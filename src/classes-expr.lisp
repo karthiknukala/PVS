@@ -55,6 +55,8 @@
 
 (defcl syntax ()
   ;;newline-comment
+  (type-constraints :accessor-name cached-type-constraints
+		    :initform :unbound :fetch-as :unbound)
   (place :restore-as nil)
   (pvs-sxhash-value :fetch-as nil :ignore t))
 

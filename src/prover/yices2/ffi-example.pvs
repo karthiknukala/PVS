@@ -17,7 +17,7 @@ BEGIN
   p: VAR [real -> bool]
 
   linear_chain: THEOREM
-    x = y + 1 AND y = 2 IMPLIES x > 2
+    x = y + 1 AND y = 2 IMPLIES x > 10000
 
   monotone_chain: THEOREM
     x <= y AND y < z IMPLIES x < z

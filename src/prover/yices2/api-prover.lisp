@@ -39,8 +39,27 @@
 (defvar *yices2-api-type-cache* nil)
 (defvar *yices2-api-symbol-cache* nil)
 (defvar *yices2-api-name-cache* nil)
+(defvar *yices2-api-last-status* nil)
+(defvar *yices2-api-last-model* nil)
+(defvar *yices2-api-last-counterexample* nil)
+(defvar *yices2-api-last-unsat-core* nil)
 
-(declaim (ftype function yices2-api-type yices2-api-term))
+(defstruct yices2-api-assumption
+  term
+  kind
+  source
+  label)
+
+(declaim (ftype function
+		yices2-api-type
+		yices2-api-term
+		yices2-api-assertion-term))
+
+(defun clear-yices2-api-last-results ()
+  (setq *yices2-api-last-status* nil
+	*yices2-api-last-model* nil
+	*yices2-api-last-counterexample* nil
+	*yices2-api-last-unsat-core* nil))
 
 (defun reset-yices2-api-state ()
   (setq *yices2-api-type-cache* (make-pvs-hash-table)
@@ -67,6 +86,12 @@
          (apply #'format nil control args)
          (yices2-api-error-string)))
 
+(defun yices2-api-owned-string (ptr)
+  (when (and ptr (not (cffi:null-pointer-p ptr)))
+    (unwind-protect
+	(cffi:foreign-string-to-lisp ptr)
+      (yices_free_string ptr))))
+
 (defun yices2-api-check-code (code control &rest args)
   (if (= code -1)
       (apply #'yices2-api-error control args)
@@ -86,6 +111,138 @@
   (if (cffi:null-pointer-p ptr)
       (apply #'yices2-api-error control args)
       ptr))
+
+(defun yices2-api-term-string (term &optional (width 120) (height 2000) (offset 2))
+  (yices2-api-owned-string
+   (yices2-api-check-pointer
+    (yices_term_to_string term width height offset)
+    "Failed to format Yices2 term ~a" term)))
+
+(defun yices2-api-model-string (model &optional (width 120) (height 2000) (offset 2))
+  (yices2-api-owned-string
+   (yices2-api-check-pointer
+    (yices_model_to_string model width height offset)
+    "Failed to format Yices2 model")))
+
+(defun yices2-api-term-vector-terms (vector-ptr)
+  (let* ((size (cffi:foreign-slot-value vector-ptr '(:struct term_vector_t) 'size))
+	 (data (cffi:foreign-slot-value vector-ptr '(:struct term_vector_t) 'data)))
+    (loop for i from 0 below size
+	  collect (cffi:mem-aref data 'term_t i))))
+
+(defun yices2-api-assumption-description (assumption)
+  (format nil "[~a] ~a"
+	  (ecase (yices2-api-assumption-kind assumption)
+	    (:goal "goal")
+	    (:subtype "subtype"))
+	  (or (yices2-api-assumption-label assumption)
+	      (format nil "~a" (yices2-api-assumption-source assumption)))))
+
+(defun yices2-api-cached-type-constraints (obj)
+  (let* ((cache (and (typep obj 'syntax)
+		     (cached-type-constraints obj)))
+	 (entry (and (not (eq cache :unbound))
+		     (assoc t cache))))
+    (if entry
+	(cdr entry)
+	(type-constraints obj t))))
+
+(defun yices2-api-subtype-constraint-formulas (expr)
+  (loop for fmla in (yices2-api-cached-type-constraints expr)
+	when (not (forall-expr? fmla))
+	  nconc (and+ fmla)))
+
+(defun yices2-api-collect-subtype-constraint-formulas (objects)
+  (let ((exprs nil)
+	(constraints nil))
+    (mapobject #'(lambda (obj)
+		   (when (and (expr? obj)
+			      (null (freevars obj)))
+		     (unless (member obj exprs :test #'tc-eq)
+		       (push obj exprs)
+		       (dolist (constraint
+				   (yices2-api-subtype-constraint-formulas obj))
+			 (when (and (expr? constraint)
+				    (null (freevars constraint))
+				    (not (binding-expr? constraint)))
+			   (pushnew constraint constraints :test #'tc-eq)))))
+		   (binding-expr? obj))
+	       objects)
+    (nreverse constraints)))
+
+(defun yices2-api-build-assumptions (sforms)
+  (let ((seen-terms (make-hash-table :test #'eql))
+	(assumptions nil))
+    (labels ((register-assumption (term kind source)
+	       (unless (gethash term seen-terms)
+		 (setf (gethash term seen-terms) t)
+		 (push (make-yices2-api-assumption
+			:term term
+			:kind kind
+			:source source
+			:label (format nil "~a" source))
+		       assumptions))))
+      (dolist (sf sforms)
+	(register-assumption (yices2-api-assertion-term sf)
+			     :goal
+			     (formula sf)))
+      (dolist (constraint
+	       (yices2-api-collect-subtype-constraint-formulas sforms))
+	(register-assumption (yices2-api-term constraint)
+			     :subtype
+			     constraint))
+      (nreverse assumptions))))
+
+(defun yices2-api-format-counterexample (assumptions model-string)
+  (let ((goal-assumptions
+	 (remove-if-not #'(lambda (assumption)
+			    (eq (yices2-api-assumption-kind assumption) :goal))
+			assumptions))
+	(subtype-count
+	 (count :subtype assumptions :key #'yices2-api-assumption-kind)))
+    (with-output-to-string (out)
+      (format out "Counterexample to the selected formulas:~%")
+      (dolist (assumption goal-assumptions)
+	(format out "  ~a~%" (yices2-api-assumption-description assumption)))
+      (when (> subtype-count 0)
+	(format out "Subtype constraints asserted: ~d~%" subtype-count))
+      (when model-string
+	(format out "Model:~%~a" model-string)))))
+
+(defun yices2-api-format-unsat-core (core-terms assumptions)
+  (let ((assumption-table (make-hash-table :test #'eql)))
+    (dolist (assumption assumptions)
+      (setf (gethash (yices2-api-assumption-term assumption) assumption-table)
+	    assumption))
+    (with-output-to-string (out)
+      (if core-terms
+	  (progn
+	    (format out "UNSAT core:~%")
+	    (dolist (term core-terms)
+	      (let ((assumption (gethash term assumption-table)))
+		(format out "  ~a~%"
+			(if assumption
+			    (yices2-api-assumption-description assumption)
+			    (yices2-api-term-string term))))))
+	  (format out "UNSAT core is empty.")))))
+
+(defun yices2-api-show-last-model ()
+  (if *yices2-api-last-model*
+      (format t "~%~a" *yices2-api-last-model*)
+      (format t "~%No Yices2 API model is available."))
+  nil)
+
+(defun yices2-api-show-last-counterexample ()
+  (if *yices2-api-last-counterexample*
+      (format t "~%~a" *yices2-api-last-counterexample*)
+      (format t "~%No Yices2 API counterexample is available."))
+  nil)
+
+(defun yices2-api-show-last-unsat-core ()
+  (if *yices2-api-last-unsat-core*
+      (format t "~%~a" *yices2-api-last-unsat-core*)
+      (format t "~%No Yices2 API UNSAT core is available."))
+  nil)
 
 (defun yices2-api-name-root (obj)
   (cond ((stringp obj) obj)
@@ -437,6 +594,7 @@
               (ensure-yices2-api-library)
               (yices_reset)
               (reset-yices2-api-state)
+              (clear-yices2-api-last-results)
               (unwind-protect
                   (progn
                     (setq config
@@ -454,28 +612,77 @@
                           (yices2-api-check-pointer
                            (yices_new_context config)
                            "Failed to allocate a Yices2 context"))
-                    (dolist (sf sforms)
-                      (yices2-api-check-code
-                       (yices_assert_formula context (yices2-api-assertion-term sf))
-                       "Failed to assert translated formula ~a"
-                       (formula sf)))
-                    (let ((status (yices_check_context context (cffi:null-pointer))))
+                    (let ((assumptions (yices2-api-build-assumptions sforms)))
+		      (cffi:with-foreign-object
+			  (array 'term_t (length assumptions))
+			(loop for assumption in assumptions
+			      for i from 0
+			      do (setf (cffi:mem-aref array 'term_t i)
+				       (yices2-api-assumption-term assumption)))
+			(let ((status
+			       (yices_check_context_with_assumptions
+				context (cffi:null-pointer)
+				(length assumptions) array)))
                       (cond ((= status +yices-status-unsat+)
+			     (setq *yices2-api-last-status* :unsat)
+			     (cffi:with-foreign-object
+				 (core '(:struct term_vector_t))
+			       (yices_init_term_vector core)
+			       (unwind-protect
+				   (let* ((code
+					   (yices_get_unsat_core context core))
+					  (core-terms
+					   (progn
+					     (yices2-api-check-code
+					      code
+					      "Failed to get the Yices2 UNSAT core")
+					     (yices2-api-term-vector-terms core)))
+					  (core-string
+					   (yices2-api-format-unsat-core
+					    core-terms assumptions)))
+				     (setq *yices2-api-last-unsat-core*
+					   core-string)
+				     (format t "~%~a" core-string))
+				 (yices_delete_term_vector core)))
                              (values '! nil nil))
                             ((= status +yices-status-sat+)
+			     (let ((model
+				    (yices2-api-check-pointer
+				     (yices_get_model context 1)
+				     "Failed to get the Yices2 model"))
+				   model-string
+				   counterexample-string)
+			       (unwind-protect
+				   (progn
+				     (setq model-string
+					   (yices2-api-model-string model))
+				     (setq counterexample-string
+					   (yices2-api-format-counterexample
+					    assumptions model-string)))
+				 (when model
+				   (yices_free_model model)))
+			       (setq *yices2-api-last-status* :sat
+				     *yices2-api-last-model* model-string
+				     *yices2-api-last-counterexample*
+				     counterexample-string)
+			       (format t "~%~a" counterexample-string))
                              (values 'X nil nil))
                             ((= status +yices-status-unknown+)
+			     (setq *yices2-api-last-status* :unknown)
                              (format t "~%Yices2 API translation returned unknown.")
                              (values 'X nil nil))
                             ((= status +yices-status-interrupted+)
+			     (setq *yices2-api-last-status* :interrupted)
                              (format t "~%Yices2 API proof attempt was interrupted.")
                              (values 'X nil nil))
                             ((= status +yices-status-error+)
+			     (setq *yices2-api-last-status* :error)
                              (yices2-api-error "Yices2 returned an error status")
                              (values 'X nil nil))
                             (t
+			     (setq *yices2-api-last-status* :error)
                              (format t "~%Yices2 API returned unexpected status ~a." status)
-                             (values 'X nil nil)))))
+                             (values 'X nil nil)))))))
                 (when context
                   (yices_free_context context))
                 (when config
@@ -485,16 +692,6 @@
             (format t "~%Yices2 API prover failed: ~a" condition)
             (values 'X nil nil))))))
 
-(defun yices2-api (sformnums)
+(defun yices2-api-dispatch (sformnums)
   #'(lambda (ps)
       (yices2-api-run ps sformnums)))
-
-(addrule 'yices2-api () ((fnums *))
-  (yices2-api fnums)
-  "Invokes Yices2 through the CFFI API as an endgame solver over the selected formulas."
-  "~%Calling Yices2 through the CFFI API,")
-
-(defstep y2api-simp (&optional (fnums *))
-  (then (skosimp*) (yices2-api :fnums fnums))
-  "Repeatedly skolemizes and flattens, then invokes the standalone Yices2 CFFI API prover."
-  "Repeatedly skolemizing and flattening, and then invoking the Yices2 CFFI API prover")

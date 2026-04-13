@@ -427,8 +427,7 @@ pvs-prover = src/prover/checker-macros.lisp \
          src/prover/strategies.lisp \
          src/prover/wish.lisp \
 	 src/prover/translate-to-yices.lisp \
-	 src/prover/yices2/bindings.lisp \
-	 src/prover/yices2/api-prover.lisp \
+	 src/prover/yices2/api-loader.lisp \
 	 src/prover/translate-to-yices2.lisp
 
 bddlisp = src/BDD/bdd.lisp src/BDD/mu.lisp src/BDD/bdd-cffi.lisp

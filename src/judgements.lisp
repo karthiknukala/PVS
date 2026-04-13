@@ -2381,6 +2381,23 @@
 
 (defvar *subtypes-seen* nil)
 
+(defun cached-type-constraints-entry (obj all?)
+  (when (and (typep obj 'syntax)
+	     (not (eq (cached-type-constraints obj) :unbound)))
+    (assoc all? (cached-type-constraints obj))))
+
+(defun cache-type-constraints (obj all? preds)
+  (when (typep obj 'syntax)
+    (let ((cache (cached-type-constraints obj)))
+      (when (eq cache :unbound)
+	(setq cache nil))
+      (let ((entry (assoc all? cache)))
+	(if entry
+	    (setf (cdr entry) preds)
+	    (push (cons all? preds) cache))
+	(setf (cached-type-constraints obj) cache))))
+  preds)
+
 (defun type-constraints (ex &optional all?)
   "Gets the type-constraints corresponding to the all? argument,
 which is one of:
@@ -2392,13 +2409,17 @@ which is one of:
   :funcs - include function constraints
   t - include all type constraints
 Note that the all? arument is only used in the type-constraints* (subtype) method."
-  (let* ((jtypes (judgement-types+ ex))
-	 (*subtypes-seen* nil)
-	 (preds (type-constraints* jtypes ex nil all?)))
-    #+pvsdebug (assert (subsetp (freevars preds)
-				(union (freevars ex) *bound-variables*)
-				:key #'declaration))
-    (delete-duplicates preds :test #'tc-eq)))
+  (let ((cached-entry (cached-type-constraints-entry ex all?)))
+    (if cached-entry
+	(cdr cached-entry)
+	(let* ((jtypes (judgement-types+ ex))
+	       (*subtypes-seen* nil)
+	       (preds (type-constraints* jtypes ex nil all?))
+	       (deduped-preds (delete-duplicates preds :test #'tc-eq)))
+	  #+pvsdebug (assert (subsetp (freevars deduped-preds)
+				      (union (freevars ex) *bound-variables*)
+				      :key #'declaration))
+	  (cache-type-constraints ex all? deduped-preds)))))
 
 (defmethod type-constraints* ((list cons) ex preds all?)
   (let ((car-preds (type-constraints* (car list) ex nil all?)))

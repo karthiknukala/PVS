@@ -467,8 +467,7 @@
 		  (:file "strategies")
 		  (:file "wish")
 		  (:file "translate-to-yices")
-		  (:file "yices2/bindings")
-		  (:file "yices2/api-prover")
+		  (:file "yices2/api-loader")
 		  (:file "translate-to-yices2"))
      :depends-on (typechecker))
    (:module bdd
