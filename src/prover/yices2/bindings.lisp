@@ -24,11 +24,31 @@
 
 (in-package :pvs)
 
-(cffi:define-foreign-library yices2
-  (:darwin (:or "libyices.2.dylib" "libyices.dylib" "libyices"))
-  (:unix (:or "libyices.so.2" "libyices.so" "libyices"))
-  (:windows (:or "libyices.dll" "yices.dll" "libyices"))
-  (t (:default "libyices")))
+(defparameter *yices2-default-foreign-library-spec*
+  '((:darwin (:or "libyices.2.dylib" "libyices.dylib" "libyices"))
+    (:unix (:or "libyices.so.2" "libyices.so" "libyices"))
+    (:windows (:or "libyices.dll" "yices.dll" "libyices"))
+    (t (:default "libyices"))))
+
+(defvar *yices2-foreign-library-selection* nil)
+
+(defun configure-yices2-foreign-library (&optional library)
+  (let ((selection
+         (when library
+           (let ((trimmed (string-trim '(#\Space #\Tab #\Newline #\Return)
+                                       (if (pathnamep library)
+                                           (namestring library)
+                                           library))))
+             (unless (> (length trimmed) 0)
+               (error "The Yices2 library name/path must not be empty"))
+             trimmed))))
+    (setq *yices2-foreign-library-selection* selection)
+    (eval `(cffi:define-foreign-library yices2
+             ,@(or (and selection `((t ,selection)))
+                   *yices2-default-foreign-library-spec*)))
+    'yices2))
+
+(configure-yices2-foreign-library)
 
 (defconstant +yices-null-term+ -1)
 (defconstant +yices-null-type+ -1)

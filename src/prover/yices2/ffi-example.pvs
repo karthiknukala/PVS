@@ -37,4 +37,7 @@ BEGIN
   quantified_transport: THEOREM
     FORALL (u, v: real): u = v IMPLIES g(u, 1) = g(v, 1)
 
+  nonlinear: THEOREM
+    x * x = 2 IMPLIES x = 1
+
 END Yices2FFIExample

@@ -72,11 +72,56 @@
         *yices2-api-name-cache* (make-pvs-hash-table))
   (newcounter *yices2-api-name-counter*))
 
+(defun yices2-api-current-library-selection ()
+  (or *yices2-foreign-library-selection* :default))
+
+(defun yices2-api-current-library-path ()
+  (let ((pathname (ignore-errors (cffi:foreign-library-pathname 'yices2))))
+    (when pathname
+      (namestring pathname))))
+
+(defun yices2-api-unload-library ()
+  (when *yices2-api-library-loaded*
+    (ignore-errors (yices_exit)))
+  (ignore-errors (cffi:close-foreign-library 'yices2))
+  (setq *yices2-api-library-loaded* nil)
+  (clear-yices2-api-last-results)
+  t)
+
 (defun ensure-yices2-api-library ()
-  (unless *yices2-api-library-loaded*
+  (unless (and *yices2-api-library-loaded*
+               (ignore-errors (cffi:foreign-library-loaded-p 'yices2)))
     (cffi:load-foreign-library 'yices2)
     (yices_init)
     (setq *yices2-api-library-loaded* t)))
+
+(defun yices2-api-library-summary-string ()
+  (ensure-yices2-api-library)
+  (format nil
+          "Yices2 library selection: ~a~%Resolved library: ~a~%Version: ~a~%Build arch: ~a~%Build mode: ~a~%MCSAT support: ~:[disabled~;enabled~]"
+          (if (eq (yices2-api-current-library-selection) :default)
+              "default search (libyices)"
+              (yices2-api-current-library-selection))
+          (or (yices2-api-current-library-path) "unknown")
+          (or yices_version "unknown")
+          (or yices_build_arch "unknown")
+          (or yices_build_mode "unknown")
+          (> (yices_has_mcsat) 0)))
+
+(defun yices2-api-show-library ()
+  (format t "~%~a" (yices2-api-library-summary-string)))
+
+(defun yices2-api-set-library (library)
+  (yices2-api-unload-library)
+  (configure-yices2-foreign-library library)
+  (format t "~%Switched Yices2 API library.~%~a"
+          (yices2-api-library-summary-string)))
+
+(defun yices2-api-use-default-library ()
+  (yices2-api-unload-library)
+  (configure-yices2-foreign-library nil)
+  (format t "~%Restored default Yices2 API library search.~%~a"
+          (yices2-api-library-summary-string)))
 
 (defun yices2-api-error-string ()
   (let ((ptr (yices_error_string)))
@@ -412,7 +457,8 @@
   (if nonlinear?
       (progn
 	(unless (> (yices_has_mcsat) 0)
-	  (error "This Yices2 build does not provide the MCSAT solver"))
+	  (error "Current Yices2 library does not provide the MCSAT solver.~%~a"
+		 (yices2-api-library-summary-string)))
 	(values *yices2-api-nonlinear-logic* "mcsat"))
       (values *yices2-api-logic* nil)))
 

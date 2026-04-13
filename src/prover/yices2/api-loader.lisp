@@ -68,6 +68,27 @@
       (yices2-api-show-last-unsat-core)
       (values 'X nil nil)))
 
+(defun yices2-api-show-library-dispatch ()
+  (ensure-yices2-api-implementation)
+  #'(lambda (ps)
+      (declare (ignore ps))
+      (yices2-api-show-library)
+      (values 'X nil nil)))
+
+(defun yices2-api-set-library-dispatch (library)
+  (ensure-yices2-api-implementation)
+  #'(lambda (ps)
+      (declare (ignore ps))
+      (yices2-api-set-library library)
+      (values 'X nil nil)))
+
+(defun yices2-api-use-default-library-dispatch ()
+  (ensure-yices2-api-implementation)
+  #'(lambda (ps)
+      (declare (ignore ps))
+      (yices2-api-use-default-library)
+      (values 'X nil nil)))
+
 (addrule 'yices2-api () ((fnums *) nonlinear?)
   (yices2-api fnums nonlinear?)
   "Invokes Yices2 through the CFFI API as an endgame solver over the selected formulas."
@@ -75,7 +96,7 @@
 
 (defstep y2api-simp (&optional (fnums *) nonlinear?)
   (let ((loaded? (ensure-yices2-api-implementation)))
-    (then (skosimp*) (yices2-api :fnums fnums :nonlinear? nonlinear?)))
+    (then (skeep) (yices2-api :fnums fnums :nonlinear? nonlinear?)))
   "Repeatedly skolemizes and flattens, then invokes the standalone Yices2 CFFI API prover."
   "Repeatedly skolemizing and flattening, and then invoking the Yices2 CFFI API prover")
 
@@ -95,3 +116,16 @@
 (addrule 'y2api-show-unsat-core nil nil
   (yices2-api-show-unsat-core-dispatch)
   "Prints the most recent Yices2 API UNSAT core, if one was produced by an unsatisfiable run.")
+
+(addrule 'y2api-show-library nil nil
+  (yices2-api-show-library-dispatch)
+  "Prints the active Yices2 shared library, resolved pathname, version, and MCSAT availability.")
+
+(addrule 'y2api-use-library (string) ()
+  (yices2-api-set-library-dispatch string)
+  "Switches the standalone Yices2 API prover to the given shared library and loads it immediately."
+  "~%Switching the Yices2 API library to ~a")
+
+(addrule 'y2api-use-default-library nil nil
+  (yices2-api-use-default-library-dispatch)
+  "Restores the standalone Yices2 API prover to the default CFFI libyices search.")
