@@ -43,9 +43,9 @@
       (setq *yices2-api-implementation-loaded* t)))
   t)
 
-(defun yices2-api (sformnums &optional nonlinear?)
+(defun yices2-api (sformnums &rest option-plist)
   (ensure-yices2-api-implementation)
-  (yices2-api-dispatch sformnums nonlinear?))
+  (apply #'yices2-api-dispatch sformnums option-plist))
 
 (defun yices2-api-show-model-dispatch ()
   (ensure-yices2-api-implementation)
@@ -75,6 +75,13 @@
       (yices2-api-show-library)
       (values 'X nil nil)))
 
+(defun yices2-api-show-help-dispatch ()
+  (ensure-yices2-api-implementation)
+  #'(lambda (ps)
+      (declare (ignore ps))
+      (yices2-api-show-help)
+      (values 'X nil nil)))
+
 (defun yices2-api-set-library-dispatch (library)
   (ensure-yices2-api-implementation)
   #'(lambda (ps)
@@ -89,20 +96,53 @@
       (yices2-api-use-default-library)
       (values 'X nil nil)))
 
-(addrule 'yices2-api () ((fnums *) nonlinear?)
-  (yices2-api fnums nonlinear?)
-  "Invokes Yices2 through the CFFI API as an endgame solver over the selected formulas."
+(addrule 'yices2-api ()
+    ((fnums *) nonlinear? logic (mode "one-shot") solver-type
+     configs params enable-options disable-options)
+  (yices2-api fnums
+              :nonlinear? nonlinear?
+              :logic logic
+              :mode mode
+              :solver-type solver-type
+              :configs configs
+              :params params
+              :enable-options enable-options
+              :disable-options disable-options)
+  "Invokes Yices2 through the CFFI API as an endgame solver over the selected formulas, with optional direct control of logic/config/parameter/context-option settings."
   "~%Calling Yices2 through the CFFI API,")
 
-(defstep y2api-simp (&optional (fnums *) nonlinear?)
+(defstep y2api-simp (&optional (fnums *)
+                               &key nonlinear? logic
+                               (mode "one-shot") solver-type configs params
+                               enable-options disable-options)
   (let ((loaded? (ensure-yices2-api-implementation)))
-    (then (skeep) (yices2-api :fnums fnums :nonlinear? nonlinear?)))
-  "Repeatedly skolemizes and flattens, then invokes the standalone Yices2 CFFI API prover."
+    (then (skeep)
+          (yices2-api :fnums fnums
+                      :nonlinear? nonlinear?
+                      :logic logic
+                      :mode mode
+                      :solver-type solver-type
+                      :configs configs
+                      :params params
+                      :enable-options enable-options
+                      :disable-options disable-options)))
+  "Repeatedly skolemizes and flattens, then invokes the standalone Yices2 CFFI API prover with direct Yices2 keyword control over logic, configuration, parameters, and context flags."
   "Repeatedly skolemizing and flattening, and then invoking the Yices2 CFFI API prover")
 
-(defstep y2api-mcsat (&optional (fnums *))
-  (y2api-simp :fnums fnums :nonlinear? t)
-  "Repeatedly skolemizes and flattens, then invokes the Yices2 API prover in nonlinear/MCSAT mode."
+(defstep y2api-mcsat (&optional (fnums *)
+                                &key logic (mode "one-shot")
+                                solver-type configs params
+                                enable-options disable-options)
+  (y2api-simp :fnums fnums
+              :nonlinear? t
+              :logic logic
+              :mode mode
+              :solver-type solver-type
+              :configs configs
+              :params params
+              :enable-options enable-options
+              :disable-options disable-options)
+  "Repeatedly skolemizes and flattens, then invokes the Yices2 API prover in nonlinear/MCSAT mode, with optional direct Yices2 logic/config/parameter/context-option settings."
   "Repeatedly skolemizing and flattening, and then invoking the Yices2 MCSAT API prover")
 
 (addrule 'y2api-show-model nil nil
@@ -120,6 +160,10 @@
 (addrule 'y2api-show-library nil nil
   (yices2-api-show-library-dispatch)
   "Prints the active Yices2 shared library, resolved pathname, version, and MCSAT availability.")
+
+(addrule 'y2api-help nil nil
+  (yices2-api-show-help-dispatch)
+  "Prints a Yices2 API reference covering commands, keyword arguments, logic names, configuration keys, context switches, and search parameters.")
 
 (addrule 'y2api-use-library (string) ()
   (yices2-api-set-library-dispatch string)
