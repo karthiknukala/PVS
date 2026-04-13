@@ -43,9 +43,9 @@
       (setq *yices2-api-implementation-loaded* t)))
   t)
 
-(defun yices2-api (sformnums)
+(defun yices2-api (sformnums &optional nonlinear?)
   (ensure-yices2-api-implementation)
-  (yices2-api-dispatch sformnums))
+  (yices2-api-dispatch sformnums nonlinear?))
 
 (defun yices2-api-show-model-dispatch ()
   (ensure-yices2-api-implementation)
@@ -68,16 +68,21 @@
       (yices2-api-show-last-unsat-core)
       (values 'X nil nil)))
 
-(addrule 'yices2-api () ((fnums *))
-  (yices2-api fnums)
+(addrule 'yices2-api () ((fnums *) nonlinear?)
+  (yices2-api fnums nonlinear?)
   "Invokes Yices2 through the CFFI API as an endgame solver over the selected formulas."
   "~%Calling Yices2 through the CFFI API,")
 
-(defstep y2api-simp (&optional (fnums *))
+(defstep y2api-simp (&optional (fnums *) nonlinear?)
   (let ((loaded? (ensure-yices2-api-implementation)))
-    (then (skosimp*) (yices2-api :fnums fnums)))
+    (then (skosimp*) (yices2-api :fnums fnums :nonlinear? nonlinear?)))
   "Repeatedly skolemizes and flattens, then invokes the standalone Yices2 CFFI API prover."
   "Repeatedly skolemizing and flattening, and then invoking the Yices2 CFFI API prover")
+
+(defstep y2api-mcsat (&optional (fnums *))
+  (y2api-simp :fnums fnums :nonlinear? t)
+  "Repeatedly skolemizes and flattens, then invokes the Yices2 API prover in nonlinear/MCSAT mode."
+  "Repeatedly skolemizing and flattening, and then invoking the Yices2 MCSAT API prover")
 
 (addrule 'y2api-show-model nil nil
   (yices2-api-show-model-dispatch)

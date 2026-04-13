@@ -92,26 +92,22 @@ In addition to the usual, slots may have the following attributes:
 		      args))
     (defclass ,name ,classes
       ,(mapcar #'(lambda (a)
-		   (let ((accessor-name (or (cadr (memq :accessor-name a))
-					    (car a))))
-		     (setq a (remove-keyword
-			      :parse
+		   (setq a (remove-keyword
+			    :parse
+			    (remove-keyword
+			     :ignore
+			     (remove-keyword
+			      :store-as
 			      (remove-keyword
-			       :ignore
+			       :restore-as
 			       (remove-keyword
-				:store-as
-				(remove-keyword
-				 :restore-as
-				 (remove-keyword
-				  :fetch-as
-				  (remove-keyword
-				   :accessor-name a)))))))
-		     (append a (list :accessor accessor-name
-				     :initarg (intern (string (car a))
-						      'keyword)
-				     :initarg (car a))
-			     (unless (memq :initform a)
-			       (list :initform nil)))))
+				:fetch-as a))))))
+		   (append a (list :accessor (car a)
+				   :initarg (intern (string (car a))
+						    'keyword)
+				   :initarg (car a))
+			   (unless (memq :initform a)
+			     (list :initform nil))))
 	      args))
     (when (fboundp 'declare-make-instance)
       (declare-make-instance ,name))
