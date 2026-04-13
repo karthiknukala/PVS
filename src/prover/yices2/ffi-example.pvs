@@ -1,0 +1,40 @@
+% A small standalone example for the Yices2 CFFI prover.
+%
+% Suggested proof commands:
+%   linear_chain, monotone_chain, unary_congruence, binary_congruence,
+%   predicate_transport, and branch_fact:
+%     (yices2-api)
+%
+%   quantified_transport:
+%     (y2api-simp)
+
+Yices2FFIExample: THEORY
+BEGIN
+
+  x, y, z: VAR real
+  f: VAR [real -> real]
+  g: VAR [real, real -> real]
+  p: VAR [real -> bool]
+
+  linear_chain: THEOREM
+    x = y + 1 AND y = 2 IMPLIES x > 2
+
+  monotone_chain: THEOREM
+    x <= y AND y < z IMPLIES x < z
+
+  unary_congruence: THEOREM
+    x = y IMPLIES f(x) = f(y)
+
+  binary_congruence: THEOREM
+    x = y AND z = 2 IMPLIES g(x, z) = g(y, 2)
+
+  predicate_transport: THEOREM
+    x = y AND p(x) IMPLIES p(y)
+
+  branch_fact: THEOREM
+    IF x < 0 THEN x + 1 <= 1 ELSE x + 1 >= 1 ENDIF
+
+  quantified_transport: THEOREM
+    FORALL (u, v: real): u = v IMPLIES g(u, 1) = g(v, 1)
+
+END Yices2FFIExample

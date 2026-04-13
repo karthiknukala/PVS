@@ -1,0 +1,16 @@
+(|Yices2FFIExample|
+ (|linear_chain| 0
+  (|linear_chain-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|monotone_chain| 0
+  (|monotone_chain-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|unary_congruence| 0
+  (|unary_congruence-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|binary_congruence| 0
+  (|binary_congruence-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|predicate_transport| 0
+  (|predicate_transport-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|branch_fact| 0
+  (|branch_fact-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK))
+ (|quantified_transport| 0
+  (|quantified_transport-1| NIL 3985096793 ("" (Y2API-SIMP)) NIL SHOSTAK)))
+
