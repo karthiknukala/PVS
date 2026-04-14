@@ -88,343 +88,6 @@
     (|bv_stimes| (|bv_arithmetic_defs| . |bv-mul|))
     ))
 
-(defparameter *yices2-yices2bv-interpreted-names*
-  '((bvadd . |bv-add|)
-    (bvsub . |bv-sub|)
-    (bvneg . |bv-neg|)
-    (bvmul . |bv-mul|)
-    (bvdiv . |bv-div|)
-    (bvrem . |bv-rem|)
-    (bvsdiv . |bv-sdiv|)
-    (bvsrem . |bv-srem|)
-    (bvsmod . |bv-smod|)
-    (bvnot . |bv-not|)
-    (bvand . |bv-and|)
-    (bvor . |bv-or|)
-    (bvxor . |bv-xor|)
-    (bvshl . |bv-shl|)
-    (bvlshr . |bv-lshr|)
-    (bvashr . |bv-ashr|)
-    (bveq . =)
-    (bvneq . /=)
-    (bvge . |bv-ge|)
-    (bvgt . |bv-gt|)
-    (bvle . |bv-le|)
-    (bvlt . |bv-lt|)
-    (bvsge . |bv-sge|)
-    (bvsgt . |bv-sgt|)
-    (bvsle . |bv-sle|)
-    (bvslt . |bv-slt|)
-    (bvconcat . |bv-concat|)
-    (redand . |bv-redand|)
-    (redor . |bv-redor|)
-    (redcomp . |bv-redcomp|)))
-
-(defun yices2-yices2bv-theory-p (theory)
-  (and theory
-       (typep theory 'module)
-       (eq (id theory) '|yices2BV|)))
-
-(defun yices2-yices2bv-source-declaration-p (decl)
-  (and decl
-       (yices2-yices2bv-theory-p (module decl))))
-
-(defun yices2-object-declaration (obj)
-  (cond ((declaration? obj) obj)
-        ((typep obj 'name) (ignore-errors (declaration obj)))
-        (t nil)))
-
-(defun yices2-same-declaration-p (x y)
-  (or (same-declaration x y)
-      (and x
-           y
-           (same-id x y)
-           (let ((xmod (ignore-errors (module x)))
-                 (ymod (ignore-errors (module y))))
-             (or (eq xmod ymod)
-                 (and xmod
-                      ymod
-                      (same-id xmod ymod)))))))
-
-(defun yices2-source-theory-name (generator)
-  (ignore-errors
-    (typecase generator
-      (importing (theory-name generator))
-      (mod-decl (theory-name generator))
-      (theory-abbreviation-decl (theory-name generator))
-      (formal-theory-decl (theory-name generator))
-      (t nil))))
-
-(defun yices2-mapping-lhs (mapping)
-  (typecase mapping
-    (cons (car mapping))
-    (t (ignore-errors (lhs mapping)))))
-
-(defun yices2-mapping-rhs (mapping)
-  (typecase mapping
-    (cons (cdr mapping))
-    (t (ignore-errors (rhs mapping)))))
-
-(defun yices2-mapped-declaration (mapped)
-  (let ((value (actual-value mapped)))
-    (cond ((declaration? value) value)
-          ((typep value 'name) (ignore-errors (declaration value)))
-          (t nil))))
-
-(defun yices2-yices2bv-source-declaration-from-generator (decl)
-  (let* ((generator (generated-by decl))
-         (source-name (and generator
-                           (yices2-source-theory-name generator)))
-         (source-theory
-          (and source-name
-               (or (ignore-errors (declaration source-name))
-                   (ignore-errors (get-theory source-name))))))
-    (when (yices2-yices2bv-theory-p source-theory)
-      (find (id decl) (all-decls source-theory)
-            :key #'id :test #'eq))))
-
-(defun yices2-yices2bv-source-declaration-from-mappings (decl)
-  (let ((contexts (remove-duplicates
-		   (list (module decl) (current-theory))
-		   :test #'eq)))
-    (loop for context in contexts
-          thereis (and context
-                       (loop for mapping in (theory-mappings context)
-                             for lhsdecl =
-                             (yices2-object-declaration
-                              (yices2-mapping-lhs mapping))
-                             for rhsdecl =
-                             (yices2-mapped-declaration
-                              (yices2-mapping-rhs mapping))
-                             when (and rhsdecl
-                                       (yices2-same-declaration-p decl rhsdecl)
-                                       (yices2-yices2bv-source-declaration-p
-                                        lhsdecl))
-                               do (return lhsdecl))))))
-
-(defun yices2-yices2bv-source-declaration-from-module-decls (decl)
-  (let ((contexts (remove-duplicates
-		   (list (module decl) (current-theory))
-		   :test #'eq)))
-    (loop for context in contexts
-          thereis
-          (and context
-               (loop for idecl in (ignore-errors (theory context))
-                     thereis
-                     (let* ((source-name (yices2-source-theory-name idecl))
-                            (source-theory
-                             (and source-name
-                                  (or (ignore-errors (declaration source-name))
-                                      (ignore-errors (get-theory source-name))))))
-                       (and (yices2-yices2bv-theory-p source-theory)
-                            (loop for mapping in (ignore-errors
-                                                   (mappings source-name))
-                                  for lhsdecl =
-                                  (yices2-object-declaration
-                                   (yices2-mapping-lhs mapping))
-                                  for rhsdecl =
-                                  (yices2-mapped-declaration
-                                   (yices2-mapping-rhs mapping))
-                                  when (and lhsdecl
-                                            rhsdecl
-                                            (yices2-same-declaration-p decl rhsdecl)
-                                            (yices2-yices2bv-source-declaration-p
-                                             lhsdecl))
-                                    do (return lhsdecl)))))))))
-
-(defun yices2-yices2bv-source-declaration (obj)
-  (let ((decl (ignore-errors (declaration obj))))
-    (or (and decl
-             (yices2-yices2bv-source-declaration-p decl)
-             decl)
-        (and decl
-             (yices2-yices2bv-source-declaration-from-generator decl))
-        (and decl
-             (yices2-yices2bv-source-declaration-from-mappings decl))
-        (and decl
-             (yices2-yices2bv-source-declaration-from-module-decls decl)))))
-
-(defun yices2-normalize-id-symbol (id)
-  (and id
-       (or (find-symbol (string-upcase (symbol-name id)) :pvs)
-           id)))
-
-(defun yices2-yices2bv-source-id (obj)
-  (let ((decl (yices2-yices2bv-source-declaration obj)))
-    (yices2-normalize-id-symbol
-     (and decl (id decl)))))
-
-(defun yices2-static-integer-value (obj &optional context)
-  (let* ((value (actual-value obj))
-         (integer (ignore-errors (pvseval-integer value))))
-    (if (integerp integer)
-        integer
-        (error "Yices2 requires a ground integer for ~a"
-               (or context value)))))
-
-(defun yices2-decl-actuals (obj)
-  (or (ignore-errors (actuals obj))
-      (let ((source (yices2-yices2bv-source-declaration obj)))
-        (and source
-             (not (eq source obj))
-             (ignore-errors (actuals source))))))
-
-(defun yices2-decl-actual-integer (obj index)
-  (let ((acts (yices2-decl-actuals obj)))
-    (unless (and acts (< index (length acts)))
-      (error "Missing declaration actual ~a for ~a" index obj))
-    (yices2-static-integer-value (nth index acts) obj)))
-
-(defun yices2-bitvector-width (ptype)
-  (let ((stype (find-supertype ptype)))
-    (cond ((and (type-name? stype)
-                (eq (yices2-yices2bv-source-id stype) 'bvec))
-           (yices2-decl-actual-integer stype 0))
-          ((and (funtype? stype)
-                (simple-below? (domain stype))
-                (number-expr? (simple-below? (domain stype)))
-                (tc-eq (find-supertype (range stype)) *boolean*))
-           (number (simple-below? (domain stype))))
-          (t nil))))
-
-(defun yices2-bv-constant-value (width value)
-  (mod value (ash 1 width)))
-
-(defun yices2-format-bv-constant (width value)
-  (format nil "(mk-bv ~a ~a)"
-          width
-          (yices2-bv-constant-value width value)))
-
-(defun yices2-translate-yices2bv-name (expr)
-  (let* ((source-id (yices2-yices2bv-source-id expr))
-         (width (when source-id
-                  (yices2-decl-actual-integer expr 0))))
-    (case source-id
-      (bvconst
-       (yices2-format-bv-constant
-        width
-        (yices2-decl-actual-integer expr 1)))
-      (bvzero
-       (yices2-format-bv-constant width 0))
-      (bvone
-       (yices2-format-bv-constant width 1))
-      (bvminusone
-       (yices2-format-bv-constant width -1))
-      (otherwise nil))))
-
-(defun yices2-yices2bv-array-elements (bits width bindings)
-  (loop for i from 0 below width
-        collect (translate-to-yices2*
-                 (make!-application bits (make!-number-expr i))
-                 bindings)))
-
-(defun yices2-bv-binary-chain (operator args)
-  (if (null args)
-      (error "No arguments supplied for Yices2 operator ~a" operator)
-      (reduce #'(lambda (left right)
-                  (format nil "(~a ~a ~a)" operator left right))
-              (cdr args)
-              :initial-value (car args))))
-
-(defun yices2-yices2bv-power-expression (arg exponent width)
-  (cond ((zerop exponent)
-         (yices2-format-bv-constant width 1))
-        ((= exponent 1)
-         arg)
-        (t
-         (yices2-bv-binary-chain
-          "bv-mul"
-          (loop repeat exponent collect arg)))))
-
-(defun translate-to-yices2-yices2bv-application (expr bindings)
-  (let* ((operator (operator* expr))
-         (source-id (yices2-yices2bv-source-id operator))
-         (arguments (arguments expr))
-         (yargs (translate-to-yices2* arguments bindings)))
-    (when source-id
-      (case source-id
-        ((bvadd bvsub bvneg bvmul bvdiv bvrem bvsdiv bvsrem bvsmod
-                bvnot bvand bvor bvxor bvshl bvlshr bvashr
-                bveq bvneq bvge bvgt bvle bvlt bvsge bvsgt bvsle bvslt
-                bvconcat redand redor redcomp)
-         (format nil "(~a~{ ~a~})"
-                 (cdr (assoc source-id *yices2-yices2bv-interpreted-names*))
-                 yargs))
-        (bvnand
-         (format nil "(bv-not (bv-and ~a ~a))"
-                 (first yargs) (second yargs)))
-        (bvnor
-         (format nil "(bv-not (bv-or ~a ~a))"
-                 (first yargs) (second yargs)))
-        (bvxnor
-         (format nil "(bv-not (bv-xor ~a ~a))"
-                 (first yargs) (second yargs)))
-        (bvsquare
-         (format nil "(bv-mul ~a ~a)"
-                 (first yargs) (first yargs)))
-        (bvpower
-         (yices2-yices2bv-power-expression
-          (first yargs)
-          (yices2-decl-actual-integer operator 1)
-          (or (yices2-bitvector-width (type expr))
-              (error "Unable to determine the bitvector width for ~a" expr))))
-        (bvarray
-         (format nil "(bv-array~{ ~a~})"
-                 (yices2-yices2bv-array-elements
-                  (first arguments)
-                  (yices2-decl-actual-integer operator 0)
-                  bindings)))
-        (bitextract
-         (format nil "(bit ~a ~a)"
-                 (yices2-decl-actual-integer operator 1)
-                 (first yargs)))
-        (bvextract
-         (format nil "(bv-extract ~a ~a ~a)"
-                 (yices2-decl-actual-integer operator 2)
-                 (yices2-decl-actual-integer operator 1)
-                 (first yargs)))
-        (bvrepeat
-         (format nil "(bv-repeat ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (sign_extend
-         (format nil "(bv-sign-extend ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (zero_extend
-         (format nil "(bv-zero-extend ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (shift_left0
-         (format nil "(bv-shift-left0 ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (shift_left1
-         (format nil "(bv-shift-left1 ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (shift_right0
-         (format nil "(bv-shift-right0 ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (shift_right1
-         (format nil "(bv-shift-right1 ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (ashift_right
-         (format nil "(bv-ashift-right ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (rotate_left
-         (format nil "(bv-rotate-left ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (rotate_right
-         (format nil "(bv-rotate-right ~a ~a)"
-                 (first yargs)
-                 (yices2-decl-actual-integer operator 1)))
-        (otherwise nil)))))
-
 (defun clear-yices2 ()
   (setq *y2defns* nil)
   (clrhash *y2name-hash*)
@@ -585,9 +248,6 @@
 		 (error "yices2 tranlation does not support scalars")
 		 ;;(translate-to-yices2-scalar yname constructors))
 	       )
-	      ((eq (yices2-yices2bv-source-id ty) 'bvec)
-	       (format nil "(bitvector ~a)"
-		 (yices2-decl-actual-integer ty 0)))
 	      ((tc-eq (find-supertype ty) *boolean*)
 	       (format nil "bool"))
 	      ((tc-eq ty *number*) "real")
@@ -678,18 +338,15 @@
   (translate-to-yices2* (type ty) bindings))
 
 (defmethod translate-to-yices2* ((ty funtype) bindings)
-  (let ((bv-width (yices2-bitvector-width ty)))
-    (if bv-width
-	(format nil "(bitvector ~a)" bv-width)
-	(with-slots (domain range) ty ; (break "tty2(funtype)")
-	  (let* ((sdom (if (dep-binding? domain)  ;;NSH(4-16-11)
-			   (find-supertype (type domain))
-			   (find-supertype domain))) %was bypassing int for real on the domain
-		 (sdom-types (types sdom))) ;NSH(4-23-25)
-	    (format nil "(->~{ ~a~})"
-		    (translate-to-yices2-list sdom-types nil
-					      (translate-to-yices2* range bindings)
-					      bindings)))))))
+  (with-slots (domain range) ty ; (break "tty2(funtype)")
+	      (let* ((sdom (if (dep-binding? domain)  ;;NSH(4-16-11)
+			      (find-supertype (type domain))
+			     (find-supertype domain))) %was bypassing int for real on the domain
+		     (sdom-types (types sdom)));NSH(4-23-25)
+	      (format nil "(->~{ ~a~})"
+		      (translate-to-yices2-list sdom-types nil
+						(translate-to-yices2* range bindings)
+						bindings)))))
 
 
 ;;name-exprs and binding-exprs are not hashed in binding contexts.
@@ -751,7 +408,6 @@
 		 (cdr bpos))
 	(let* ((yname-hashentry (gethash expr *y2name-hash*)))
 	  (or yname-hashentry
-	      (yices2-translate-yices2bv-name expr)
 	      (yices2-interpretation expr)
 	      ;(eta-expanded-yices2-interpretation expr)
 	      (yices2-recognizer expr bindings)
@@ -889,7 +545,6 @@
 	       (number (car (exprs (cadr (exprs argument)))))
 	       (number (cadr (exprs (cadr (exprs argument)))))
 	       (translate-to-yices2* (car (exprs argument)) bindings)))
-	    ((translate-to-yices2-yices2bv-application expr bindings))
 	    ((and (enum-adt? (find-supertype (type argument)))
 		  (recognizer? operator))
 	     (format nil "(= ~a ~a)"
@@ -1137,13 +792,11 @@
 
 (defun yices2-interpretation (name-expr)
   (when (name-expr? name-expr)
-    (or (cdr (assoc (yices2-yices2bv-source-id name-expr)
-		    *yices2-yices2bv-interpreted-names*))
-	(let* ((id-assoc (cdr (assoc (id name-expr) *yices2-interpreted-names*)))
-	       (mod-assoc (cdr (assoc (id (module-instance
-					   (resolution name-expr)))
-				      id-assoc))))
-	  mod-assoc))))
+    (let* ((id-assoc (cdr (assoc (id name-expr) *yices2-interpreted-names*)))
+	   (mod-assoc (cdr (assoc (id (module-instance
+				       (resolution name-expr)))
+				  id-assoc))))
+      mod-assoc)))
 ;;       (if (eq (id name-expr) '-)
 ;; 	  (and (tupletype? (find-supertype (domain (type name-expr))))
 ;; 	       mod-assoc)
