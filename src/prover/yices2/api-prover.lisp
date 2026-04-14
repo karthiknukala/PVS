@@ -45,6 +45,7 @@
 (defvar *yices2-api-last-model* nil)
 (defvar *yices2-api-last-counterexample* nil)
 (defvar *yices2-api-last-unsat-core* nil)
+(defvar *yices2-api-suppress-errors* nil)
 
 (defvar *yices2-api-assumption-list* nil)
 (defvar *yices2-api-assumption-seen-terms* nil)
@@ -57,6 +58,9 @@
     ("y2api-mcsat"
      "Standalone Yices2 API prover in nonlinear/MCSAT mode."
      "Equivalent to y2api-simp with :nonlinear? t.")
+    ("y2api-expand"
+     "Interleaves Yices2 API calls with selected definition expansions."
+     "Accepts the y2api-simp keywords plus :expand-enable, :expand-disable, and :expand-assert?.")
     ("yices2-api"
      "Primitive rule form used by the strategies."
      "Takes the same keyword arguments plus :fnums selection.")
@@ -79,6 +83,18 @@
   '((:fnums
      "Selected formulas."
      "Default is *.")
+    (:expand-enable
+     "Definition-expansion plan interleaved with solver calls."
+     "Accepts a single name, a list of names, or specs like ((\"f\" 2) (\"g\" :depth 3)); the default count is 1 per entry.")
+    (:expand-disable
+     "Names removed from :expand-enable before the loop runs."
+     "Accepts a single name or a list of names/specs; any counts are ignored.")
+    (:expand-assert?
+     "Simplification mode used by each expand step."
+     "Default is NONE so the next solver pass sees the raw expansion; use NIL for SIMPLIFY or T for ASSERT.")
+    (:quiet?
+     "Suppresses routine solver output during the call."
+     "Keeps the last model/counterexample/UNSAT-core available for y2api-show-* commands, but does not print them during the strategy run.")
     (:nonlinear?
      "Boolean switch for nonlinear solving."
      "Changes the default logic from QF_UFLIRA to QF_UFNIRA and defaults solver-type to mcsat.")
@@ -926,6 +942,9 @@
   (format stream "  :configs ((arith-solver simplex) (solver-type mcsat))~%")
   (format stream "  :configs (arith-solver simplex solver-type mcsat)~%")
   (format stream "  :params ((randomness 0.05) (branching theory))~%")
+  (format stream "  :expand-enable ((\"popcount4\" 1) (\"normalize\" :depth 2))~%")
+  (format stream "  :expand-disable (\"normalize\")~%")
+  (format stream "  :quiet? t~%")
   (format stream "  :enable-options (flatten learn-eq)~%")
   (format stream "  :disable-options (var-elim)~%"))
 
@@ -972,6 +991,9 @@
     (yices2-api-help-write-context-options out)
     (yices2-api-help-write-parameters out)
     (format out "~%Example:~%")
+    (format out "  (y2api-expand :expand-enable '((\"popcount4\" 1))~%")
+    (format out "                :quiet? t~%")
+    (format out "                :logic \"QF_UFBV\")~%")
     (format out "  (y2api-simp :logic \"QF_UFLIA\"~%")
     (format out "              :configs ((arith-solver simplex))~%")
     (format out "              :params ((randomness 0.0) (branching theory))~%")
@@ -2105,7 +2127,7 @@
          "Failed to negate succedent formula ~a" fmla))))
 
 (defun yices2-api-run (ps sformnums &key nonlinear? logic (mode "one-shot")
-                                         solver-type configs params
+                                         solver-type configs params quiet?
                                          enable-options disable-options)
   (let* ((goalsequent (current-goal ps))
          (sforms (select-seq (s-forms goalsequent) sformnums))
@@ -2195,7 +2217,8 @@
                                               core-terms assumptions)))
                                        (setq *yices2-api-last-unsat-core*
                                              core-string)
-                                       (format t "~%~a" core-string))
+                                       (unless quiet?
+                                         (format t "~%~a" core-string)))
                                    (yices_delete_term_vector core)))
                                (values '! nil nil))
                               ((= status +yices-status-sat+)
@@ -2219,24 +2242,29 @@
                                        *yices2-api-last-model* model-string
                                        *yices2-api-last-counterexample*
                                        counterexample-string)
-                                 (format t "~%~a" counterexample-string))
+                                 (unless quiet?
+                                   (format t "~%~a" counterexample-string)))
                                (values 'X nil nil))
                               ((= status +yices-status-unknown+)
                                (setq *yices2-api-last-status* :unknown)
-                               (format t "~%Yices2 API translation returned unknown.")
+                               (unless quiet?
+                                 (format t "~%Yices2 API translation returned unknown."))
                                (values 'X nil nil))
                               ((= status +yices-status-interrupted+)
                                (setq *yices2-api-last-status* :interrupted)
-                               (format t "~%Yices2 API proof attempt was interrupted.")
+                               (unless quiet?
+                                 (format t "~%Yices2 API proof attempt was interrupted."))
                                (values 'X nil nil))
                               ((= status +yices-status-error+)
                                (setq *yices2-api-last-status* :error)
-                               (yices2-api-error "Yices2 returned an error status")
+                               (unless *yices2-api-suppress-errors*
+                                 (yices2-api-error "Yices2 returned an error status"))
                                (values 'X nil nil))
                               (t
                                (setq *yices2-api-last-status* :error)
-                               (format t "~%Yices2 API returned unexpected status ~a."
-                                       status)
+                               (unless *yices2-api-suppress-errors*
+                                 (format t "~%Yices2 API returned unexpected status ~a."
+                                         status))
                                (values 'X nil nil))))))
                 (when context
                   (yices_free_context context))
@@ -2246,7 +2274,8 @@
                   (yices_free_config config))
                 (yices_reset)))
           (error (condition)
-            (format t "~%Yices2 API prover failed: ~a" condition)
+            (unless *yices2-api-suppress-errors*
+              (format t "~%Yices2 API prover failed: ~a" condition))
             (values 'X nil nil))))))
 
 (defun yices2-api-dispatch (sformnums &rest option-plist)

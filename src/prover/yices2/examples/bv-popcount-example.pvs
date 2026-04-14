@@ -5,7 +5,12 @@
 % on any particular PVS bitvector library encoding.
 %
 % Suggested proof command for the popcount theorems below:
-%   (then (expand "popcount4") (y2api-simp))
+%   (y2api-expand :expand-enable '(("popcount4" 1)))
+%
+% Suggested proof command for the 32-bit equivalence theorem below:
+%   (y2api-expand :expand-enable '(("popcount32_hd" 1)
+%                                  ("popcount32_naive" 33))
+%                 :quiet? t)
 %
 % Suggested proof command for xor_self_zero:
 %   (y2api-simp)
@@ -16,14 +21,39 @@ BEGIN
   IMPORTING yices2BV
 
   Word4: TYPE = bvec[4]
+  Word32: TYPE = bvec[32]
 
   x: VAR Word4
+  y: VAR Word32
 
-  popcount4(x: Word4): MACRO nat =
+  popcount4(x: Word4): nat =
     (IF bitextract(4, 0, x) THEN 1 ELSE 0 ENDIF) +
     (IF bitextract(4, 1, x) THEN 1 ELSE 0 ENDIF) +
     (IF bitextract(4, 2, x) THEN 1 ELSE 0 ENDIF) +
     (IF bitextract(4, 3, x) THEN 1 ELSE 0 ENDIF)
+
+  popcount32_hd(x: Word32): Word32 =
+    LET i1 = bvsub(32, x,
+                   bvand(32, shift_right0(32, 1, x),
+                         bvconst(32, 1431655765))),
+        i2 = bvadd(32,
+                   bvand(32, i1, bvconst(32, 858993459)),
+                   bvand(32, shift_right0(32, 2, i1),
+                         bvconst(32, 858993459))),
+        i3 = bvand(32,
+                   bvadd(32, i2, shift_right0(32, 4, i2)),
+                   bvconst(32, 252645135))
+    IN shift_right0(32, 24, bvmul(32, i3, bvconst(32, 16843009)))
+
+  popcount32_naive(x: Word32, n: upto(32)): RECURSIVE Word32 =
+    IF n = 0 THEN
+      bvzero(32)
+    ELSE
+      bvadd(32,
+            IF bitextract(32, n - 1, x) THEN bvone(32) ELSE bvzero(32) ENDIF,
+            popcount32_naive(x, n - 1))
+    ENDIF
+    MEASURE n
 
   zero_popcount: THEOREM
     popcount4(bvzero(4)) = 0
@@ -48,5 +78,8 @@ BEGIN
 
   add_literal_popcount: THEOREM
     popcount4(bvadd(4, bvconst(4, 5), bvone(4))) = 2
+
+  popcount32_hd_equivalent: THEOREM
+    popcount32_hd(y) = popcount32_naive(y, 32)
 
 END Yices2BVPopcountExample
