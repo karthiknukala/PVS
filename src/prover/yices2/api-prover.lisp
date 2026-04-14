@@ -848,6 +848,7 @@
             *yices2-api-logic* *yices2-api-nonlinear-logic*)
     (format out "Use y2api-show-library to inspect the active libyices build and MCSAT support.~%")
     (format out "The :params section below lists the exact yices_set_param names accepted by the C API.~%")
+    (format out "Records are encoded as Yices tuples in canonical field order; tuple/record projections and WITH-updates use select/update terms directly.~%")
     (yices2-api-help-write-commands out)
     (yices2-api-help-write-keywords out)
     (yices2-api-help-write-logics out)
@@ -914,11 +915,63 @@
         (tc-eq stype *real*)
         (tc-eq stype *number*))))
 
+(defun yices2-api-component-type (ptype)
+  (if (typep ptype 'dep-binding)
+      (type ptype)
+      ptype))
+
+(defun yices2-api-record-fields (rtype)
+  (sort-fields (fields rtype) (dependent? rtype)))
+
+(defun yices2-api-record-field-decl (field-id rtype)
+  (let* ((needle (or (ignore-errors (id field-id))
+                     field-id))
+         (field (find needle
+                      (yices2-api-record-fields rtype)
+                      :key #'id
+                      :test #'eq)))
+    (or field
+        (error "Unsupported record field ~a for Yices2 API type ~a"
+               field-id rtype))))
+
+(defun yices2-api-record-field-index (field-id rtype)
+  (let* ((field (yices2-api-record-field-decl field-id rtype))
+         (position (position field (yices2-api-record-fields rtype))))
+    (or (and position (1+ position))
+        (error "Failed to locate the Yices2 API record field index for ~a in ~a"
+               field-id rtype))))
+
+(defun yices2-api-build-tuple-type (elt-types source)
+  (let ((arity (length elt-types)))
+    (when (zerop arity)
+      (error "Cannot build an empty Yices2 tuple type for ~a" source))
+    (case arity
+      (1 (yices2-api-check-type
+          (yices_tuple_type1 (car elt-types))
+          "Failed to build tuple type for ~a" source))
+      (2 (yices2-api-check-type
+          (yices_tuple_type2 (first elt-types) (second elt-types))
+          "Failed to build tuple type for ~a" source))
+      (3 (yices2-api-check-type
+          (yices_tuple_type3 (first elt-types) (second elt-types) (third elt-types))
+          "Failed to build tuple type for ~a" source))
+      (otherwise
+       (cffi:with-foreign-object (array 'type_t arity)
+         (loop for tau in elt-types
+               for i from 0
+               do (setf (cffi:mem-aref array 'type_t i) tau))
+         (yices2-api-check-type
+          (yices_tuple_type arity array)
+          "Failed to build tuple type for ~a" source))))))
+
 (defun yices2-api-function-type (fty)
   (let* ((domain (domain fty))
+         (domain-type (if (dep-binding? domain)
+                          (find-supertype (type domain))
+                          (find-supertype domain)))
          (range-type (yices2-api-type (range fty))))
-    (if (tupletype? domain)
-        (let* ((dom-types (mapcar #'yices2-api-type (types domain)))
+    (if (typep domain-type '(or tupletype struct-sub-tupletype))
+        (let* ((dom-types (mapcar #'yices2-api-type (types domain-type)))
                (arity (length dom-types)))
           (case arity
             (1 (yices2-api-check-type
@@ -940,30 +993,20 @@
                 (yices_function_type arity array range-type)
                 "Failed to build function type for ~a" fty)))))
         (yices2-api-check-type
-         (yices_function_type1 (yices2-api-type domain) range-type)
+         (yices_function_type1 (yices2-api-type domain-type) range-type)
          "Failed to build function type for ~a" fty))))
 
 (defun yices2-api-tuple-type (tty)
-  (let* ((elt-types (mapcar #'yices2-api-type (types tty)))
-         (arity (length elt-types)))
-    (case arity
-      (1 (yices2-api-check-type
-          (yices_tuple_type1 (car elt-types))
-          "Failed to build tuple type for ~a" tty))
-      (2 (yices2-api-check-type
-          (yices_tuple_type2 (first elt-types) (second elt-types))
-          "Failed to build tuple type for ~a" tty))
-      (3 (yices2-api-check-type
-          (yices_tuple_type3 (first elt-types) (second elt-types) (third elt-types))
-          "Failed to build tuple type for ~a" tty))
-      (otherwise
-       (cffi:with-foreign-object (array 'type_t arity)
-         (loop for tau in elt-types
-               for i from 0
-               do (setf (cffi:mem-aref array 'type_t i) tau))
-         (yices2-api-check-type
-          (yices_tuple_type arity array)
-          "Failed to build tuple type for ~a" tty))))))
+  (yices2-api-build-tuple-type
+   (mapcar #'yices2-api-type (types tty))
+   tty))
+
+(defun yices2-api-record-type (rtype)
+  (yices2-api-build-tuple-type
+   (mapcar #'(lambda (field)
+               (yices2-api-type (yices2-api-component-type (type field))))
+           (yices2-api-record-fields rtype))
+   rtype))
 
 (defun yices2-api-uninterpreted-type (ptype)
   (let ((tau (yices2-api-check-type
@@ -981,15 +1024,15 @@
               (cond ((yices2-api-boolean-type-p key)
                      (yices_bool_type))
                     ((yices2-api-integer-type-p key)
-                     (yices_int_type))
+                    (yices_int_type))
                     ((yices2-api-real-type-p key)
                      (yices_real_type))
                     ((funtype? key)
                      (yices2-api-function-type key))
-                    ((tupletype? key)
+                    ((typep key '(or tupletype struct-sub-tupletype))
                      (yices2-api-tuple-type key))
-                    ((recordtype? key)
-                     (error "Yices2 API prover does not yet support record type ~a" key))
+                    ((typep key '(or recordtype struct-sub-recordtype))
+                     (yices2-api-record-type key))
                     (t
                      (yices2-api-uninterpreted-type key)))))))
 
@@ -1060,9 +1103,10 @@
          (yices_application fun arity array)
           "Failed to translate application ~a" expr))))))
 
-(defun yices2-api-tuple-term (expr env)
-  (let* ((args (mapcar #'(lambda (arg) (yices2-api-term arg env)) (exprs expr)))
-         (arity (length args)))
+(defun yices2-api-build-tuple-term (args expr)
+  (let ((arity (length args)))
+    (when (zerop arity)
+      (error "Cannot build an empty Yices2 tuple term for ~a" expr))
     (case arity
       (2 (yices2-api-check-term
           (yices_pair (first args) (second args))
@@ -1075,6 +1119,121 @@
          (yices2-api-check-term
           (yices_tuple arity array)
           "Failed to translate tuple term ~a" expr))))))
+
+(defun yices2-api-tuple-term (expr env)
+  (yices2-api-build-tuple-term
+   (mapcar #'(lambda (arg) (yices2-api-term arg env)) (exprs expr))
+   expr))
+
+(defun yices2-api-record-assignment (field expr)
+  (let* ((field-id (id field))
+         (assignment
+          (find field-id
+                (assignments expr)
+                :key #'(lambda (assign)
+                         (id (caar (arguments assign))))
+                :test #'eq)))
+    (or assignment
+        (error "Missing record assignment for field ~a in ~a" field-id expr))))
+
+(defun yices2-api-record-term (expr env)
+  (let* ((rtype (find-supertype (type expr)))
+         (args
+          (mapcar #'(lambda (field)
+                      (yices2-api-term
+                       (expression (yices2-api-record-assignment field expr))
+                       env))
+                  (yices2-api-record-fields rtype))))
+    (yices2-api-build-tuple-term args expr)))
+
+(defun yices2-api-select-term (tuple index expr)
+  (yices2-api-check-term
+   (yices_select index tuple)
+   "Failed to translate tuple/record selection ~a" expr))
+
+(defun yices2-api-function-update (fun args new-value expr)
+  (case (length args)
+    (1 (yices2-api-check-term
+        (yices_update1 fun (first args) new-value)
+        "Failed to translate unary function update ~a" expr))
+    (2 (yices2-api-check-term
+        (yices_update2 fun (first args) (second args) new-value)
+        "Failed to translate binary function update ~a" expr))
+    (3 (yices2-api-check-term
+        (yices_update3 fun (first args) (second args) (third args) new-value)
+        "Failed to translate ternary function update ~a" expr))
+    (otherwise
+     (let ((arity (length args)))
+       (cffi:with-foreign-object (array 'term_t arity)
+         (loop for arg in args
+               for i from 0
+               do (setf (cffi:mem-aref array 'term_t i) arg))
+         (yices2-api-check-term
+          (yices_update fun arity array new-value)
+          "Failed to translate function update ~a" expr))))))
+
+(defun yices2-api-update-path (path value basis basis-type env expr)
+  (if (null path)
+      (yices2-api-term value env)
+      (let ((stype (find-supertype basis-type)))
+        (cond
+         ((typep stype '(or recordtype struct-sub-recordtype))
+          (let* ((field (yices2-api-record-field-decl (caar path) stype))
+                 (index (yices2-api-record-field-index field stype))
+                 (selected (yices2-api-select-term basis index expr))
+                 (updated (yices2-api-update-path
+                           (cdr path)
+                           value
+                           selected
+                           (yices2-api-component-type (type field))
+                           env
+                           expr)))
+            (yices2-api-check-term
+             (yices_tuple_update basis index updated)
+             "Failed to translate record update ~a" expr)))
+         ((typep stype '(or tupletype struct-sub-tupletype))
+          (let* ((index (number (caar path)))
+                 (types (types stype)))
+            (unless (<= 1 index (length types))
+              (error "Tuple update index ~a is out of range for ~a"
+                     index stype))
+            (let* ((selected (yices2-api-select-term basis index expr))
+                   (updated (yices2-api-update-path
+                             (cdr path)
+                             value
+                             selected
+                             (yices2-api-component-type (nth (1- index) types))
+                             env
+                             expr)))
+              (yices2-api-check-term
+               (yices_tuple_update basis index updated)
+               "Failed to translate tuple update ~a" expr))))
+         ((funtype? stype)
+          (let* ((arg-terms (mapcar #'(lambda (arg) (yices2-api-term arg env))
+                                    (car path)))
+                 (selected (yices2-api-apply basis arg-terms expr))
+                 (updated (yices2-api-update-path
+                           (cdr path)
+                           value
+                           selected
+                           (range stype)
+                           env
+                           expr)))
+            (yices2-api-function-update basis arg-terms updated expr)))
+         (t
+          (error "Unsupported Yices2 API update path ~a over ~a" path stype))))))
+
+(defun yices2-api-update-term (expr env)
+  (let ((basis (yices2-api-term (expression expr) env))
+        (basis-type (type (expression expr))))
+    (dolist (assignment (assignments expr) basis)
+      (setf basis
+            (yices2-api-update-path (arguments assignment)
+                                    (expression assignment)
+                                    basis
+                                    basis-type
+                                    env
+                                    expr)))))
 
 (defun yices2-api-term (expr &optional env)
   (cond ((tc-eq expr *true*)
@@ -1142,6 +1301,19 @@
                      (yices2-api-term (then-part expr) env)
                      (yices2-api-term (else-part expr) env))
           "Failed to translate branch ~a" expr))
+        ((projection-application? expr)
+         (yices2-api-select-term
+          (yices2-api-term (argument expr) env)
+          (index expr)
+          expr))
+        ((field-application? expr)
+         (let* ((argument (argument expr))
+                (rtype (find-supertype (type argument)))
+                (index (yices2-api-record-field-index (id expr) rtype)))
+           (yices2-api-select-term
+            (yices2-api-term argument env)
+            index
+            expr)))
         ((application? expr)
          (let* ((op (operator* expr))
                 (op-id (and (name-expr? op) (id op)))
@@ -1191,7 +1363,9 @@
         ((tuple-expr? expr)
          (yices2-api-tuple-term expr env))
         ((record-expr? expr)
-         (error "Yices2 API prover does not yet translate record terms directly: ~a" expr))
+         (yices2-api-record-term expr env))
+        ((update-expr? expr)
+         (yices2-api-update-term expr env))
         (t
          (error "Unsupported expression for Yices2 API prover: ~a" expr))))
 

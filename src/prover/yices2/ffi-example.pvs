@@ -11,10 +11,13 @@
 Yices2FFIExample: THEORY
 BEGIN
 
+  Pair: TYPE = [# left: real, right: real #]
+
   x, y, z: VAR real
   f: VAR [real -> real]
   g: VAR [real, real -> real]
   p: VAR [real -> bool]
+  h: VAR [Pair -> real]
 
   linear_chain: THEOREM
     x = y + 1 AND y = 2 IMPLIES x > 10000
@@ -33,6 +36,26 @@ BEGIN
 
   branch_fact: THEOREM
     IF x < 0 THEN x + 1 <= 1 ELSE x + 1 >= 1 ENDIF
+
+  tuple_projection: THEOREM
+    (x, y)`1 = x AND (x, y)`2 = y
+
+  tuple_update: THEOREM
+    ((x, y) WITH [(1) := z])`1 = z AND
+    ((x, y) WITH [(2) := z])`2 = z
+
+  record_projection: THEOREM
+    (# left := x, right := y #)`left = x AND
+    (# left := x, right := y #)`right = y
+
+  record_literal_order: THEOREM
+    (# right := y, left := x #) = (# left := x, right := y #)
+
+  record_update: THEOREM
+    ((# left := x, right := y #) WITH [`right := z])`right = z
+
+  record_congruence: THEOREM
+    h((# right := y, left := x #)) = h((# left := x, right := y #))
 
   quantified_transport: THEOREM
     FORALL (u, v: real): u = v IMPLIES g(u, 1) = g(v, 1)
