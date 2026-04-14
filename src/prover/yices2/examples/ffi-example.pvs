@@ -2,25 +2,26 @@
 %
 % Suggested proof commands:
 %   linear_chain, monotone_chain, unary_congruence, binary_congruence,
-%   predicate_transport, and branch_fact:
+%   predicate_transport, branch_fact, tuple/record examples, and
+%   quantified_transport:
 %     (yices2-api)
 %
-%   quantified_transport:
-%     (y2api-simp)
+%   nonlinear:
+%     (y2api-mcsat)
 
 Yices2FFIExample: THEORY
 BEGIN
 
   Pair: TYPE = [# left: real, right: real #]
 
-  x, y, z: VAR real
-  f: VAR [real -> real]
-  g: VAR [real, real -> real]
-  p: VAR [real -> bool]
-  h: VAR [Pair -> real]
+  x, y, z: real
+  f: [real -> real]
+  g: [real, real -> real]
+  p: [real -> bool]
+  h: [Pair -> real]
 
   linear_chain: THEOREM
-    x = y + 1 AND y = 2 IMPLIES x > 10000
+    x = y + 1 AND y = 2 IMPLIES x = 3
 
   monotone_chain: THEOREM
     x <= y AND y < z IMPLIES x < z
@@ -61,6 +62,6 @@ BEGIN
     FORALL (u, v: real): u = v IMPLIES g(u, 1) = g(v, 1)
 
   nonlinear: THEOREM
-    x * x = 2 IMPLIES x = 1
+    x * x = 2 IMPLIES x * x > 1
 
 END Yices2FFIExample

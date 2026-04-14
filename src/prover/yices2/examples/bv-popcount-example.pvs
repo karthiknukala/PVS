@@ -1,0 +1,52 @@
+% Examples for the Yices2 bitvector interpretation path.
+%
+% This theory talks directly in the solver-facing yices2BV vocabulary.
+% That keeps the example focused on the Yices2 operator surface rather than
+% on any particular PVS bitvector library encoding.
+%
+% Suggested proof command for the popcount theorems below:
+%   (then (expand "popcount4") (y2api-simp))
+%
+% Suggested proof command for xor_self_zero:
+%   (y2api-simp)
+
+Yices2BVPopcountExample: THEORY
+BEGIN
+
+  IMPORTING yices2BV
+
+  Word4: TYPE = bvec[4]
+
+  x: VAR Word4
+
+  popcount4(x: Word4): MACRO nat =
+    (IF bitextract(4, 0, x) THEN 1 ELSE 0 ENDIF) +
+    (IF bitextract(4, 1, x) THEN 1 ELSE 0 ENDIF) +
+    (IF bitextract(4, 2, x) THEN 1 ELSE 0 ENDIF) +
+    (IF bitextract(4, 3, x) THEN 1 ELSE 0 ENDIF)
+
+  zero_popcount: THEOREM
+    popcount4(bvzero(4)) = 0
+
+  one_popcount: THEOREM
+    popcount4(bvone(4)) = 1
+
+  full_popcount: THEOREM
+    popcount4(bvminusone(4)) = 4
+
+  literal_popcount: THEOREM
+    popcount4(bvconst(4, 10)) = 2
+
+  xor_self_zero: THEOREM
+    bvxor(4, bvconst(4, 9), bvconst(4, 9)) = bvzero(4)
+
+  xor_self_popcount: THEOREM
+    popcount4(bvxor(4, bvconst(4, 9), bvconst(4, 9))) = 0
+
+  masked_popcount: THEOREM
+    popcount4(bvand(4, bvconst(4, 13), bvconst(4, 10))) = 1
+
+  add_literal_popcount: THEOREM
+    popcount4(bvadd(4, bvconst(4, 5), bvone(4))) = 2
+
+END Yices2BVPopcountExample

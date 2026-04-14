@@ -1,0 +1,33 @@
+(|Yices2FFIExample|
+ (|linear_chain| 0
+  (|linear_chain-1| NIL 3985177037 ("" (GRIND)) NIL SHOSTAK))
+ (|monotone_chain| 0
+  (|monotone_chain-1| NIL 3985177037 ("" (YICES2-API))
+   ((|real_lt_is_strict_total_order| NAME-JUDGEMENT
+     "(strict_total_order?[real])" |real_props| NIL)
+    (|real_le_is_total_order| NAME-JUDGEMENT "(total_order?[real])"
+     |real_props| NIL))
+   SHOSTAK))
+ (|unary_congruence| 0
+  (|unary_congruence-1| NIL 3985177037 ("" (GRIND)) NIL SHOSTAK))
+ (|binary_congruence| 0
+  (|binary_congruence-1| NIL 3985177037 ("" (GRIND)) NIL SHOSTAK))
+ (|predicate_transport| 0
+  (|predicate_transport-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|branch_fact| 0
+  (|branch_fact-1| NIL 3985177038 ("" (GRIND)) NIL SHOSTAK))
+ (|tuple_projection| 0
+  (|tuple_projection-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|tuple_update| 0
+  (|tuple_update-1| NIL 3985177038 ("" (GRIND)) NIL SHOSTAK))
+ (|record_projection| 0
+  (|record_projection-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|record_literal_order| 0
+  (|record_literal_order-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|record_update| 0
+  (|record_update-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|record_congruence| 0
+  (|record_congruence-1| NIL 3985177038 ("" (YICES2-API)) NIL SHOSTAK))
+ (|quantified_transport| 0
+  (|quantified_transport-1| NIL 3985177038 ("" (GRIND)) NIL SHOSTAK))
+ (|nonlinear| 0 (|nonlinear-1| NIL 3985177038 ("" (GRIND)) NIL SHOSTAK)))

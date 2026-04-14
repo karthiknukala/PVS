@@ -1,0 +1,79 @@
+% Solver-facing bitvector vocabulary for the Yices2 backends.
+%
+% This theory is intentionally phrased using ordinary PVS type/function
+% declarations so it can be reinterpreted with theory mappings into an
+% existing bitvector development.
+%
+% The names are deliberately Yices2-oriented: the bitvector carrier is the
+% ordinary width-indexed PVS `bvec[N]` family, while the operator surface is
+% kept separate from the prelude bitvector overloads.
+
+yices2BV: THEORY
+BEGIN
+
+  % Literal/constructor surface.
+  bvconst(N: posnat, VALUE: int): bvec[N]
+  bvzero(N: posnat): bvec[N]
+  bvone(N: posnat): bvec[N]
+  bvminusone(N: posnat): bvec[N]
+  bvarray(N: posnat, bits: [below(N) -> bit]): bvec[N]
+  bitextract(N: posnat, I: below(N), x: bvec[N]): bit
+
+  % Core arithmetic.
+  bvadd(N: posnat, x, y: bvec[N]): bvec[N]
+  bvsub(N: posnat, x, y: bvec[N]): bvec[N]
+  bvneg(N: posnat, x: bvec[N]): bvec[N]
+  bvmul(N: posnat, x, y: bvec[N]): bvec[N]
+  bvsquare(N: posnat, x: bvec[N]): bvec[N]
+  bvpower(N: posnat, K: nat, x: bvec[N]): bvec[N]
+  bvdiv(N: posnat, x, y: bvec[N]): bvec[N]
+  bvrem(N: posnat, x, y: bvec[N]): bvec[N]
+  bvsdiv(N: posnat, x, y: bvec[N]): bvec[N]
+  bvsrem(N: posnat, x, y: bvec[N]): bvec[N]
+  bvsmod(N: posnat, x, y: bvec[N]): bvec[N]
+
+  % Core bitwise operators.
+  bvnot(N: posnat, x: bvec[N]): bvec[N]
+  bvand(N: posnat, x, y: bvec[N]): bvec[N]
+  bvor(N: posnat, x, y: bvec[N]): bvec[N]
+  bvxor(N: posnat, x, y: bvec[N]): bvec[N]
+  bvnand(N: posnat, x, y: bvec[N]): bvec[N]
+  bvnor(N: posnat, x, y: bvec[N]): bvec[N]
+  bvxnor(N: posnat, x, y: bvec[N]): bvec[N]
+
+  % Shifts, rotates, and structural operators.
+  bvshl(N: posnat, x, y: bvec[N]): bvec[N]
+  bvlshr(N: posnat, x, y: bvec[N]): bvec[N]
+  bvashr(N: posnat, x, y: bvec[N]): bvec[N]
+  shift_left0(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  shift_left1(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  shift_right0(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  shift_right1(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  ashift_right(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  rotate_left(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  rotate_right(N: posnat, K: upto(N), x: bvec[N]): bvec[N]
+  bvextract(N: posnat, I: below(N), J: {j: below(N) | I <= j}, x: bvec[N]):
+    bvec[J - I + 1]
+  bvconcat(N: posnat, M: posnat, x: bvec[N], y: bvec[M]): bvec[N + M]
+  bvrepeat(N: posnat, K: posnat, x: bvec[N]): bvec[N * K]
+  sign_extend(N: posnat, K: nat, x: bvec[N]): bvec[N + K]
+  zero_extend(N: posnat, K: nat, x: bvec[N]): bvec[N + K]
+
+  % Reductions.
+  redand(N: posnat, x: bvec[N]): bvec[1]
+  redor(N: posnat, x: bvec[N]): bvec[1]
+  redcomp(N: posnat, x, y: bvec[N]): bvec[1]
+
+  % Comparison atoms.
+  bveq(N: posnat, x, y: bvec[N]): bool
+  bvneq(N: posnat, x, y: bvec[N]): bool
+  bvge(N: posnat, x, y: bvec[N]): bool
+  bvgt(N: posnat, x, y: bvec[N]): bool
+  bvle(N: posnat, x, y: bvec[N]): bool
+  bvlt(N: posnat, x, y: bvec[N]): bool
+  bvsge(N: posnat, x, y: bvec[N]): bool
+  bvsgt(N: posnat, x, y: bvec[N]): bool
+  bvsle(N: posnat, x, y: bvec[N]): bool
+  bvslt(N: posnat, x, y: bvec[N]): bool
+
+END yices2BV

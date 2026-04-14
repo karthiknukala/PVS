@@ -48,6 +48,7 @@
 
 (defvar *yices2-api-assumption-list* nil)
 (defvar *yices2-api-assumption-seen-terms* nil)
+(defvar *yices2-api-suppress-global-invariants* nil)
 
 (defparameter *yices2-api-help-commands*
   '(("y2api-simp"
@@ -567,9 +568,12 @@
 	:key #'yices2-api-pvs-string))
 
 (defun yices2-api-type-predicate-formulas (expr)
-  (mapcar #'(lambda (pred)
-              (make!-reduced-application pred expr))
-          (type-predicates (type expr) t)))
+  (let ((predicates
+         (and (not (yices2-api-bitvector-type-p (type expr)))
+              (ignore-errors (type-predicates (type expr) t)))))
+    (mapcar #'(lambda (pred)
+                (make!-reduced-application pred expr))
+            predicates)))
 
 (defun yices2-api-global-invariant-formulas (expr)
   (let ((key (yices2-api-global-term-key expr)))
@@ -586,7 +590,8 @@
                    formulas)))))))
 
 (defun yices2-api-register-global-invariants (expr)
-  (when *yices2-api-assumption-seen-terms*
+  (when (and *yices2-api-assumption-seen-terms*
+             (not *yices2-api-suppress-global-invariants*))
     (dolist (formula (yices2-api-global-invariant-formulas expr))
       (yices2-api-register-assumption
        (yices2-api-term formula)
@@ -637,18 +642,69 @@
       (yices2-api-register-assumption (yices2-api-assertion-term sf)
                                       :goal
                                       sf))
-    (dolist (constraint
-             (yices2-api-collect-subtype-constraint-formulas sforms))
-      (yices2-api-register-assumption (yices2-api-term constraint)
-                                      :subtype
-                                      constraint))
+    (let ((*yices2-api-suppress-global-invariants* t))
+      (dolist (constraint
+               (yices2-api-collect-subtype-constraint-formulas sforms))
+        (yices2-api-register-assumption (yices2-api-term constraint)
+                                        :subtype
+                                        constraint)))
     (nreverse *yices2-api-assumption-list*)))
 
 (defun yices2-api-assumptions-require-quantifiers-p (assumptions)
+  (labels ((term-has-quantifier-p (term)
+             (let ((rendered
+                    (ignore-errors
+                      (string-downcase
+                       (yices2-api-term-string term 200 2000 0)))))
+               (and rendered
+                    (or (search "(forall" rendered)
+                        (search "(exists" rendered)
+                        (search "(lambda" rendered)))))
+           (assumption-has-quantifier-p (assumption)
+             (let ((term (yices2-api-assumption-term assumption)))
+               (if term
+                   (term-has-quantifier-p term)
+                   (yices2-api-object-has-binding-expr-p
+                    (yices2-api-assumption-expr assumption))))))
+    (some #'assumption-has-quantifier-p
+          assumptions)))
+
+(defun yices2-api-object-has-bitvectors-p (object)
+  (let ((found nil))
+    (labels ((mark-type (ptype)
+               (when (and ptype
+                          (yices2-api-bitvector-type-p ptype))
+                 (setq found t))))
+      (mapobject #'(lambda (obj)
+                     (typecase obj
+                       (expr (mark-type (ignore-errors (type obj))))
+                       (type-expr (mark-type obj)))
+                     found)
+                 object))
+    found))
+
+(defun yices2-api-assumptions-require-bitvectors-p (assumptions)
   (some #'(lambda (assumption)
-            (yices2-api-object-has-binding-expr-p
+            (yices2-api-object-has-bitvectors-p
              (yices2-api-assumption-expr assumption)))
         assumptions))
+
+(defun yices2-api-logic-supports-bitvectors-p (logic)
+  (let ((normalized (yices2-api-logic-string logic)))
+    (or (string= normalized "ALL")
+        (search "BV" normalized))))
+
+(defun yices2-api-effective-logic (requested-logic assumptions)
+  (let ((requires-bv (yices2-api-assumptions-require-bitvectors-p assumptions))
+        (requires-quantifiers
+         (yices2-api-assumptions-require-quantifiers-p assumptions)))
+    (cond ((and requires-bv
+                (not (yices2-api-logic-supports-bitvectors-p requested-logic)))
+           "ALL")
+          (requires-quantifiers
+           (yices2-api-quantified-logic-string requested-logic))
+          (t
+           requested-logic))))
 
 (defun yices2-api-normalize-value-string (string)
   (cond ((null string) nil)
@@ -958,6 +1014,194 @@
                          fallback))
                     (funcall *yices2-api-name-counter*)))))
 
+(defun yices2-api-yices2bv-theory-p (theory)
+  (and theory
+       (typep theory 'module)
+       (eq (id theory) '|yices2BV|)))
+
+(defun yices2-api-yices2bv-source-declaration-p (decl)
+  (and decl
+       (yices2-api-yices2bv-theory-p (module decl))))
+
+(defun yices2-api-object-declaration (obj)
+  (cond ((declaration? obj) obj)
+        ((typep obj 'name) (ignore-errors (declaration obj)))
+        (t nil)))
+
+(defun yices2-api-same-declaration-p (x y)
+  (or (same-declaration x y)
+      (and x
+           y
+           (same-id x y)
+           (let ((xmod (ignore-errors (module x)))
+                 (ymod (ignore-errors (module y))))
+             (or (eq xmod ymod)
+                 (and xmod
+                      ymod
+                      (same-id xmod ymod)))))))
+
+(defun yices2-api-source-theory-name (generator)
+  (ignore-errors
+    (typecase generator
+      (importing (theory-name generator))
+      (mod-decl (theory-name generator))
+      (theory-abbreviation-decl (theory-name generator))
+      (formal-theory-decl (theory-name generator))
+      (t nil))))
+
+(defun yices2-api-mapping-lhs (mapping)
+  (typecase mapping
+    (cons (car mapping))
+    (t (ignore-errors (lhs mapping)))))
+
+(defun yices2-api-mapping-rhs (mapping)
+  (typecase mapping
+    (cons (cdr mapping))
+    (t (ignore-errors (rhs mapping)))))
+
+(defun yices2-api-mapped-declaration (mapped)
+  (let ((value (actual-value mapped)))
+    (cond ((declaration? value) value)
+          ((typep value 'name) (ignore-errors (declaration value)))
+          (t nil))))
+
+(defun yices2-api-yices2bv-source-declaration-from-generator (decl)
+  (let* ((generator (generated-by decl))
+         (source-name (and generator
+                           (yices2-api-source-theory-name generator)))
+         (source-theory
+          (and source-name
+               (or (ignore-errors (declaration source-name))
+                   (ignore-errors (get-theory source-name))))))
+    (when (yices2-api-yices2bv-theory-p source-theory)
+      (find (id decl) (all-decls source-theory)
+            :key #'id :test #'eq))))
+
+(defun yices2-api-yices2bv-source-declaration-from-mappings (decl)
+  (let ((contexts (remove-duplicates
+                   (list (module decl) (current-theory))
+                   :test #'eq)))
+    (loop for context in contexts
+          thereis (and context
+                       (loop for mapping in (theory-mappings context)
+                             for lhsdecl =
+                             (yices2-api-object-declaration
+                              (yices2-api-mapping-lhs mapping))
+                             for rhsdecl =
+                             (yices2-api-mapped-declaration
+                              (yices2-api-mapping-rhs mapping))
+                             when (and rhsdecl
+                                       (yices2-api-same-declaration-p
+                                        decl rhsdecl)
+                                       (yices2-api-yices2bv-source-declaration-p
+                                        lhsdecl))
+                               do (return lhsdecl))))))
+
+(defun yices2-api-yices2bv-source-declaration-from-module-decls (decl)
+  (let ((contexts (remove-duplicates
+                   (list (module decl) (current-theory))
+                   :test #'eq)))
+    (loop for context in contexts
+          thereis
+          (and context
+               (loop for idecl in (ignore-errors (theory context))
+                     thereis
+                     (let* ((source-name (yices2-api-source-theory-name idecl))
+                            (source-theory
+                             (and source-name
+                                  (or (ignore-errors (declaration source-name))
+                                      (ignore-errors (get-theory source-name))))))
+                       (and (yices2-api-yices2bv-theory-p source-theory)
+                            (loop for mapping in (ignore-errors
+                                                   (mappings source-name))
+                                  for lhsdecl =
+                                  (yices2-api-object-declaration
+                                   (yices2-api-mapping-lhs mapping))
+                                  for rhsdecl =
+                                  (yices2-api-mapped-declaration
+                                   (yices2-api-mapping-rhs mapping))
+                                  when (and lhsdecl
+                                            rhsdecl
+                                            (yices2-api-same-declaration-p
+                                             decl rhsdecl)
+                                            (yices2-api-yices2bv-source-declaration-p
+                                             lhsdecl))
+                                    do (return lhsdecl)))))))))
+
+(defun yices2-api-yices2bv-source-declaration (obj)
+  (let ((decl (ignore-errors (declaration obj))))
+    (or (and decl
+             (yices2-api-yices2bv-source-declaration-p decl)
+             decl)
+        (and decl
+             (yices2-api-yices2bv-source-declaration-from-generator decl))
+        (and decl
+             (yices2-api-yices2bv-source-declaration-from-mappings decl))
+        (and decl
+             (yices2-api-yices2bv-source-declaration-from-module-decls decl)))))
+
+(defun yices2-api-normalize-id-symbol (id)
+  (and id
+       (or (find-symbol (string-upcase (symbol-name id)) :pvs)
+           id)))
+
+(defun yices2-api-yices2bv-source-id (obj)
+  (let ((decl (yices2-api-yices2bv-source-declaration obj)))
+    (yices2-api-normalize-id-symbol
+     (and decl (id decl)))))
+
+(defun yices2-api-static-integer-value (obj &optional context)
+  (let* ((value (actual-value obj))
+         (integer (ignore-errors (pvseval-integer value))))
+    (if (integerp integer)
+        integer
+        (error "Yices2 API requires a ground integer for ~a"
+               (or context value)))))
+
+(defun yices2-api-decl-actuals (obj)
+  (or (ignore-errors (actuals obj))
+      (let ((source (yices2-api-yices2bv-source-declaration obj)))
+        (and source
+             (not (eq source obj))
+             (ignore-errors (actuals source))))))
+
+(defun yices2-api-decl-actual-integer-if-present (obj index)
+  (let ((acts (yices2-api-decl-actuals obj)))
+    (and acts
+         (< index (length acts))
+         (yices2-api-static-integer-value (nth index acts) obj))))
+
+(defun yices2-api-decl-actual-integer (obj index)
+  (or (yices2-api-decl-actual-integer-if-present obj index)
+      (error "Missing declaration actual ~a for ~a" index obj)))
+
+(defun yices2-api-bitvector-width (ptype)
+  (let ((stype (find-supertype ptype)))
+    (cond ((and (funtype? stype)
+                (simple-below? (domain stype))
+                (number-expr? (simple-below? (domain stype)))
+                (tc-eq (find-supertype (range stype)) *boolean*))
+           (number (simple-below? (domain stype))))
+          ((and (type-name? stype)
+                (eq (ignore-errors (yices2-api-yices2bv-source-id stype))
+                    'bvec))
+           (ignore-errors (yices2-api-decl-actual-integer stype 0)))
+          (t nil))))
+
+(defun yices2-api-bitvector-type-p (ptype)
+  (not (null (yices2-api-bitvector-width ptype))))
+
+(defun yices2-api-bv-binary-string (width value)
+  (let ((normalized (mod value (ash 1 width))))
+    (with-output-to-string (out)
+      (loop for bit from (1- width) downto 0
+            do (write-char (if (logbitp bit normalized) #\1 #\0) out)))))
+
+(defun yices2-api-bv-constant-term (width value source)
+  (yices2-api-check-term
+   (yices_parse_bvbin (yices2-api-bv-binary-string width value))
+   "Failed to translate bitvector constant ~a" source))
+
 (defun yices2-api-boolean-type-p (ptype)
   (tc-eq (find-supertype ptype) *boolean*))
 
@@ -1081,7 +1325,11 @@
   (let ((key (find-supertype ptype)))
     (or (gethash key *yices2-api-type-cache*)
         (setf (gethash key *yices2-api-type-cache*)
-              (cond ((yices2-api-boolean-type-p key)
+              (cond ((yices2-api-bitvector-type-p key)
+                     (yices2-api-check-type
+                      (yices_bv_type (yices2-api-bitvector-width key))
+                      "Failed to build bitvector type for ~a" key))
+                    ((yices2-api-boolean-type-p key)
                      (yices_bool_type))
                     ((yices2-api-integer-type-p key)
                     (yices_int_type))
@@ -1139,10 +1387,345 @@
       identity
       (yices2-api-reduce-terms builder args description)))
 
-(defun yices2-api-application-arg-terms (expr env)
+(defun yices2-api-direct-application-args (expr)
   (if (tuple-expr? (argument expr))
-        (mapcar #'(lambda (arg) (yices2-api-term arg env)) (arguments expr))
-        (list (yices2-api-term (argument expr) env))))
+      (arguments expr)
+      (list (argument expr))))
+
+(defun yices2-api-application-head-and-args (expr)
+  (labels ((walk (term)
+             (if (application? term)
+                 (multiple-value-bind (head args)
+                     (walk (operator* term))
+                   (values head
+                           (append args
+                                   (yices2-api-direct-application-args term))))
+                 (values term nil))))
+    (walk expr)))
+
+(defun yices2-api-application-head (expr)
+  (multiple-value-bind (head args)
+      (yices2-api-application-head-and-args expr)
+    (declare (ignore args))
+    head))
+
+(defun yices2-api-application-args (expr)
+  (multiple-value-bind (head args)
+      (yices2-api-application-head-and-args expr)
+    (declare (ignore head))
+    args))
+
+(defun yices2-api-application-arg-terms (expr env)
+  (mapcar #'(lambda (arg) (yices2-api-term arg env))
+          (yices2-api-application-args expr)))
+
+(defun yices2-api-yices2bv-value-exprs (expr meta-count value-count source-id)
+  (let* ((raw-args (yices2-api-application-args expr))
+         (argc (length raw-args)))
+    (cond ((= argc value-count)
+           raw-args)
+          ((= argc (+ meta-count value-count))
+           (nthcdr meta-count raw-args))
+          (t
+           (error "Unexpected Yices2 BV argument shape for ~a: ~a"
+                  source-id expr)))))
+
+(defun yices2-api-yices2bv-value-terms (expr env meta-count value-count source-id)
+  (mapcar #'(lambda (arg) (yices2-api-term arg env))
+          (yices2-api-yices2bv-value-exprs expr meta-count value-count source-id)))
+
+(defun yices2-api-yices2bv-parameter-integer (expr actual-index raw-index source-id)
+  (let* ((operator (yices2-api-application-head expr))
+         (actual (yices2-api-decl-actual-integer-if-present operator actual-index)))
+    (or actual
+        (let* ((raw-args (yices2-api-application-args expr)))
+          (unless (< raw-index (length raw-args))
+            (error "Missing Yices2 BV integer parameter ~a for ~a in ~a"
+                   raw-index source-id expr))
+          (yices2-api-static-integer-value (nth raw-index raw-args) expr)))))
+
+(defun yices2-api-bv-array-term (bits width env expr)
+  (cffi:with-foreign-object (array 'term_t width)
+    (loop for i from 0 below width
+          do (setf (cffi:mem-aref array 'term_t i)
+                   (yices2-api-term
+                    (make!-application bits (make!-number-expr i))
+                    env)))
+    (yices2-api-check-term
+     (yices_bvarray width array)
+     "Failed to translate bitvector array term ~a" expr)))
+
+(defun yices2-api-yices2bv-name-term (expr)
+  (let* ((source-id (yices2-api-yices2bv-source-id expr))
+         (width (when source-id
+                  (yices2-api-decl-actual-integer-if-present expr 0))))
+    (cond ((and width (eq source-id 'bvconst))
+           (yices2-api-bv-constant-term
+            width
+            (yices2-api-decl-actual-integer expr 1)
+            expr))
+          ((and width (eq source-id 'bvzero))
+           (yices2-api-check-term
+            (yices_bvconst_zero width)
+            "Failed to translate bitvector zero constant ~a" expr))
+          ((and width (eq source-id 'bvone))
+           (yices2-api-check-term
+            (yices_bvconst_one width)
+            "Failed to translate bitvector one constant ~a" expr))
+          ((and width (eq source-id 'bvminusone))
+           (yices2-api-check-term
+            (yices_bvconst_minus_one width)
+            "Failed to translate bitvector all-ones constant ~a" expr))
+          (t nil))))
+
+(defun yices2-api-translate-yices2bv-application (expr env)
+  (let* ((operator (yices2-api-application-head expr))
+         (source-id (yices2-api-yices2bv-source-id operator)))
+    (when source-id
+      (labels ((value-terms (meta-count value-count)
+                 (yices2-api-yices2bv-value-terms expr env meta-count value-count
+                                                  source-id))
+               (value-exprs (meta-count value-count)
+                 (yices2-api-yices2bv-value-exprs expr meta-count value-count
+                                                  source-id))
+               (param-int (actual-index raw-index)
+                 (yices2-api-yices2bv-parameter-integer expr actual-index raw-index
+                                                        source-id)))
+      (case source-id
+        (bvconst
+         (yices2-api-bv-constant-term
+          (param-int 0 0)
+          (param-int 1 1)
+          expr))
+        (bvzero
+         (yices2-api-check-term
+          (yices_bvconst_zero (param-int 0 0))
+          "Failed to translate bitvector zero constant ~a" expr))
+        (bvone
+         (yices2-api-check-term
+          (yices_bvconst_one (param-int 0 0))
+          "Failed to translate bitvector one constant ~a" expr))
+        (bvminusone
+         (yices2-api-check-term
+          (yices_bvconst_minus_one (param-int 0 0))
+          "Failed to translate bitvector all-ones constant ~a" expr))
+        (bvadd
+         (yices2-api-reduce-terms #'yices_bvadd (value-terms 1 2) expr))
+        (bvsub
+         (yices2-api-reduce-terms #'yices_bvsub (value-terms 1 2) expr))
+        (bvneg
+         (yices2-api-check-term
+          (yices_bvneg (first (value-terms 1 1)))
+          "Failed to translate bitvector negation ~a" expr))
+        (bvmul
+         (yices2-api-reduce-terms #'yices_bvmul (value-terms 1 2) expr))
+        (bvsquare
+         (yices2-api-check-term
+          (yices_bvsquare (first (value-terms 1 1)))
+          "Failed to translate bitvector square ~a" expr))
+        (bvpower
+         (yices2-api-check-term
+          (yices_bvpower (first (value-terms 2 1))
+                         (param-int 1 1))
+          "Failed to translate bitvector power ~a" expr))
+        (bvdiv
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvdiv (first args) (second args)))
+          "Failed to translate bitvector unsigned division ~a" expr))
+        (bvrem
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvrem (first args) (second args)))
+          "Failed to translate bitvector unsigned remainder ~a" expr))
+        (bvsdiv
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsdiv (first args) (second args)))
+          "Failed to translate bitvector signed division ~a" expr))
+        (bvsrem
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsrem (first args) (second args)))
+          "Failed to translate bitvector signed remainder ~a" expr))
+        (bvsmod
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsmod (first args) (second args)))
+          "Failed to translate bitvector signed modulus ~a" expr))
+        (bvnot
+         (yices2-api-check-term
+          (yices_bvnot (first (value-terms 1 1)))
+          "Failed to translate bitvector not ~a" expr))
+        (bvand
+         (yices2-api-reduce-terms #'yices_bvand2 (value-terms 1 2) expr))
+        (bvor
+         (yices2-api-reduce-terms #'yices_bvor2 (value-terms 1 2) expr))
+        (bvxor
+         (yices2-api-reduce-terms #'yices_bvxor2 (value-terms 1 2) expr))
+        (bvnand
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvnand (first args) (second args)))
+          "Failed to translate bitvector nand ~a" expr))
+        (bvnor
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvnor (first args) (second args)))
+          "Failed to translate bitvector nor ~a" expr))
+        (bvxnor
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvxnor (first args) (second args)))
+          "Failed to translate bitvector xnor ~a" expr))
+        (bvshl
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvshl (first args) (second args)))
+          "Failed to translate bitvector shift-left ~a" expr))
+        (bvlshr
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvlshr (first args) (second args)))
+          "Failed to translate logical bitvector shift-right ~a" expr))
+        (bvashr
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvashr (first args) (second args)))
+          "Failed to translate arithmetic bitvector shift-right ~a" expr))
+        (shift_left0
+         (yices2-api-check-term
+          (yices_shift_left0 (first (value-terms 2 1))
+                             (param-int 1 1))
+          "Failed to translate constant bitvector shift-left0 ~a" expr))
+        (shift_left1
+         (yices2-api-check-term
+          (yices_shift_left1 (first (value-terms 2 1))
+                             (param-int 1 1))
+          "Failed to translate constant bitvector shift-left1 ~a" expr))
+        (shift_right0
+         (yices2-api-check-term
+          (yices_shift_right0 (first (value-terms 2 1))
+                              (param-int 1 1))
+          "Failed to translate constant bitvector shift-right0 ~a" expr))
+        (shift_right1
+         (yices2-api-check-term
+          (yices_shift_right1 (first (value-terms 2 1))
+                              (param-int 1 1))
+          "Failed to translate constant bitvector shift-right1 ~a" expr))
+        (ashift_right
+         (yices2-api-check-term
+          (yices_ashift_right (first (value-terms 2 1))
+                              (param-int 1 1))
+          "Failed to translate constant arithmetic shift-right ~a" expr))
+        (rotate_left
+         (yices2-api-check-term
+          (yices_rotate_left (first (value-terms 2 1))
+                             (param-int 1 1))
+          "Failed to translate constant bitvector rotate-left ~a" expr))
+        (rotate_right
+         (yices2-api-check-term
+          (yices_rotate_right (first (value-terms 2 1))
+                              (param-int 1 1))
+          "Failed to translate constant bitvector rotate-right ~a" expr))
+        (bvextract
+         (yices2-api-check-term
+          (yices_bvextract (first (value-terms 3 1))
+                           (param-int 1 1)
+                           (param-int 2 2))
+          "Failed to translate bitvector extract ~a" expr))
+        (bvconcat
+         (yices2-api-reduce-terms #'yices_bvconcat2 (value-terms 2 2) expr))
+        (bvrepeat
+         (yices2-api-check-term
+          (yices_bvrepeat (first (value-terms 2 1))
+                          (param-int 1 1))
+          "Failed to translate bitvector repeat ~a" expr))
+        (sign_extend
+         (yices2-api-check-term
+          (yices_sign_extend (first (value-terms 2 1))
+                             (param-int 1 1))
+          "Failed to translate sign extension ~a" expr))
+        (zero_extend
+         (yices2-api-check-term
+          (yices_zero_extend (first (value-terms 2 1))
+                             (param-int 1 1))
+          "Failed to translate zero extension ~a" expr))
+        (redand
+         (yices2-api-check-term
+          (yices_redand (first (value-terms 1 1)))
+          "Failed to translate bitvector reduction-and ~a" expr))
+        (redor
+         (yices2-api-check-term
+          (yices_redor (first (value-terms 1 1)))
+          "Failed to translate bitvector reduction-or ~a" expr))
+        (redcomp
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_redcomp (first args) (second args)))
+          "Failed to translate bitvector reduction-compare ~a" expr))
+        (bvarray
+         (yices2-api-bv-array-term
+          (first (value-exprs 1 1))
+          (param-int 0 0)
+          env
+          expr))
+        (bitextract
+         (yices2-api-check-term
+          (yices_bitextract (first (value-terms 2 1))
+                            (param-int 1 1))
+          "Failed to translate bit extraction ~a" expr))
+        (bveq
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bveq_atom (first args) (second args)))
+          "Failed to translate bitvector equality atom ~a" expr))
+        (bvneq
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvneq_atom (first args) (second args)))
+          "Failed to translate bitvector disequality atom ~a" expr))
+        (bvge
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvge_atom (first args) (second args)))
+          "Failed to translate bitvector >= atom ~a" expr))
+        (bvgt
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvgt_atom (first args) (second args)))
+          "Failed to translate bitvector > atom ~a" expr))
+        (bvle
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvle_atom (first args) (second args)))
+          "Failed to translate bitvector <= atom ~a" expr))
+        (bvlt
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvlt_atom (first args) (second args)))
+          "Failed to translate bitvector < atom ~a" expr))
+        (bvsge
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsge_atom (first args) (second args)))
+          "Failed to translate signed bitvector >= atom ~a" expr))
+        (bvsgt
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsgt_atom (first args) (second args)))
+          "Failed to translate signed bitvector > atom ~a" expr))
+        (bvsle
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvsle_atom (first args) (second args)))
+          "Failed to translate signed bitvector <= atom ~a" expr))
+        (bvslt
+         (yices2-api-check-term
+          (let ((args (value-terms 1 2)))
+            (yices_bvslt_atom (first args) (second args)))
+          "Failed to translate signed bitvector < atom ~a" expr))
+        (otherwise nil))))))
 
 (defun yices2-api-apply (fun args expr)
   (case (length args)
@@ -1307,10 +1890,12 @@
     var))
 
 (defun yices2-api-binding-predicate-terms (binding env)
-  (let ((var-expr (make-variable-expr binding)))
-    (mapcar #'(lambda (formula)
-                (yices2-api-term formula env))
-            (yices2-api-type-predicate-formulas var-expr))))
+  (if (yices2-api-bitvector-type-p (type binding))
+      nil
+      (let ((var-expr (make-variable-expr binding)))
+        (mapcar #'(lambda (formula)
+                    (yices2-api-term formula env))
+                (yices2-api-type-predicate-formulas var-expr)))))
 
 (defun yices2-api-binding-setup (bindings env include-predicates?)
   (labels ((walk-bindings (remaining current-env vars guard-terms)
@@ -1384,6 +1969,7 @@
          (yices2-api-rational-term (number expr)))
         ((name-expr? expr)
          (or (yices2-api-bound-term expr env)
+             (yices2-api-yices2bv-name-term expr)
              (yices2-api-global-term expr)))
         ((negation? expr)
          (yices2-api-check-term
@@ -1455,49 +2041,50 @@
             index
             expr)))
         ((application? expr)
-         (let* ((op (operator* expr))
-                (op-id (and (name-expr? op) (id op)))
-                (args (yices2-api-application-arg-terms expr env)))
-           (cond ((and (eq op-id '-)
+         (or (yices2-api-translate-yices2bv-application expr env)
+             (let* ((op (yices2-api-application-head expr))
+                    (op-id (and (name-expr? op) (id op)))
+                    (args (yices2-api-application-arg-terms expr env)))
+               (cond ((and (eq op-id '-)
                        (unary-application? expr)
                        (yices2-api-arithmetic-type-p (type expr)))
-                  (yices2-api-check-term
-                   (yices_neg (first args))
-                   "Failed to translate unary minus ~a" expr))
-                 ((and (eq op-id '+)
+                      (yices2-api-check-term
+                       (yices_neg (first args))
+                       "Failed to translate unary minus ~a" expr))
+                     ((and (eq op-id '+)
                        (yices2-api-arithmetic-type-p (type expr)))
-                  (yices2-api-reduce-terms #'yices_add args expr))
-                 ((and (eq op-id '-)
+                      (yices2-api-reduce-terms #'yices_add args expr))
+                     ((and (eq op-id '-)
                        (yices2-api-arithmetic-type-p (type expr)))
-                  (yices2-api-reduce-terms #'yices_sub args expr))
-                 ((and (eq op-id '*)
+                      (yices2-api-reduce-terms #'yices_sub args expr))
+                     ((and (eq op-id '*)
                        (yices2-api-arithmetic-type-p (type expr)))
-                  (yices2-api-reduce-terms #'yices_mul args expr))
-                 ((and (eq op-id '/)
+                      (yices2-api-reduce-terms #'yices_mul args expr))
+                     ((and (eq op-id '/)
                        (yices2-api-arithmetic-type-p (type expr)))
-                  (yices2-api-reduce-terms #'yices_division args expr))
-                 ((and (eq op-id '<)
+                      (yices2-api-reduce-terms #'yices_division args expr))
+                     ((and (eq op-id '<)
                        (yices2-api-boolean-type-p (type expr)))
-                  (yices2-api-check-term
-                   (yices_arith_lt_atom (first args) (second args))
-                   "Failed to translate < formula ~a" expr))
-                 ((and (eq op-id '<=)
+                      (yices2-api-check-term
+                       (yices_arith_lt_atom (first args) (second args))
+                       "Failed to translate < formula ~a" expr))
+                     ((and (eq op-id '<=)
                        (yices2-api-boolean-type-p (type expr)))
-                  (yices2-api-check-term
-                   (yices_arith_leq_atom (first args) (second args))
-                   "Failed to translate <= formula ~a" expr))
-                 ((and (eq op-id '>)
+                      (yices2-api-check-term
+                       (yices_arith_leq_atom (first args) (second args))
+                       "Failed to translate <= formula ~a" expr))
+                     ((and (eq op-id '>)
                        (yices2-api-boolean-type-p (type expr)))
-                  (yices2-api-check-term
-                   (yices_arith_gt_atom (first args) (second args))
-                   "Failed to translate > formula ~a" expr))
-                 ((and (eq op-id '>=)
+                      (yices2-api-check-term
+                       (yices_arith_gt_atom (first args) (second args))
+                       "Failed to translate > formula ~a" expr))
+                     ((and (eq op-id '>=)
                        (yices2-api-boolean-type-p (type expr)))
-                  (yices2-api-check-term
-                   (yices_arith_geq_atom (first args) (second args))
-                   "Failed to translate >= formula ~a" expr))
-                 (t
-                  (yices2-api-apply (yices2-api-term op env) args expr)))))
+                      (yices2-api-check-term
+                       (yices_arith_geq_atom (first args) (second args))
+                       "Failed to translate >= formula ~a" expr))
+                     (t
+                      (yices2-api-apply (yices2-api-term op env) args expr))))))
         ((binding-expr? expr)
          (yices2-api-binding-term expr env))
         ((tuple-expr? expr)
@@ -1558,11 +2145,8 @@
               (unwind-protect
                   (let* ((assumptions (yices2-api-build-assumptions sforms))
                          (logic
-                          (if (yices2-api-assumptions-require-quantifiers-p
-                               assumptions)
-                              (yices2-api-quantified-logic-string
-                               requested-logic)
-                              requested-logic)))
+                          (yices2-api-effective-logic
+                           requested-logic assumptions)))
                     (setq config
                           (yices2-api-check-pointer
                            (yices_new_config)

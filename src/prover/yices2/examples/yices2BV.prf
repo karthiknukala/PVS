@@ -1,0 +1,11 @@
+(|yices2BV|
+ (|bvextract_TCC1| 0
+  (|bvextract_TCC1-1| NIL 3985178424 ("" (GRIND))
+   ((|minus_nzint_is_nzint| APPLICATION-JUDGEMENT "nzint" |integers| NIL)
+    (|posint_plus_nnint_is_posint| APPLICATION-JUDGEMENT "posint" |integers|
+     NIL))
+   NIL
+   (|bvextract| SUBTYPE
+    "(number_fields.-)((number_fields.+)(1, yices2BV.J), yices2BV.I)" "nat"
+    (56 4 56 19)))))
+
