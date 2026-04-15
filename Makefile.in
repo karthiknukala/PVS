@@ -172,7 +172,7 @@ SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
 	$(wildcard lib/finite_sets/.pvscontext lib/finite_sets/pvsbin) \
 	$(wildcard lib/bitvectors/*.pvs lib/bitvectors/*.prf) \
 	$(wildcard lib/bitvectors/.pvscontext lib/bitvectors/pvsbin) \
-	yices/$(PLATFORM) $(bindir)/yices1 $(bindir)/yices2 \
+	$(wildcard yices/$(PLATFORM) $(bindir)/yices1 $(bindir)/yices2) \
 	emacs/configured-for-x Vagrantfile vagrant.README \
 	$(wildcard pvs-version.lisp git-commit)
 
