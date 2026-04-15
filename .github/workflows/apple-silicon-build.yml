@@ -20,7 +20,6 @@ jobs:
       run:
         shell: bash
     env:
-      CI_HOME: ${{ runner.temp }}/pvs-home
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
 
     steps:
@@ -39,19 +38,17 @@ jobs:
 
       - name: Prepare isolated build home
         run: |
+          CI_HOME="$RUNNER_TEMP/pvs-home"
           mkdir -p "$CI_HOME"
+          echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
       - name: Configure source tree
-        env:
-          HOME: ${{ env.CI_HOME }}
         run: |
-          ./configure --with-pvspath="$PWD"
+          HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
-        env:
-          HOME: ${{ env.CI_HOME }}
         run: |
-          make smoke-sbcl-release
+          HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
