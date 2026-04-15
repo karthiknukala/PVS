@@ -667,14 +667,14 @@ nil."
 
 (defun user-pvs-lisp-file ()
   (unless *started-with-minus-q*
-    (let* ((homedir (truename (user-homedir-pathname)))
-	   (home-lisp-file (make-pathname :defaults homedir
-					  :name ".pvs" :type "lisp"))
-	   (home-fasl-file (when (uiop:file-exists-p home-lisp-file)
-			     (make-fasl-file-name home-lisp-file))))
-      (when (or (uiop:file-exists-p home-lisp-file)
-		(uiop:file-exists-p home-fasl-file))
-	home-lisp-file))))
+	    (let* ((homedir (truename (user-homedir-pathname)))
+		   (home-lisp-file (make-pathname :defaults homedir
+						  :name ".pvs" :type "lisp"))
+		   (home-fasl-file (when (uiop:file-exists-p home-lisp-file)
+				     (make-fasl-file-name home-lisp-file :ensure-dir? nil))))
+	      (when (or (uiop:file-exists-p home-lisp-file)
+			(uiop:file-exists-p home-fasl-file))
+		home-lisp-file))))
 
 (defun pvs-patch-files-for (ext)
   (let* ((defaults (pathname (format nil "~a/"
