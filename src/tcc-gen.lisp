@@ -228,7 +228,9 @@
     (when (and vdecl *rec-judgement-extra-conditions*)
       (break "Need to add extra conditions"))
     (let ((tform (add-tcc-conditions*
-		  (raise-actuals srec-expr)
+		  (if (< (expr-size srec-expr) 10000)
+		      (raise-actuals srec-expr)
+		      srec-expr)
 		  (if (and vdecl ch?)
 		      (insert-var-into-conditions vdecl conditions)
 		      conditions)
@@ -426,7 +428,10 @@ looking in bindings and substs."
 		   :kind kind
 		   :expr (if (eq kind 'existence)
 			     ""
-			     (str (raise-actuals expr t :all) :char-width nil))
+			     (str (if (< (expr-size expr) 10000)
+				      (raise-actuals expr)
+				      expr)
+				  :char-width nil))
 		   :type (str (raise-actuals type t :all) :char-width nil)
 		   :place (tcc-origin-place expr type))))
     (assert root () "No tcc-root in ~a" expr)
@@ -1417,6 +1422,7 @@ which is the transitive closure of the immediate assuming instances."
     (mapcar #'(lambda (ax) (collect-mapping-axiom ax thinst theory)) axioms)))
 
 (defun collect-mapping-axiom (axiom thinst theory)
+  (ensure-closed-definition axiom)
   (multiple-value-bind (dfmls dacts)
       (new-decl-formals axiom)
     (let* ((id (make-tcc-name nil (id axiom)))
@@ -1444,7 +1450,7 @@ which is the transitive closure of the immediate assuming instances."
 		   :id (id axiom)
 		   :spelling 'AXIOM
 		   :kind nil)
-		 (if (importing? (current-declaration))
+		 (if (importing-entity? (current-declaration))
 		     (add-decl naxiom)
 		     (break "collect-mapping-axiom needs interp")))
 		(t (insert-tcc-decl 'mapped-axiom thinst axiom naxiom))))

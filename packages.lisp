@@ -877,6 +877,30 @@
 	   :rt-mvb :rt-vls
 	   ))
 
+;; From interface/pvs-json-rpc.lisp
+(defpackage #:pvs-jsonrpc
+  (:use #:cl-user #:json #:common-lisp)
+  (:export #:*interrupted-rpc*
+	   #:defrequest
+	   #:finish-proofstate-rpc-hook
+	   #:process-jsonrpc
+	   #:pvs-message-hook
+	   #:pvs-y-or-n-hook
+	   #:pvs2json-response
+	   #:rpc-output-notify-proof-success
+	   #:send-client-request
+	   #:send-response
+	   ))
+
+(defpackage #:pvs-websocket
+  (:use #:cl-user #:common-lisp)
+  (:nicknames #:pvs-ws)
+  (:export #:*ws*
+	   #:start-pvs-server
+	   ;;#:start-proof-server
+	   #:stop-pvs-server
+	   #:ws-current-connection
+	   ))
 
 ;;; PVS packages
 (defpackage #:pvs
@@ -887,6 +911,10 @@
   (:shadow :class :condition :debug :declaration :keyword :name :number
 	   :parse-error :type :type-error :memq :var)
   (:import-from :file-utils)
+  (:import-from :pvs-ws)
+  (:import-from :pvs-jsonrpc
+		:defrequest
+		:send-client-request)
   (:import-from :lparallel.queue
 		:make-queue
 		:peek-queue
@@ -904,8 +932,7 @@
 		:queue-full-p/no-lock
 		:try-pop-queue
 		:try-pop-queue/no-lock
-		:with-locked-queue
-		)
+		:with-locked-queue)
   (:export
    #:*boolean*
    #:*bound-variables*
@@ -924,6 +951,7 @@
    #:*in-evaluator*
    #:*integer*
    #:*last-attempted-proof*
+   #:*last-escaped-quote-place*
    #:*last-proof*
    #:*multiple-proof-default-behavior*
    #:*naturalnumber*
@@ -1390,26 +1418,4 @@
    #:xmlrpc-output-proofstate
    ;;sb-runtime:*abs-syn-package*
    ))
-
-;; From interface/pvs-json-rpc.lisp
-(defpackage #:pvs-jsonrpc
-  (:use #:cl-user #:json #:common-lisp)
-  (:export #:*interrupted-rpc*
-	   #:finish-proofstate-rpc-hook
-	   #:process-jsonrpc
-	   #:pvs-message-hook
-	   #:pvs-y-or-n-hook
-	   #:pvs2json-response
-	   #:rpc-output-notify-proof-success
-	   #:send-response
-	   ))
-
-(defpackage #:pvs-websocket
-  (:use #:cl-user #:common-lisp)
-  (:nicknames #:pvs-ws)
-  (:export #:start-pvs-server
-	   ;;#:start-proof-server
-	   #:stop-pvs-server
-	   #:ws-current-connection
-	   ))
 

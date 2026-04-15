@@ -22,18 +22,21 @@
 
 (defvar *pvsio-dummy-val* t)
 
+(defun clos-type2str (the-type)
+  "Return string represenation of a PVS type represented in CLOS"
+  (format nil "~a" (or (print-type the-type) the-type)))
+
 (defun stdpvs-attachments ()
 
 (eval '(attachments |stdpvs|
 
-(defattach |format_lisp| (s e)
-   "Formats expression E using Common Lisp format string S"
-   (let ((the-type (pc-typecheck (cadr (types (domain the-pvs-type_))))))
-     (unwind-protect
-	 (progn
-	   (pvsio_push_gvar *pvsio-pp_rationals* nil)
-	   (apply #'format (cons nil (cons s (formatargs e the-type)))))
-       (pvsio_pop_gvar *pvsio-pp_rationals*))))
+(defattach |format_lisp| (s e (the-type :decl-formal |T|))
+   "Formats expression E of type T using Common Lisp format string S"
+   (unwind-protect
+       (progn
+	 (pvsio_push_gvar *pvsio-pp_rationals* nil)
+	 (apply #'format (cons nil (cons s (formatargs e the-type)))))
+     (pvsio_pop_gvar *pvsio-pp_rationals*)))
 
 (defattach |error_lisp| (mssg)
   "Signals the error message MSSG to the ground evaluator"
@@ -43,31 +46,33 @@
   "Exits the current evaluation and returns to the ground evaluator"
   (error 'pvsio-exit))
 
-(defattach |last_iteration| (e)
+(defattach |last_iteration| (e (the-type :decl-formal |T|))
   "Breaks a loop with the value E"
-  (let ((the-type (domain the-pvs-type_)))
-    (error 'pvsio-break :val e :type the-type)))
+  (error 'pvsio-break :val e :type the-type))
 
-(defattach |return| (e)
+(defattach |return| (e (the-type :decl-formal |T|))
   "Returns E as the value of a function call"
-  (let ((the-type (domain the-pvs-type_)))
-    (error 'pvsio-return :val e :type the-type)))
+  (error 'pvsio-return :val e :type the-type))
 
 (defattach |loop_lift| (f)
    "Applies F in an infinite loop"
-   (handler-case 
+   (handler-case
        (loop (pvs-funcall f *pvsio-dummy-val*))
      (pvsio-break
       (condition)
       (val condition))))
 
 (defattach |to_lisp| (pvs)
-  "Translates PVS object to Lisp"
+  "Translates PVS object to Common Lisp"
   pvs)
 
-(defattach |to_lisp_| (pvs)
-  "Translates PVS object to Lisp"
-  pvs)
+(defattach |from_lisp| (cl)
+  "Translates Common Lisp object to PVS"
+ cl)
+
+(defattach |typeof_lisp_| (cl)
+  "PVS type of encoded Common Lisp object"
+  (cdr cl))
 
 (defattach |unwind_protect_lift| (ft fcu)
   "Evaluate ft, returning its value. The cleanup code fcu will be evaluated if control leaves ft."
@@ -75,16 +80,10 @@
       (pvs-funcall ft *pvsio-dummy-val*)
     (pvs-funcall fcu *pvsio-dummy-val*)))
 
-(defattach |type_of_domain_lisp| (e)
-  (declare (ignore e))		      
-  "Returns the string value of the type of E"
-  (let* ((the-domain (domain (domain the-pvs-type_))))
-    (format nil "~a" (or (print-type the-domain) the-domain))))
-
 )))
 
 (defun replace-string (string part replacement &key (test #'char=))
-  "Returns a new string in which all the occurences of the part 
+  "Returns a new string in which all the occurences of the part
 is replaced with replacement."
   (with-output-to-string (out)
     (loop with part-length = (length part)
@@ -98,7 +97,7 @@ is replaced with replacement."
           when pos do (write-string replacement out)
           while pos)))
 
-;; Oveline: <char> Ctrl-x 8 305 
+;; Oveline: <char> Ctrl-x 8 305
 (defparameter *ol-digits* '("0̅" "1̅" "2̅" "3̅" "4̅" "5̅" "6̅" "7̅" "8̅" "9̅"))
 (defparameter *ellipsis* '("¨" . "¨̅"))
 
@@ -131,32 +130,24 @@ representation is finite. Otherwise, it prints its rational form."
 	  (t (let ((str (ratio2decimal-with-rounding-mode r 0 (min precision (+ finp infp)) t)))
 	       (pp-decstr str finp (> (+ finp infp) precision)))))))
 
+(defun stdchar-attachments ()
+
+(eval '(attachments |stdchar|
+
+(defattach |char_compare_lisp| (c1 c2 sensitive)
+ "Returns 0 if C1 = C2, -1 if C1 < C2, 1 if C1 > C2. If sensitive is T, comparison is case sensitive."
+ (if sensitive
+     (cond ((char= c1 c2) 0)
+           ((char< c1 c2) -1)
+           (t 1))
+     (cond ((char-equal c1 c2) 0)
+           ((char-lessp c1 c2) -1)
+           (t 1))))
+)))
+
 (defun stdstr-attachments ()
 
 (eval '(attachments |stdstr|
-
-(defattach |charcode| (n)
-  "Char whose code is N"
-  (format nil "~a" (code-char n)))
-
-(defattach |chartable| ()
-  "Standard char table"
-  (or 
-   (do ((i 0 (+ i 1)))
-       ((>= i 128))
-       (let ((c (code-char i)))
-	 (when (and (graphic-char-p c)
-		    (standard-char-p c))
-	   (format t "~3d : ~a " i c))))
-   t))
-   
-(defattach |newline| ()
-  "New line"
-  (format nil "~a" #\Newline))
-
-(defattach |tab| ()
-  "Tabular"
-  (format nil "~a" #\Tab))
 
 (defattach |spaces_lisp| (n)
   "N spaces"
@@ -182,9 +173,10 @@ representation is finite. Otherwise, it prints its rational form."
   "Index of rightmost occurrence of S1 in S2 or -1 if S1 doesn't occur in S2"
   (or (search s1 s2 :from-end t :test #'char=) -1))
 
-(defattach |substring_lisp| (s i j)
-  "If i <= j returns substring S[i..j]. Otherwise, returns substring S[j..i].
-NOTE: When 0 <= i < j < length(s), substring(s,i,j) is the same as charstrings.substr(s,i,j+1)"
+(defattach |strextract_lisp| (s i j)
+  "If i <= j returns string S[i..j]. If j <= i, Otherwise, return string S[j..i].
+Return empty string if i or j are out of bound.
+NOTE: When 0 <= i < j < length(s), strextract(s,i,j) is the same substr(s,i,j+1)."
   (cond ((and (<= 0 i) (<= i j) (< j (length s)))
 	 (subseq s i (+ j 1)))
 	((and (<= 0 j) (<= j i) (< i (length s)))
@@ -192,13 +184,13 @@ NOTE: When 0 <= i < j < length(s), substring(s,i,j) is the same as charstrings.s
 	(t "")))
 
 (defattach |strreplace| (s part replacement)
-  "Returns a new string in which all the occurences of part in s 
+  "Returns a new string in which all the occurences of part in s
 is replaced with replacement."
   (replace-string s part replacement))
 
-(defattach |strsplit| (str separator)
+(defattach |strsplit| (str (separator |char|))
   "Splits the string STR using SEPARATOR as separator."
-  (split str (char separator 0)))
+  (split str separator))
 
 (defattach |rat2decstr_with_zeros| (r precision rounding zeros)
   "Converts rational number to string decimal representation using given precision, i.e., natural number n
@@ -235,7 +227,7 @@ non-repeating digits. Truncated indicates that the infinite representation was t
 (defattach |str2int| (s)
   "Integer denoted by S"
   (let ((i (read-from-string s)))
-    (if (integerp i) i 
+    (if (integerp i) i
       (throw-pvsio-exc "stdexceptions.NotAnInteger" s))))
 
 (defattach |number?| (s)
@@ -251,7 +243,7 @@ non-repeating digits. Truncated indicates that the infinite representation was t
   (format nil "~a~a" s1 s2))
 
 (defattach |strcompare_lisp| (s1 s2 sensitive)
-  "Returns 0 if s1 = s2, -1 if s1 < s2, 1 if s1 > s2. If sensitive is TRUE, comparise is case sensitive."
+  "Returns 0 if S1 = S2, -1 if S1 < S2, 1 if S1 > S2. If sensitive is T, comparison is case sensitive."
   (if sensitive
       (cond ((string= s1 s2) 0)
 	    ((string< s1 s2) -1)
@@ -259,7 +251,7 @@ non-repeating digits. Truncated indicates that the infinite representation was t
     (cond ((string-equal s1 s2) 0)
 	  ((string-lessp s1 s2) -1)
 	  (t 1))))
-  
+
 (defattach |strtrim| (s1 s2)
    "A substring of s2, with all the characters in s1 stripped of the beginning and end"
    (string-trim s1 s2))
@@ -284,8 +276,13 @@ non-repeating digits. Truncated indicates that the infinite representation was t
    "A substring of s, with all the space characters stripped of the end"
    (string-right-trim '(#\Space #\Tab #\Newline) s))
 
+(defattach |type2str| ((the-type :decl-formal |T|))
+ "Returns the string value of the type T"
+ (clos-type2str the-type))
+
 (defattach |subtypeof?| (t1 t2)
-  "Returns TRUE if T1 is a subtype of T2 (types are represented using strings). Uses subtype judgements, but otherwise it's essentially syntactic"
+  "Returns TRUE if T1 is a subtype of T2 (types are represented using strings).
+Uses subtype judgements, but otherwise it's essentially syntactic."
   (let ((the-type1 (pc-typecheck (pc-parse t1 'type-expr)))
 	(the-type2 (pc-typecheck (pc-parse t2 'type-expr))))
     (subtype-of? the-type1 the-type2)))
@@ -294,19 +291,18 @@ non-repeating digits. Truncated indicates that the infinite representation was t
   "Translates string S to PVS format"
   (eval (pvs2cl (pc-typecheck (pc-parse s 'expr)))))
 
-(defattach |pvs2str_lisp| (e)
+(defattach |pvs2str| (e (the-type :decl-formal |T|))
   "Translates PVS expresion E to a string"
-  (let ((the-domain (domain the-pvs-type_)))
-    (handler-case
-	(unwind-protect
-	     (progn
-	       (pvsio_push_gvar *pvsio-pp_rationals* nil)
-	       (str (cl2pvs e (pc-typecheck the-domain))))
-	  (pvsio_pop_gvar *pvsio-pp_rationals*))
-      (groundeval-error
-       (condition)
-       (declare (ignore condition))
-       (throw-pvsio-exc "stdexceptions.PVS2String" (format nil "~s" e))))))
+  (handler-case
+      (unwind-protect
+	  (progn
+	    (pvsio_push_gvar *pvsio-pp_rationals* nil)
+	    (str (cl2pvs e (pc-typecheck the-type))))
+	(pvsio_pop_gvar *pvsio-pp_rationals*))
+    (groundeval-error
+     (condition)
+     (declare (ignore condition))
+     (throw-pvsio-exc "stdexceptions.PVS2String" (format nil "~s" e)))))
 )))
 
 (defun prompt (s)
@@ -341,7 +337,7 @@ non-repeating digits. Truncated indicates that the infinite representation was t
 
 (eval '(attachments |stdio|
 
-(defprimitive |printstr| (s) 
+(defprimitive |printstr| (s)
   "Prints lisp format of string S"
   (not (format t "~a" s)))
 
@@ -350,26 +346,26 @@ non-repeating digits. Truncated indicates that the infinite representation was t
   (prompt mssg)
   (format nil "~a" (read-token *standard-input* s)))
 
-(defattach |query_line| (mssg) 
+(defattach |query_line| (mssg)
   "Queries a line from standard input with prompt MSSG"
   (prompt mssg)
   (format nil "~a" (read-line)))
 
-(defattach |query_real| (mssg) 
+(defattach |query_real| (mssg)
   "Queries a real number from standard input with prompt MSSG"
   (prompt mssg)
   (let ((i (read)))
     (if (numberp i) (rational i)
       (throw-pvsio-exc "stdexceptions.NotARealNumber" (format nil "~a" i)))))
 
-(defattach |query_int| (mssg) 
+(defattach |query_int| (mssg)
   "Queries an integer from standard input with prompt MSSG"
-  (prompt mssg)       
+  (prompt mssg)
   (let ((i (read)))
-    (if (integerp i) i 
+    (if (integerp i) i
       (throw-pvsio-exc "stdexceptions.NotAnInteger" (format nil "~a" i)))))
 
-(defattach |stdin| () 
+(defattach |stdin| ()
   "Standard input stream"
   *standard-input*)
 
@@ -381,18 +377,18 @@ non-repeating digits. Truncated indicates that the infinite representation was t
   "Error output stream"
   *error-output*)
 
-(defattach |fopenin_lisp| (s) 
+(defattach |fopenin_lisp| (s)
   "Opens file input stream named S"
   (let ((f (open s :direction :input :if-does-not-exist nil)))
     (or f (throw-pvsio-exc "stdexceptions.FileNotFound" s))))
 
-(defattach |sopenin| (s) 
+(defattach |sopenin| (s)
   "Opens string S as an input stream"
   (let ((str (make-string-input-stream s)))
     (setf (gethash str *pvsio_length_str_stream*) (length s))
     str))
 
-(defattach |fopenout_lisp| (s i) 
+(defattach |fopenout_lisp| (s i)
   "Opens file output stream named S"
  (cond ((= i 0) (let ((f (open s :direction :output :if-exists nil)))
 		  (or f (throw-pvsio-exc "stdexceptions.FileAlreadyExists" s))))
@@ -400,19 +396,19 @@ non-repeating digits. Truncated indicates that the infinite representation was t
        ((= i 2) (open s :direction :output :if-exists :append))
        ((= i 3) (open s :direction :output :if-exists :overwrite))))
 
-(defattach |sopenout| (s) 
+(defattach |sopenout| (s)
   "Opens string output stream"
   (let ((f (make-string-output-stream)))
     (format f s)
     f))
 
-(defattach |fclose| (f) 
+(defattach |fclose| (f)
   "Closes stream F"
   (or (when (typep f 'file-stream)
 	(close f))
       t))
 
-(defattach |fexists| (s) 
+(defattach |fexists| (s)
   "Tests if file named S already exists"
   (and (probe-file s) t))
 
@@ -447,46 +443,46 @@ non-repeating digits. Truncated indicates that the infinite representation was t
     (error (condition)
       (declare (ignore condition))
       (throw-pvsio-exc "stdexceptions.FileNotFound" oldname))))
-  
-(defattach |fgetstr_lisp| (f) 
+
+(defattach |fgetstr_lisp| (f)
   "Gets string from string output stream F"
   (if (typep f 'string-stream)
       (get-output-stream-string f)
     ""))
 
-(defattach |eof_lisp| (f) 
+(defattach |eof_lisp| (f)
   "Tests end of input stream F"
   (not (peek-char nil f nil nil)))
 
-(defattach |flength_lisp| (f) 
+(defattach |flength_lisp| (f)
   "Length of stream F"
   (cond ((typep f 'file-stream)   (file-length f))
-	((typep f 'string-stream) 
+	((typep f 'string-stream)
 	 (nth-value 0 (gethash f *pvsio_length_str_stream*)))
 	(t 0)))
 
-(defattach |fgetpos_lisp| (f) 
+(defattach |fgetpos_lisp| (f)
   "Gets current position of file stream F"
-  (if (typep f 'file-stream) 
+  (if (typep f 'file-stream)
       (file-position f)
     0))
 
-(defattach |fsetpos_lisp| (f n) 
+(defattach |fsetpos_lisp| (f n)
   "Set current position of file stream F"
   (when (typep f 'file-stream)
     (cond ((<= n 0) (file-position f :start))
 	  ((>= n (file-length f)) (file-position f :end))
 	  (t (file-position f n)))))
 
-(defattach |fprint_lisp| (f s) 
+(defattach |fprint_lisp| (f s)
   "Prints S in stream F"
   (not (format f "~a" s)))
 
-(defattach |fread_token_lisp| (f s) 
+(defattach |fread_token_lisp| (f s)
   "Reads a token from stream F separated by characters in S"
   (format nil "~a" (read-token f s)))
 
-(defattach |fread_line_lisp| (f) 
+(defattach |fread_line_lisp| (f)
   "Reads a line from stream F"
   (let ((s (read-line f nil nil)))
     (format nil "~a" s)))
@@ -494,14 +490,14 @@ non-repeating digits. Truncated indicates that the infinite representation was t
 (defattach |fread_real_lisp| (f)
   "Reads a real number from stream F"
   (let ((i (read f nil nil)))
-    (when i 
+    (when i
       (if (numberp i) (rational i)
         (throw-pvsio-exc "stdexceptions.NotARealNumber" (format nil "~a" i))))))
 
 (defattach |fread_int_lisp| (f)
   "Reads an integer from stream F"
   (let ((i (read f nil nil)))
-    (when i 
+    (when i
       (if (integerp i) i
         (throw-pvsio-exc "stdexceptions.NotAnInteger" (format nil "~a" i))))))
 
@@ -520,25 +516,19 @@ non-repeating digits. Truncated indicates that the infinite representation was t
          (cons "/" (cdr dirs))
        (cdr dirs))))
 
-(defattach |fwrite_lisp| (f typ pvs)
+(defattach |fwrite_lisp| (f pvs)
   "Writes a PVS object to output stream F of type TYP, so that it
 can be retrieved afterwards by fread"
-  (or (format f "~s~%" (cons typ pvs)) t))
+  (or (format f "~s~%" pvs) t))
 
-(defattach |fread_lisp| (f typ)
+(defattach |fread_lisp| (f)
   "Reads an PVS object of type TYP from an input stream F, which has been
 written by fwrite"
-  (let* ((type-pvs (read f))
-	 (the-type1 (pc-typecheck (pc-parse (car type-pvs) 'type-expr)))
-	 (the-type2 (pc-typecheck (pc-parse typ 'type-expr))))
-    (if (subtype-of? the-type1 the-type2)
-	(cdr type-pvs)
-      (throw-pvsio-exc
-	"stdexceptions.ReadPVS" (format nil "Type ~a is not of a sub-type of ~a" the-type1 the-type2)))))
+  (read f))
 
 )))
 
-(defun rat2double (x) 
+(defun rat2double (x)
   (float x 1.0d0))
 
 (defun stdmath-attachments ()
@@ -617,6 +607,19 @@ In either case, if the second value is 0, the rational has a finite decimal repr
 
 (eval '(attachments |stdprog|
 
+(defattach |to_lisp_| (pvs (the-type :decl-formal |T|))
+    "Encodes PVS object as a pair of Common Lisp object and CLOS type"
+    (cons pvs (clos-type2str the-type)))
+
+(defattach |from_lisp_| (cl (the-type :decl-formal |T|))
+  "Decodes a pair of Common Lisp object and CLOS type into a PVS object"
+  (let ((clos-type (pc-typecheck (pc-parse (cdr cl) 'type-expr))))
+    (if (subtype-of? clos-type the-type)
+	(car cl)
+      (throw-pvsio-exc
+       "stdexceptions.Lisp2PVS"
+       (format nil " (type ~a is not of a sub-type of ~a)" clos-type the-type)))))
+
 (defattach |new| ()
   "Creates a new mutable variable with an undefined value"
   (pvsio_new_gvar))
@@ -659,7 +662,7 @@ declared as a Global variable"
 (defattach |global?| (ref)
   "Return TRUE is mutable REF is a Global variable"
   (when (car ref) t))
- 
+
 )))
 
 (define-condition pvsio-exception (simple-error)
@@ -741,7 +744,7 @@ declared as a Global variable"
 )))
 
 (defun stdpvsio-attachments ()
- 
+
 (eval '(attachments |stdpvsio|
 
 (defattach |help_pvs_attachment| (s)
@@ -804,10 +807,11 @@ declared as a Global variable"
 
 (defun initialize-prelude-attachments ()
   (stdpvs-attachments)
-  (stdstr-attachments)
-  (stdio-attachments)
-  (stdmath-attachments)
   (stdprog-attachments)
   (stdcatch-attachments)
+  (stdmath-attachments)
+  (stdchar-attachments)
+  (stdstr-attachments)
+  (stdio-attachments)
   (stdpvsio-attachments)
   (stdsys-attachments))
