@@ -446,6 +446,9 @@ current declaration."
   (dolist (k (sort (get-hash-keys pvs-theories) #'string-lessp))
     (funcall fn (gethash k pvs-theories))))
 
+(defun do-workspace-theories (fn &optional (ws (current-workspace)))
+  (maphash #'(lambda (id th) (declare (ignore id)) (funcall fn th)) (pvs-theories ws)))
+
 (defun do-all-theories (fn &optional no-prelude?)
   "Goes through all known (e.g., parsed) theories of the current context,
 and all *all-workspace-sessions* applying fn to each theory."
@@ -608,7 +611,7 @@ obj may be of type:
     `(let ((,eobj ,obj))
        (with-workspace ,eobj
 	 (let* ((*current-context* (cond ((eq ,eobj :prelude)
-					  *prelude-context*)
+					  (copy-context *prelude-context*))
 					 ((context? ,eobj) ,eobj)
 					 (t (context ,eobj))))
 		(*default-pathname-defaults* (if (theory *current-context*)
