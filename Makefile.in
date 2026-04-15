@@ -837,9 +837,11 @@ smoke-sbcl-release: $(dist-sbclisp-gzip)
 	home="$$tmpdir/home" && \
 	trap 'rm -rf "$$tmpdir"' EXIT HUP INT TERM && \
 	mkdir -p "$$home" && \
+	printf '%s\n' '(in-package :cl-user)' > "$$home/.pvs.lisp" && \
 	tar xzf "$(dist-sbclisp-gzip)" -C "$$tmpdir" && \
 	root=`cd "$$tmpdir/$(DISTDIR)" && pwd -P` && \
 	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvs" -raw -version >/dev/null && \
+	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSPATCHLEVEL=0 "$$root/pvs" -raw -version >/dev/null && \
 	resolved=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvs" -raw -E '(format t "PVSROOT=~a" pvs::*pvs-path*)(bye)' | sed -n 's/^PVSROOT=//p'` && \
 	test "$$resolved" = "$$root/" && \
 	central=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" --no-userinit --eval '(progn (format t "CENTRAL=~S~%" asdf:*central-registry*)(pvs::bye))' | sed -n 's/^CENTRAL=//p'` && \

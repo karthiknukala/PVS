@@ -110,7 +110,13 @@
 
 (defun pvs-init (&optional dont-load-patches dont-load-user-lisp path)
   (proclaim '(optimize (speed 3) (safety 3) (cl:debug 1)))
+  ;; Reinitialize ASDF path/cache state at runtime so dumped images don't
+  ;; retain source-registry or output-translation paths from the build host.
+  (ignore-errors (uiop:clear-configuration))
+  (ignore-errors (asdf/source-registry:clear-source-registry))
+  (ignore-errors (asdf/output-translations:clear-output-translations))
   (asdf/source-registry:initialize-source-registry)
+  (asdf/output-translations:initialize-output-translations)
   (setq *pvs-path* (initial-pvs-path path))
   (reset-pvs-log-directory)
   (setq *pvs-log-stream* nil)
