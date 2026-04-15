@@ -58,15 +58,18 @@ extern void *safe_realloc(void *ptr, size_t size) __attribute__ ((malloc));
  * is NULL. It's safer to check anyway.
  */
 static inline void safe_free(void *ptr) {
+  printf("\nFreeing %p", ptr);
   if (ptr != NULL) free(ptr);
 }
 
 static inline void release_mpz(mpz_ptr_t x){
+  printf("\nClearing mpz pointer %p", x);
   mpz_clear(x);
   safe_free(x);
 }
 
 static inline void release_mpq(mpq_ptr_t x){
+  printf("\nClearing mpq pointer %p", x);  
   mpq_clear(x);
   safe_free(x);
 }
@@ -96,6 +99,7 @@ extern int64_t div_int64_uint64(int64_t x, uint64_t y);
 extern int64_t div_int64_uint32(int64_t x, uint32_t y);
 extern uint128_t div_uint128_uint128(int128_t x, uint128_t y);
 extern int128_t div_int128_uint128(int128_t x, uint128_t y); //deprecated
+extern uint64_t div_mpz_uint64(mpz_t x, uint64_t y);
 extern uint32_t rem_uint32_uint32(uint32_t x, uint32_t y);
 extern uint32_t rem_int32_uint32(int32_t x, uint32_t y);
 extern uint64_t rem_uint64_uint64(uint64_t x, uint64_t y);
@@ -258,7 +262,7 @@ struct stringliteral_s {
   uint32_t size;
   uint32_t max;
   uint32_t elems[];
-} stringliteral_s;
+};
 typedef struct stringliteral_s * stringliteral_t;
 
 uint32_t code(uint32_t x);
@@ -290,7 +294,7 @@ struct file_s {
   uint32_t capacity;
   char * name; 
   char * contents; 
-} file_s;
+};
 typedef struct file_s * file_t;
 
 extern void release_file__file(file_t file);

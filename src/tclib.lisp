@@ -154,7 +154,7 @@
       (format t "~%Done typechecking the core prelude")
       (restore-prelude-proofs)
       ;;(initialize-prelude-attachments)
-      (ignore-errors (pvs2c-prelude))
+      (pvs2c-prelude)
       (ignore-errors (uiop:run-program (format nil "~a/lib/pvs2c/src/make" *pvs-path*)))
       (register-manip-type *number_field* 'pvs-type-real))))
 
@@ -1073,7 +1073,8 @@ abspath as a subdirectory.  If it is found, and is a valid library id, it is ret
       :test #'equal :key #'lib-ref :from-end t)))
 
 (defun all-decls (theory)
-  (or (all-declarations theory)
+  (or (and (memq 'typechecked (status theory))
+	   (all-declarations theory))
       (let ((decls (append (formals theory)
 			   (mapappend #'(lambda (d)
 					  (when (typep d '(or formal-subtype-decl

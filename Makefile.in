@@ -162,7 +162,8 @@ SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
 	lib/finite_sets/.pvscontext lib/finite_sets/pvsbin \
 	$(wildcard lib/bitvectors/*.pvs lib/bitvectors/*.prf) \
 	lib/bitvectors/.pvscontext lib/bitvectors/pvsbin \
-	yices/$(PLATFORM) $(bindir)/yices1 $(bindir)/yices2 \
+	yices/$(PLATFORM) \
+	$(bindir)/yices2 \
 	emacs/configured-for-x Vagrantfile vagrant.README \
 	pvs-version.lisp git-commit
 
@@ -314,6 +315,7 @@ ess-files = ess/dist-ess.lisp \
 pvs-parser-in = src/make-pvs-parser.lisp \
              src/pvs-gr.txt \
              src/ergo-runtime-fixes.lisp \
+             src/pvs-parser-runtime-fixes.lisp \
              src/ergo-gen-fixes.lisp \
              src/pvs-lang-def.lisp \
              src/pvs-parse-fixes.lisp
@@ -587,35 +589,39 @@ yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-pc-l
 else
 ifeq ($(PLATFORM),ix86-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
 else
 ifeq ($(PLATFORM),arm-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
 endif
 endif
 endif
 
-yices1-tgt = yices/$(PLATFORM)/yices-$(yices1-version)/bin/yices
-yices2-tgt = yices/$(PLATFORM)/yices-$(yices2-version)/bin/yices
+yices1-dir = yices/$(PLATFORM)/yices-$(yices1-version)
+yices2-dir = yices/$(PLATFORM)/yices-$(yices2-version)
+yices1-tgt = $(yices1-dir)/bin/yices
+yices2-tgt = $(yices2-dir)/bin/yices
 yices1-lnk = bin/$(PLATFORM)/yices1
 yices2-lnk = bin/$(PLATFORM)/yices2
 
-yices : | $(yices1-lnk) $(yices2-lnk)
+yices : | $(yices2-lnk) $(yices1-lnk) 
 
 $(yices1-tgt) :
 	@-$(MKDIR_P) yices/$(PLATFORM)
-	curl --output - $(yices1-tar) | tar xzf - -C ./yices/$(PLATFORM)
+	@echo "Yices1: downloading $(yices1-tar), installing in $(yices1-dir)"
+	@-(curl --output - $(yices1-tar) 2> /dev/null | tar xzf - -C ./yices/$(PLATFORM) 2> /dev/null) || echo "Warning: Yices1 is not currently available for download - this only affects proofs using the 'yices', 'yices-with-rewrites', or 'ygrind' commands"
 
 $(yices1-lnk) : $(yices1-tgt)
-	ln -s ../../$< $@
+	@-test -h $@ || ln -s ../../$< $@
 
 $(yices2-tgt) :
 	@-$(MKDIR_P) yices/$(PLATFORM)
-	curl --output - $(yices2-tar) | tar xzf - -C ./yices/$(PLATFORM)
+	@echo "Yices2: downloading $(yices2-tar), installing in $(yices2-dir)"
+	@-(curl $(yices2-tar) 2>/dev/null | tar xzf - -C ./yices/$(PLATFORM)) || echo "Warning: Yices2 is not currently available for download - this only affects proofs using the 'yices2', 'yices2-with-rewrites', 'y2simp', or 'y2grind' commands"
 
 $(yices2-lnk) : $(yices2-tgt)
-	ln -s ../../$< $@
+	@-test -h $@ || ln -sf ../../$< $@
 
 # Here are the rules for building PVS using pvs.asd, which does most of the
 # work. It not only builds the image, it creates all the libraries

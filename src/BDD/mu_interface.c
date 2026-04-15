@@ -178,7 +178,7 @@ Formula mu_check_mk_bool_var (char *name)
   return R;
  }
 
-LIST empty_list ()
+LIST empty_list (void)
 {return NULL_LIST;}
 
 /* returns the name of a boolean variable */
@@ -198,12 +198,12 @@ Main function
   extern int optind;
 //extern FILE *freopen ();
   int option;
-  extern int yyparse ();
+  extern int yyparse (void);
 /*  extern int yylineno = 0;  */
 
 BDDPTR mu___modelcheck_formula (Formula fml)
  { auto int return_value;
-   extern BDDPTR modelcheck_formula();
+   extern BDDPTR modelcheck_formula(Formula fml);
    BDDPTR mcvalue;
 
    bdd_interrupted = 0;
@@ -221,7 +221,7 @@ BDDPTR mu___modelcheck_formula (Formula fml)
 
 BDD_LIST bdd___bdd_sum_of_cubes (BDDPTR f, int irredundant)
  { auto int return_value;
-   extern BDD_LIST bdd_sum_of_cubes();
+   extern BDD_LIST bdd_sum_of_cubes(BDDPTR f, int irredundant);
    BDD_LIST mcvalue;
 
    bdd_interrupted = 0;
