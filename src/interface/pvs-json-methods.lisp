@@ -262,13 +262,16 @@ returning the unique id (within a PVS session)."
   (let* ((prf-result (pvs:prover-step proof-id form))
 	 (prf-alist (pvs2json-response prf-result))
 	 (prf-json (json:encode-json-to-string prf-alist)))
-    ;; (format t "~%proof-command: after prf-json => ~a " prf-json) ;; debug
-    ;; (format t "~%proof => ~a " (pvs:script(pvs:default-proof(pvs:get-formula-decl "sq#sq_neg")))) ;; debug
     (values prf-alist prf-json)))
 
 (defrequest proof-help (cmd)
   "Gets help for the given cmd"
   (pvs:prover-help cmd))
+
+(defrequest add-prover-hook (hook-fun)
+  "Provides a hook for PVS to call whenever the prover is waiting for input."
+  (pushnew hook-fun *proofstate-hooks*)
+  nil)
 
 (defun pvs2json-response (prv-result)
   "prv-result is an alist of the form
@@ -444,7 +447,7 @@ returning the unique id (within a PVS session)."
 	  (pvs:pp-with-view frm pvs:*proofstate-indent* pvs:*proofstate-width*)
 	(setf (pvs:view sform) (list frmstr frmview))))
     (let ((names-info (pvs:names-info-proof-formula sform)))
-      (obj `(("labels" . ,(arr (cons fnum (pvs:label sform))))
+      (obj `(("labels" . ,(arr (cons fnum (mapcar #'symbol-name (pvs:label sform)))))
 	     ("changed" . ,(if (member sform par-sforms) "false" "true"))
 	     ("formula" . ,(car (pvs:view sform)))
 	     ("names-info" . ,names-info))))))

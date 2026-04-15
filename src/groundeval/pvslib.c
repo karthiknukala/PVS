@@ -30,7 +30,7 @@ void *safe_malloc(size_t size) {
   if (tmp == NULL && size > 0) {
     out_of_memory();
   }
-
+  //  printf("\nAllocating %p of size %zu", tmp, size); 
   return tmp;
 }
 
@@ -190,6 +190,10 @@ int128_t div_int128_uint128(int128_t x, uint128_t y){
   return x/y;
 }
 
+uint64_t div_mpz_uint64(mpz_t x, uint64_t y){
+  return  mpz_fdiv_ui(x, y);
+}
+
 
 uint32_t rem_uint32_uint32(uint32_t x, uint32_t y){
   return x%y;
@@ -259,15 +263,15 @@ uint32_t rem_mpz_uint32(mpz_t x, uint32_t y){
   return mpz_fdiv_ui(x, y);  
 }
 
+//pvsfloor_q_z is an internal function that does not clear x; caller's responsibility
 mpz_ptr_t pvsfloor_q_z(mpq_t x){
         mpz_ptr_t result;
         result = safe_malloc(sizeof(mpz_t));
         mpz_init(result);
         mpz_set_q(result, x);
-
         return result;
 }
-
+//pvsfloor_q_q is an internal function that does not clear x; caller's responsibility
 mpq_ptr_t pvsfloor_q_q(mpq_t x){
         mpq_ptr_t result;
         result = safe_malloc(sizeof(mpq_t));
@@ -285,6 +289,7 @@ int64_t pvsfloor_q_i64(mpq_t x){
 	tmp = pvsfloor_q_z(x);
 	result = mpz_get_si(tmp);
 	mpz_clear(tmp);
+	mpq_clear(x);
         return result;
 }
 
@@ -294,6 +299,7 @@ uint64_t pvsfloor_q_u64(mpq_t x){
 	tmp = pvsfloor_q_z(x);
 	result = mpz_get_si(tmp);
 	mpz_clear(tmp);
+	mpq_clear(x);
         return result;
 }
 
@@ -322,6 +328,7 @@ int64_t pvsceiling_q_i64(mpq_t x){
   mpz_ptr_t tmp = pvsceiling_q_z(x);
   result = mpz_get_si(tmp);
   mpz_clear(tmp);
+  mpq_clear(x);
   return result;
 }
 
@@ -330,6 +337,7 @@ uint64_t pvsceiling_q_u64(mpq_t x){
   mpz_ptr_t tmp = pvsceiling_q_z(x);
   result = mpz_get_ui(tmp);
   mpz_clear(tmp);
+  mpq_clear(x);
   return result;
 }
 
@@ -498,6 +506,7 @@ void release_uint64(pointer_t x, ...){
 void release_file__file(file_t file){
   if (file->count <= 1){
     munmap(file->contents, file->capacity);
+    safe_free(file->name);
     safe_free(file);
   } else
     {
