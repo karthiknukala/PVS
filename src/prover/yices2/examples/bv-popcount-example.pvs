@@ -10,7 +10,7 @@
 % Suggested proof command for the 32-bit equivalence theorem below:
 %   (y2api-expand :expand-enable '(("popcount32_hd" 1)
 %                                  ("popcount32_naive" 33))
-%                 :quiet? t)
+%                 :verbosity 1)
 %
 % Suggested proof command for xor_self_zero:
 %   (y2api-simp)

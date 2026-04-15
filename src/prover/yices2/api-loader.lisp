@@ -217,7 +217,7 @@
             collect spec)))
 
 (defun yices2-api-make-primitive-step (fnums nonlinear? logic mode solver-type
-                                             configs params quiet?
+                                             configs params verbosity quiet?
                                              enable-options disable-options
                                              &optional suppress-errors?)
   (let ((qfnums (yices2-api-strategy-quote fnums))
@@ -227,6 +227,7 @@
         (qsolver-type (yices2-api-strategy-quote solver-type))
         (qconfigs (yices2-api-strategy-quote configs))
         (qparams (yices2-api-strategy-quote params))
+        (qverbosity (yices2-api-strategy-quote verbosity))
         (qquiet (yices2-api-strategy-quote quiet?))
         (qenable-options (yices2-api-strategy-quote enable-options))
         (qdisable-options (yices2-api-strategy-quote disable-options)))
@@ -238,13 +239,14 @@
       :solver-type ,qsolver-type
       :configs ,qconfigs
       :params ,qparams
+      :verbosity ,qverbosity
       :quiet? ,qquiet
       :enable-options ,qenable-options
       :disable-options ,qdisable-options)))
 
 (addrule 'yices2-api ()
     ((fnums *) nonlinear? logic (mode "one-shot") solver-type
-     configs params quiet? enable-options disable-options)
+     configs params verbosity quiet? enable-options disable-options)
   (yices2-api fnums
               :nonlinear? nonlinear?
               :logic logic
@@ -252,6 +254,7 @@
               :solver-type solver-type
               :configs configs
               :params params
+              :verbosity verbosity
               :quiet? quiet?
               :enable-options enable-options
               :disable-options disable-options)
@@ -260,7 +263,7 @@
 
 (addrule 'yices2-api-quiet ()
     ((fnums *) nonlinear? logic (mode "one-shot") solver-type
-     configs params quiet? enable-options disable-options)
+     configs params verbosity quiet? enable-options disable-options)
   (yices2-api-quiet fnums
                     :nonlinear? nonlinear?
                     :logic logic
@@ -268,6 +271,7 @@
                     :solver-type solver-type
                     :configs configs
                     :params params
+                    :verbosity verbosity
                     :quiet? quiet?
                     :enable-options enable-options
                     :disable-options disable-options)
@@ -277,6 +281,7 @@
 (defstep y2api-simp (&optional (fnums *)
                                &key nonlinear? logic
                                (mode "one-shot") solver-type configs params
+                               verbosity
                                quiet?
                                enable-options disable-options)
   (let ((loaded? (ensure-yices2-api-implementation)))
@@ -288,6 +293,7 @@
                       :solver-type solver-type
                       :configs configs
                       :params params
+                      :verbosity verbosity
                       :quiet? quiet?
                       :enable-options enable-options
                       :disable-options disable-options)))
@@ -297,6 +303,7 @@
 (defstep y2api-mcsat (&optional (fnums *)
                                 &key logic (mode "one-shot")
                                 solver-type configs params
+                                verbosity
                                 quiet?
                                 enable-options disable-options)
   (y2api-simp :fnums fnums
@@ -306,6 +313,7 @@
               :solver-type solver-type
               :configs configs
               :params params
+              :verbosity verbosity
               :quiet? quiet?
               :enable-options enable-options
               :disable-options disable-options)
@@ -366,6 +374,7 @@
                                  (expand-assert? 'none)
                                  nonlinear? logic
                                  (mode "one-shot") solver-type configs params
+                                 verbosity
                                  quiet?
                                  enable-options disable-options)
   (let ((enabled-specs
@@ -377,6 +386,7 @@
           (solver-step
            (yices2-api-make-primitive-step fnums nonlinear? logic mode
                                            solver-type configs params
+                                           verbosity
                                            quiet?
                                            enable-options disable-options
                                            t)))

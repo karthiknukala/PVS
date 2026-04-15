@@ -398,6 +398,5 @@
                      (if (yices2-function-declaration-p declaration)
                          (yices2-defcfun-form declaration)
                          (yices2-defcvar-form declaration)))
-                   declarations)))))
-
-(define-yices2-bindings)
+                   declarations))))
+  (define-yices2-bindings))
