@@ -1,0 +1,27 @@
+
+
+Yices2BVXORExample  % [ parameters ]
+		: THEORY
+
+  BEGIN
+
+  % ASSUMING
+   % assuming declarations
+  % ENDASSUMING
+
+  IMPORTING yices2BV
+
+  x, y: VAR bvec[32]
+
+   % x ^ y == (((y & x)*-2) + (y + x))
+
+  XOR_EQUIV: THEOREM
+    bvxor(32, x, y) =
+      bvadd(32, bvmul(32, bvand(32, y, x), bvconst(32, -100)),
+        bvadd(32, y, x))
+
+
+
+  END Yices2BVXORExample
+
+

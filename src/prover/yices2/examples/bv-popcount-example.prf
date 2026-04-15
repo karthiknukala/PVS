@@ -72,10 +72,12 @@
    NIL SHOSTAK))
  (|popcount32_hd_equivalent| 0
   (|popcount32_hd_equivalent-1| NIL 3985192667
-   (""
-    (Y2API-EXPAND :EXPAND-ENABLE '(("popcount32_hd" 1) ("popcount32_naive" 33))
-     :VERBOSITY 1)
-    NIL NIL)
+   ("" (SKEEP)
+    ((""
+      (Y2API-EXPAND :EXPAND-ENABLE
+       '(("popcount32_hd" 1) ("popcount32_naive" 33)) :VERBOSITY 1)
+      NIL NIL))
+    NIL)
    ((|popcount32_naive| DEF-DECL "Word32" |Yices2BVPopcountExample| NIL)
     (|popcount32_hd| CONST-DECL "Word32" |Yices2BVPopcountExample| NIL))
    SHOSTAK)))

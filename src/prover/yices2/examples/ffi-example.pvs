@@ -62,6 +62,52 @@ BEGIN
     FORALL (u, v: real): u = v IMPLIES g(u, 1) = g(v, 1)
 
   nonlinear: THEOREM
-    x * x = 2 IMPLIES x * x > 1
+    x * x = 2 IMPLIES x * x > 100000
+
+
+  T: TYPE
+  f1, f2, f3: [T -> T]
+  t: VAR T
+
+  eq: THEOREM
+    f1(t) = f2(t) AND f2(t) = f3(t) IMPLIES f1(t) /= f3(t)
 
 END Yices2FFIExample
+
+
+
+ShankarExamples  % [ parameters ]
+		: THEORY
+
+  BEGIN
+
+  % ASSUMING
+   % assuming declarations
+  % ENDASSUMING
+
+  T: TYPE
+  x, y: VAR T
+  f: [T -> T]
+  shankar1: THEOREM
+    (x = y AND f(f(f(x))) = f(x)) =>
+      f(f(f(f(f(y))))) = f(x)
+
+
+  m, n, p: VAR int
+  U: TYPE = ARRAY[int -> int]
+  a: VAR U
+  g: [int -> int]
+  shankar2: THEOREM % TODO
+    m+2 = n => g((a WITH [m:=3])(n-2)) = g(n-m+1)
+
+  h: VAR [int -> int]
+  shankar3: THEOREM
+    h(n-1)-1 = n+1 AND h(m)+1 = m-1 AND m+1 = n => FALSE
+
+  shankar4: THEOREM
+    g(g(m)-g(n)) /= g(p) AND (n <= m) AND (n >= m+p) & p >= 0 => false
+
+
+  END ShankarExamples
+
+
