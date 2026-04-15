@@ -20,12 +20,37 @@
 use Getopt::Long qw(GetOptionsFromString);
 use File::Basename;
 use Term::ANSIColor qw(:constants);
-use Cwd;
+use Cwd qw(abs_path);
 use File::Temp qw/ tempdir /;
 
 $Term::ANSIColor::AUTORESET = 1;
 
-$PVSPATH="@PVSPATH@";
+sub normalize_dir {
+  my ($path) = @_;
+  return $path =~ /\/$/ ? $path : "$path/";
+}
+
+sub resolve_script_dir {
+  my $path = shift;
+  if ($path !~ /\//) {
+    my $candidate = `command -v "$path" 2>/dev/null`;
+    chomp $candidate;
+    $path = $candidate if $candidate ne "";
+  }
+  my $resolved = abs_path($path);
+  return defined $resolved ? dirname($resolved) : undef;
+}
+
+$PVSPATH = $ENV{PVSPATH};
+if (defined $PVSPATH && -d $PVSPATH) {
+  my $resolved = abs_path($PVSPATH);
+  $PVSPATH = defined $resolved ? normalize_dir($resolved) : normalize_dir($PVSPATH);
+} else {
+  my $script_dir = resolve_script_dir($0);
+  die "Error: the PVS installation could not be located from $0\n"
+    unless defined $script_dir;
+  $PVSPATH = normalize_dir($script_dir);
+}
 
 @prelude = ("bitvector", "finite_sets");
 
@@ -35,17 +60,8 @@ $PROVEIT="$PVSPATH/proveit";
 
 $usageln = "Usage: provethem [--help | <option> ...] <file>";
 
-# If PROVEIT cannot be located, the execution is cancelled
-if (system("type \"$PROVEIT\" > /dev/null 2>&1")) {
-  if (system("type proveit > /dev/null 2>&1")) {
-    $PVSPATH=dirname($0);
-    $PROVEIT="$PVSPATH/proveit";
-    if (system("type \"$PROVEIT\" > /dev/null 2>&1")) {
-      die "Error: the proveit script could not be located. Add it to the system path or run install-scripts in the PVS folder.\n" ;
-    } 
-  } else {
-    $PROVEIT="proveit";
-  }
+if (system("test -x \"$PROVEIT\" > /dev/null 2>&1")) {
+  die "Error: the proveit script could not be located relative to $PVSPATH.\n";
 }
 
 sub readVersion(){

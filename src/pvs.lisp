@@ -111,6 +111,7 @@
 (defun pvs-init (&optional dont-load-patches dont-load-user-lisp path)
   (asdf/source-registry:initialize-source-registry)
   (setq *pvs-path* (initial-pvs-path path))
+  (reset-pvs-log-directory)
   (setq *pvs-log-stream* nil)
   (start-load-watching)
   #+allegro (setq excl:*enclose-printer-errors* nil)
@@ -247,7 +248,7 @@ should be enough."
 	   ;; We were started as, e.g., bin/ix86_64-Linux/runtime/pvs-allegro
 	   ;; assume the parent of bin is a valid PVS installed directory.
 	   (and cfile (find-pvs-path-from cfile))))
-	((let* ((pvs-sys (asdf:find-system :pvs))
+	((let* ((pvs-sys (ignore-errors (asdf:find-system :pvs nil)))
 		(path (when pvs-sys (slot-value pvs-sys 'asdf/component:absolute-pathname))))
 	   path))
 	(t (pvs-error "Init error"
@@ -272,6 +273,21 @@ should be enough."
 (defun collect-pvs-env-variables ()
   (mapcar #'(lambda (env) (cons env (environment-variable env)))
     *pvs-env-variables*))
+
+(defun ensure-directory-string (dir)
+  (when (and dir (> (length dir) 0))
+    (if (char= (char dir (1- (length dir))) #\/)
+	dir
+	(format nil "~a/" dir))))
+
+(defun pvs-runtime-log-directory ()
+  (or (ensure-directory-string
+       (or (environment-variable "PVS_LOG_DIR")
+	   (environment-variable "PVSLOGDIR")))
+      "~/.pvslog/"))
+
+(defun reset-pvs-log-directory ()
+  (setq *pvs-log-directory* (pvs-runtime-log-directory)))
 
 (defun pvs-init-globals ()
   (reset-typecheck-caches)

@@ -1,0 +1,101 @@
+name: Apple Silicon Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-silicon-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos-arm64:
+    name: Build macOS arm64 bundle
+    runs-on: macos-15
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_HOME: ${{ runner.temp }}/pvs-home
+      PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          brew list make >/dev/null 2>&1 || brew install make
+          brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          brew list sbcl >/dev/null 2>&1 || brew install sbcl
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: Prepare isolated build home
+        run: |
+          mkdir -p "$CI_HOME"
+
+      - name: Configure source tree
+        env:
+          HOME: ${{ env.CI_HOME }}
+        run: |
+          ./configure --with-pvspath="$PWD"
+
+      - name: Build and smoke-test standalone bundle
+        env:
+          HOME: ${{ env.CI_HOME }}
+        run: |
+          make smoke-sbcl-release
+
+      - name: Capture artifact paths
+        id: artifacts
+        run: |
+          shopt -s nullglob
+          files=( $PVS_ARTIFACT_GLOB )
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one standalone tarball, found ${#files[@]}" >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+
+          bundle_dir=$(make print-DISTDIR | sed -n 's/^DISTDIR=//p')
+          if [ -z "$bundle_dir" ] || [ ! -d "$bundle_dir" ]; then
+            echo "Expected unpacked bundle directory to exist, got '$bundle_dir'" >&2
+            exit 1
+          fi
+
+          echo "tgz=${files[0]}" >> "$GITHUB_OUTPUT"
+          echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload standalone tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-silicon-tgz
+          path: ${{ steps.artifacts.outputs.tgz }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload standalone bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-silicon-bundle
+          path: ${{ steps.artifacts.outputs.bundle_dir }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Apple Silicon bundle"
+            echo
+            echo "- Runner: \`macos-15\`"
+            echo "- Tarball artifact: \`pvs-apple-silicon-tgz\`"
+            echo "- Ready-to-unzip bundle artifact: \`pvs-apple-silicon-bundle\`"
+            echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
+          } >> "$GITHUB_STEP_SUMMARY"

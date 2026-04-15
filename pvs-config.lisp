@@ -95,6 +95,26 @@
   #+allegro excl:*fasl-default-type*
   #+sbcl sb-fasl:*fasl-file-type*)
 
+(defun build-target-root ()
+  (namestring
+   (uiop:ensure-directory-pathname
+    (or (uiop:getenv "TARGETPATH") "./"))))
+
+(defun platform-build-dir (platform subdir)
+  (format nil "~abin/~a/~a/" (build-target-root) platform subdir))
+
+#+sbcl
+(defun scrub-runtime-image-state ()
+  (ignore-errors (asdf:clear-system :pvs))
+  (ignore-errors (asdf/source-registry:clear-source-registry))
+  (ignore-errors (asdf/output-translations:clear-output-translations))
+  (ignore-errors (uiop:clear-configuration))
+  (ignore-errors (when (fboundp 'close-pvs-log) (close-pvs-log)))
+  (setf asdf:*central-registry* nil)
+  (setq *pvs-log-stream* nil
+	*pvs-log-directory* "~/.pvslog/"
+	*pvs-path* nil))
+
 #+allegro
 (eval-when (:load-toplevel :execute)
   (setq *ignore-package-name-case* t))
@@ -282,11 +302,10 @@ targets and copying them to the corresponding bin directory."
   (format t "~%Making Allegro ~a" (if runtime? "runtime" "devel"))
   (let* ((tmp-dir "/tmp/pvs-allegro-build/")
 	 (platform (pvs-platform))
-	 (platform-dir (format nil "./bin/~a/" platform))
-	 (build-dir (format nil "~a~a/"
-		     platform-dir (if runtime? "runtime" "devel")))
+	 (platform-dir (format nil "~abin/~a/" (build-target-root) platform))
+	 (build-dir (platform-build-dir platform (if runtime? "runtime" "devel")))
 	 (foreign-ext #-(or macosx os-macosx) "so" #+(or macosx os-macosx) "dylib")
-	 (bin-dir (format nil "bin/~a/~a/" platform (if runtime? "runtime" "devel")))
+	 (bin-dir (platform-build-dir platform (if runtime? "runtime" "devel")))
 	 (allegro-home (or (sys:getenv "ALLEGRO_HOME") "~/acl")))
     ;; (setq *pvs-path* nil)
     (ensure-directories-exist build-dir)
@@ -367,8 +386,7 @@ targets and copying them to the corresponding bin directory."
     (dolist (sdir-file '(("utils" . "file_utils") ("BDD" . "mu") ("WS1S" . "ws1s")))
       (let* ((file (format nil "~a.~a" (cdr sdir-file) foreign-ext))
 	     (libsrc (format nil "src/~a/~a/~a" (car sdir-file) platform file))
-	     (libdest (format nil "bin/~a/~a/~a"
-			platform (if runtime? "runtime" "devel") file)))
+	     (libdest (format nil "~a~a" build-dir file)))
 	(format t "~%Copying ~a to ~a" libsrc libdest)
 	(sys:copy-file libsrc libdest :overwrite t)))
     ;; Now copy files.bu and libacli10196s.{so,dylib} from ALLEGRO_HOME
@@ -395,11 +413,9 @@ targets and copying them to the corresponding bin directory."
 
 #+sbcl
 (defun make-pvs-program ()
-  (let* ((tmp-dir "/tmp/pvs-sbcl-build/")
-	 (platform (pvs-platform))
-	 (platform-dir (format nil "./bin/~a/" platform))
+  (let* ((platform (pvs-platform))
 	 (lext #-(or macosx os-macosx) "so" #+(or macosx os-macosx) "dylib")
-	 (build-dir (format nil "~aruntime/" platform-dir))
+	 (build-dir (platform-build-dir platform "runtime"))
 	 (pvs-prog (format nil "~apvs-sbclisp" build-dir)))
     (format t "~%Creating SBCL core image in ~a" pvs-prog)
     (ensure-directories-exist pvs-prog)
@@ -423,6 +439,7 @@ targets and copying them to the corresponding bin directory."
 	(sb-alien:unload-shared-object (sb-alien::shared-object-pathname shobj))
 	;;(setf (sb-alien::shared-object-dont-save shobj) t)
 	))
+    (scrub-runtime-image-state)
     (sb-ext:save-lisp-and-die
      pvs-prog
      :toplevel (function startup-pvs)

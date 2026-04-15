@@ -15,7 +15,39 @@
 # Script for batch proving several libraries in PVS 
 #
 
-PVSPATH=@PVSPATH@
+normalize_dir() {
+  case $1 in
+    */) printf '%s\n' "$1" ;;
+    *) printf '%s/\n' "$1" ;;
+  esac
+}
+
+resolve_script_dir() {
+  target=$1
+  case $target in
+    */*) ;;
+    *) target=`command -v "$target"` || return 1 ;;
+  esac
+  while [ -h "$target" ]
+  do
+    link=`readlink "$target"` || return 1
+    case $link in
+      /*) target=$link ;;
+      *) target=`dirname "$target"`/$link ;;
+    esac
+  done
+  CDPATH= cd -- "`dirname "$target"`" 2>/dev/null && pwd -P
+}
+
+if [ -n "$PVSPATH" -a -d "$PVSPATH" ]
+then PVSPATH=`normalize_dir "$PVSPATH"`
+else
+  PVSPATH=`resolve_script_dir "$0"` || {
+    echo "Unable to determine the PVS installation directory"
+    exit 1
+  }
+  PVSPATH=`normalize_dir "$PVSPATH"`
+fi
 
 #-------------------------------------------------
 # Nothing below this line should need modification
