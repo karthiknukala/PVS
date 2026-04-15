@@ -592,7 +592,9 @@
   '(|file__file|)
   nil
   "{struct stat s;
-    return (fstat(f->fd, &s) != -1);
+    bool_t b = (fstat(f->fd, &s) != -1);
+    release_file__file(f);
+    return b;
    }")
 
 (def-c-attach-primitive "file" "name" "bytestrings__bytestring"
@@ -602,12 +604,13 @@
   "{
    char * name = f->name;
    uint32_t size = strlen(name);
-    bytestrings_array_0_t newarray = new_bytestrings_array_0(size);
-    memcpy(newarray, (char *) name, size);
-    bytestrings__bytestring_t newstring = new_bytestrings__bytestring();
-    newstring->length = size;
-    newstring->seq = newarray;
-    return newstring;
+   bytestrings_array_0_t newarray = new_bytestrings_array_0(size);
+   memcpy(newarray, (char *) name, size);
+   release_file__file(f);
+   bytestrings__bytestring_t newstring = new_bytestrings__bytestring();
+   newstring->length = size;
+   newstring->seq = newarray;
+   return newstring;
    }")
 
 
@@ -619,7 +622,6 @@
     char * filenamestring = byte2cstring(name->length, name->seq->elems);
     uint64_t fd = open(filenamestring, O_RDWR, S_IRUSR | S_IWUSR);
     release_bytestrings__bytestring(name); 
-    safe_free(filenamestring);
     struct stat s;
     if (fstat(fd, &s) == -1){
        return con_file__fail(); //pvs2cerror(\"File size extraction failed.\n\")
@@ -627,7 +629,7 @@
     uint32_t size = s.st_size;
     uint32_t capacity = 4096 * (size/4096 + 1);
     char * contents = (char *) mmap(NULL, capacity, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    file_t ff = (file_t) safe_malloc(sizeof(file_s));
+    file_t ff = (file_t) safe_malloc(sizeof(struct file_s));
     ff->count = 1;
     ff->fd = fd;
     ff->size = size;
@@ -645,7 +647,6 @@
     char * filenamestring = byte2cstring(name->length, name->seq->elems);
     uint64_t fd = open(filenamestring, O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
     release_bytestrings__bytestring(name); 
-    safe_free(filenamestring);
     struct stat s;
     if (fstat(fd, &s) == -1){
        return con_file__fail(); //pvs2cerror(\"File size extraction failed.\n\")
@@ -653,7 +654,7 @@
     uint32_t size = s.st_size;
     uint32_t capacity = 4096 * (size/4096 + 1);
     char * contents = (char *) mmap(NULL, capacity, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    file_t ff = (file_t) safe_malloc(sizeof(file_s));
+    file_t ff = (file_t) safe_malloc(sizeof(struct file_s));
     ff->count = 1;
     ff->fd = fd;
     ff->size = size;
@@ -671,19 +672,19 @@
     uint32_t capacity = f->capacity;
     char * contents = f->contents;
     uint32_t len = b->length;
-    char * data = (char *)b->seq->elems;
     ftruncate(fd, size + len);
     if (size + len < capacity){
     for (size_t i = 0; i < len; i++)
-      contents[i + size] = data[i];
+      contents[i + size] = b->seq->elems[i];
   } else {
     munmap(contents, capacity);
     uint32_t new_capacity = capacity + (10 * 4096);
     char * new_contents = mmap(NULL, new_capacity, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0); 
     for (size_t i = 0; i < len; i++)
-      new_contents[i + size] = data[i];
+      new_contents[i + size] = b->seq->elems[i];
     f->contents = new_contents;
  };
+    release_bytestrings__bytestring(b); 
    f->size = size + len;
    return con_file__pass(f);
 }")

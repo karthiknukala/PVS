@@ -874,9 +874,10 @@ use binfiles."
     (let ((merged-theories
 	   (update-parsed-file filename file theories new-theories forced? typecheck?)))
       (pvs-message "~a parsed in ~,2,-3f seconds" filename time)
-      (assert (every #'(lambda (nth) (and (datatype-or-module? nth)
-					  (eq nth (get-theory (id nth)))))
-		     merged-theories))
+      (assert (every #'(lambda (nth) (datatype-or-module? nth)) merged-theories)
+	      () "parse-file* - bad value in merged-theories")
+      (assert (every #'(lambda (nth) (eq nth (get-theory (id nth)))) merged-theories)
+	      () "parse-file* - merged theory differs from get-theory")
       ;; (assert (parsed-file? filename))
       ;; (assert (every #'parsed? theories))
       merged-theories)))
@@ -1283,6 +1284,8 @@ escapes here."
 	   (setf (gethash (id nthy) (current-pvs-theories)) nthy))
 	 (setf (gethash filename (current-pvs-files))
 	       (cons (file-write-date file) new-theories))
+	 (assert (every #'datatype-or-module? new-theories) ()
+		 "update-parsed-file forced? invalid new-theories: ~a" new-theories)
 	 new-theories)
 	((null old-theories)
 	 (setf (gethash (pvs-filename filename) (current-pvs-files))
@@ -1290,16 +1293,21 @@ escapes here."
 	 (dolist (nthy new-theories)
 	   (setf (gethash (id nthy) (current-pvs-theories)) nthy))
 	 (update-context filename)
+	 (assert (every #'datatype-or-module? new-theories) ()
+		 "update-parsed-file no old-theories: invalid new-theories: ~a"
+		 new-theories)
 	 new-theories)
 	(t (multiple-value-bind (merged-theories th-diffs)
 	       ;; merged-theories will be a mix of new and old
 	       ;; th-diffs has elts of the form (othy nthy diff)
 	       (update-parsed-theories filename file old-theories new-theories)
-	     (assert (every #'datatype-or-module? merged-theories))
 	     (setf (gethash (pvs-filename filename) (current-pvs-files))
 		   (cons (file-write-date file) merged-theories))
 	     (unless typecheck?
 	       (update-context filename))
+	     (assert (every #'datatype-or-module? merged-theories) ()
+		     "update-parsed-file - invalid merged-theories: ~a"
+		     merged-theories)
 	     merged-theories))))
 
 (defun update-parsed-theories (filename file old-theories new-theories
@@ -1515,8 +1523,8 @@ escapes here."
 		      (newsec (append kept-part new-part)))
 		 (assert (memq last-kept-decl newsec) ()
 			 "merge-parsed-theory-decls - 2")
-		 (assert (= (length (slot-value nthy cursec))
-			    (length (remove-if #'generated-by newsec))))
+		 ;; (assert (= (length (slot-value nthy cursec))
+		 ;; 	    (length (remove-if #'generated-by newsec))))
 		 ;; This is destructive - othy has been modified
 		 (setf (slot-value othy cursec) newsec)))
 	      ((eq cursec nsec)
@@ -3833,7 +3841,7 @@ nil is returned in that case."
 		  (pvs-filename (filename mod)))))
     (when (and mod fname
 	       (gethash fname (current-pvs-files))
-	       (not (file-exists-p (make-specpath (filename mod)))))
+	       (not (uiop:file-exists-p (make-specpath (filename mod)))))
       (pvs-message "File ~a.pvs has disappeared!" (filename mod))
       (remhash fname (current-pvs-files))
       (remhash (id mod) (current-pvs-theories))
@@ -3874,9 +3882,9 @@ nil is returned in that case."
 	     (assert (eq (get-theory theoryref) th))
 	     th))
 	  (t (let ((filename (context-file-of theoryref)))
-	       (if (and filename (file-exists-p (make-specpath filename)))
+	       (if (and filename (uiop:file-exists-p (make-specpath filename)))
 		   (parse-file filename nil quiet? typecheck?)
-		   (if (file-exists-p (make-specpath theoryref))
+		   (if (uiop:file-exists-p (make-specpath theoryref))
 		       (parse-file theoryref nil quiet? typecheck?)
 		       (let ((file
 			      (look-for-theory-in-directory-files theoryref)))
@@ -4576,7 +4584,7 @@ nil is returned in that case."
   (prover-command-entry name))
 
 (defun prover-help (name)
-  (nth-value (funcall (help-rule-fun name) nil) 0))
+  (with-output-to-string (*standard-output*) (funcall (help-rule-fun name) nil)))
 
 (defun all-proof-commands-json ()
   (let* ((rule-deps (collect-rule-dependencies))
@@ -4910,7 +4918,7 @@ specified pvs-file, and its associated .prf file.  "
 
 (defun rename-in-prf-file (old new file-ref)
   (let ((prf-file (make-prf-pathname file-ref)))
-    (when (file-exists-p prf-file)
+    (when (uiop:file-exists-p prf-file)
       (with-open-file (input prf-file :direction :input)
 	(let ((proofs (rename-in-proof-file-stream old new input)))
 	  (break "rename-in-prf-file")

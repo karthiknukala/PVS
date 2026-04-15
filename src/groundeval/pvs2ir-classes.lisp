@@ -92,7 +92,7 @@
   ir-else)
 
 (defcl ir-offset (ir-expr)
-  expr offset)
+  expr offset expr-type)
 
 ;; (defcl ir-switch (ir-expr)
 ;;   ir-cvar

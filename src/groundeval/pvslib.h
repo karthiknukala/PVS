@@ -58,15 +58,18 @@ extern void *safe_realloc(void *ptr, size_t size) __attribute__ ((malloc));
  * is NULL. It's safer to check anyway.
  */
 static inline void safe_free(void *ptr) {
+  printf("\nFreeing %p", ptr);
   if (ptr != NULL) free(ptr);
 }
 
 static inline void release_mpz(mpz_ptr_t x){
+  printf("\nClearing mpz pointer %p", x);
   mpz_clear(x);
   safe_free(x);
 }
 
 static inline void release_mpq(mpq_ptr_t x){
+  printf("\nClearing mpq pointer %p", x);  
   mpq_clear(x);
   safe_free(x);
 }
@@ -259,7 +262,7 @@ struct stringliteral_s {
   uint32_t size;
   uint32_t max;
   uint32_t elems[];
-} stringliteral_s;
+};
 typedef struct stringliteral_s * stringliteral_t;
 
 uint32_t code(uint32_t x);
@@ -291,7 +294,7 @@ struct file_s {
   uint32_t capacity;
   char * name; 
   char * contents; 
-} file_s;
+};
 typedef struct file_s * file_t;
 
 extern void release_file__file(file_t file);
