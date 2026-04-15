@@ -2210,40 +2210,50 @@ the same id for the substitution."
 	     (id (make-tcc-name)))
 	(assert (tc-eq (find-supertype (type uform)) *boolean*))
 	(unless (tc-eq conc *true*)
-	  (when (and *false-tcc-error-flag*
-		     (tc-eq uform *false*))
-	    (type-error expr
-	      "Disjointness TCC for this expression simplifies to false:~2%  ~a"
-	      tform))
-	  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
+		  (when (and *false-tcc-error-flag*
+			     (tc-eq uform *false*))
+		    (type-error expr
+		      "Disjointness TCC for this expression simplifies to false:~2%  ~a"
+		      tform))
+		  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
+
+(defun balanced-conjunction-node-list (exprs)
+  (when exprs
+    (let ((vec (coerce exprs 'vector)))
+      (labels ((mk-and (l r)
+		 (cond ((null l) r)
+		       ((null r) l)
+		       (t (make-instance 'infix-conjunction
+			    :operator (and-operator)
+			    :argument (make!-arg-tuple-expr l r)
+			    :type *boolean*))))
+	       (rec (lo hi)
+		 (cond ((>= lo hi) nil)
+		       ((= (+ lo 1) hi) (aref vec lo))
+		       (t (let ((mid (+ lo (floor (- hi lo) 2))))
+			    (mk-and (rec lo mid) (rec mid hi)))))))
+	(rec 0 (length vec))))))
 
 (defun make-disjoint-cond-property (conditions values)
   (let ((pairs (make-disjoint-cond-pairs conditions
 					 (pseudo-normalize values))))
-    (make-disjoint-cond-property* (nreverse pairs) nil)))
-
-(defun make-disjoint-cond-property* (pairs prop)
-  (cond ((null pairs)
-	 prop)
-	((null prop)
-	 (make-disjoint-cond-property* (cdr pairs) (car pairs)))
-	(t (make-disjoint-cond-property*
-	    (cdr pairs)
-	    (make!-conjunction (car pairs) prop)))))
+    (balanced-conjunction-node-list pairs)))
 
 (defun make-disjoint-cond-pairs (conditions values &optional result)
-  (if (null (cdr conditions))
-      result
-      (make-disjoint-cond-pairs
-       (cdr conditions)
-       (cdr values)
-       (append result
-	       (mapcan #'(lambda (c v)
-			   (unless (tc-eq v (car values))
-			     (list
-			      (make-negated-conjunction (car conditions) c))))
-		       (cdr conditions)
-		       (cdr values))))))
+  (declare (ignore result))
+  (let ((res nil))
+    (loop while (cdr conditions)
+	  do (let ((c1 (car conditions))
+		   (v1 (car values))
+		   (restc (cdr conditions))
+		   (restv (cdr values)))
+	       (loop for c in restc
+		     for v in restv
+		     unless (tc-eq v v1)
+		     do (push (make-negated-conjunction c1 c) res))
+	       (setf conditions restc
+		     values restv)))
+    (nreverse res)))
 
 (defun generate-cond-coverage-tcc (expr conditions)
   (let* ((*old-tcc-name* nil)
