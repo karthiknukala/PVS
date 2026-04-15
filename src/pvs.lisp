@@ -552,7 +552,7 @@ nil."
   (let ((*loading-files* :patches))
     (dolist (pfile (append (collect-pvs-patch-files)
 			   (collect-pvs-lisp-files)))
-      (let* ((bfile (make-fasl-file-name pfile))
+      (let* ((bfile (make-fasl-file-name pfile :ensure-dir? nil))
 	     (compile? (and (uiop:file-exists-p pfile)
 			    (or (not (uiop:file-exists-p bfile))
 				(compiled-file-older-than-source?
@@ -574,17 +574,19 @@ nil."
 		  (t (pushnew pfile *pvs-patches-loaded*
 			      :test #'equalp)
 		     (setq bfile-loaded? t)))))
-	(when compile?
-	  ;; Needs compilation - haven't tried loading yet, or the load failed.
-	  (pvs-message "Attempting to compile patch file ~a"
-	    (pathname-name pfile))
-	  (multiple-value-bind (ignore condition)
-	      (ignore-file-errors
-	       (values (compile-file pfile :output-file bfile)))
-	    (declare (ignore ignore))
-	    (cond (condition
-		   ;; Could be many reasons - permissions, source errors
-		   (pvs-message "Compilation error - ~a" condition)
+		(when compile?
+		  ;; Needs compilation - haven't tried loading yet, or the load failed.
+		  (pvs-message "Attempting to compile patch file ~a"
+		    (pathname-name pfile))
+		  (multiple-value-bind (ignore condition)
+		      (ignore-file-errors
+		       (let ((output-file (make-fasl-file-name pfile)))
+			 (setq bfile output-file)
+			 (values (compile-file pfile :output-file output-file))))
+		    (declare (ignore ignore))
+		    (cond (condition
+			   ;; Could be many reasons - permissions, source errors
+			   (pvs-message "Compilation error - ~a" condition)
 		   (setq compilation-error? t)
 		   ;; Note that this may fail as well
 		   (ignore-errors (delete-file bfile)))
