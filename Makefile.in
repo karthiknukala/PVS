@@ -598,6 +598,9 @@ yices2-lnk = bin/$(PLATFORM)/yices2
 
 yices : | $(yices1-lnk) $(yices2-lnk)
 
+yices/$(PLATFORM) : | $(yices1-lnk) $(yices2-lnk)
+	@test -d "$@"
+
 $(yices1-tgt) :
 	@-$(MKDIR_P) yices/$(PLATFORM)
 	curl --output - $(yices1-tar) | tar xzf - -C ./yices/$(PLATFORM)
