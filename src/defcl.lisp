@@ -108,7 +108,7 @@ In addition to the usual, slots may have the following attributes:
 				   :initarg (car a))
 			   (unless (memq :initform a)
 			     (list :initform nil))))
-	      args))
+     args))
     (when (fboundp 'declare-make-instance)
       (declare-make-instance ,name))
     (declaim (inline ,(intern (format nil "~a?" name) :pvs)))
