@@ -16,11 +16,19 @@ jobs:
     name: Build macOS arm64 bundle
     runs-on: macos-15
     timeout-minutes: 120
+    outputs:
+      bundle_dir: ${{ steps.artifacts.outputs.bundle_dir }}
+      pkg_enabled: ${{ steps.pkg_mode.outputs.enabled }}
+      pkg_name: ${{ steps.artifacts.outputs.pkg_name }}
+      pkg_version: ${{ steps.artifacts.outputs.pkg_version }}
+      tgz: ${{ steps.artifacts.outputs.tgz }}
     defaults:
       run:
         shell: bash
     env:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
+      PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
+      PVS_PKG_INSTALL_BASE: /Applications
 
     steps:
       - name: Check out sources
@@ -67,8 +75,34 @@ jobs:
             exit 1
           fi
 
+          pkg_name="$(basename "${files[0]%.tgz}").pkg"
+          pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
+
           echo "tgz=${files[0]}" >> "$GITHUB_OUTPUT"
           echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+          echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether notarized packaging is enabled
+        id: pkg_mode
+        env:
+          MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+          MACOS_DEV_ID_INSTALLER_CERT_NAME: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          if [ -n "$MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_PASSWORD" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_NAME" ] \
+            && [ -n "$MACOS_NOTARY_ISSUER_ID" ] \
+            && [ -n "$MACOS_NOTARY_KEY_ID" ] \
+            && [ -n "$MACOS_NOTARY_API_KEY_P8_BASE64" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload standalone tarball
         uses: actions/upload-artifact@v4
@@ -94,5 +128,141 @@ jobs:
             echo "- Runner: \`macos-15\`"
             echo "- Tarball artifact: \`pvs-apple-silicon-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-silicon-bundle\`"
+            if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
+              echo "- Signed installer package artifact: produced by the \`package-macos-arm64\` job"
+              echo "- Package notarization: scheduled because all signing and notary credentials were configured"
+            else
+              echo "- Signed installer package artifact: skipped because notarization credentials were not fully configured"
+            fi
             echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  package-macos-arm64:
+    name: Build notarized macOS arm64 package
+    runs-on: macos-15
+    needs: build-macos-arm64
+    if: ${{ needs['build-macos-arm64'].outputs.pkg_enabled == 'true' }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
+      PVS_PKG_INSTALL_BASE: /Applications
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Download standalone tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pvs-apple-silicon-tgz
+          path: ${{ runner.temp }}/standalone-artifacts
+
+      - name: Restore standalone bundle from tarball
+        id: bundle
+        env:
+          PVS_BUNDLE_DIR: ${{ needs['build-macos-arm64'].outputs.bundle_dir }}
+          PVS_TGZ: ${{ needs['build-macos-arm64'].outputs.tgz }}
+        run: |
+          artifact_root="$RUNNER_TEMP/standalone-artifacts"
+          tgz_path="$artifact_root/$PVS_TGZ"
+          extract_root="$RUNNER_TEMP/standalone-bundle"
+
+          if [ ! -f "$tgz_path" ]; then
+            echo "Expected standalone tarball to exist at '$tgz_path'" >&2
+            exit 1
+          fi
+
+          mkdir -p "$extract_root"
+          tar xzf "$tgz_path" -C "$extract_root"
+
+          bundle_path="$extract_root/$PVS_BUNDLE_DIR"
+          if [ ! -d "$bundle_path" ]; then
+            echo "Expected unpacked bundle directory to exist at '$bundle_path'" >&2
+            exit 1
+          fi
+
+          echo "bundle_path=$bundle_path" >> "$GITHUB_OUTPUT"
+
+      - name: Import Apple installer signing certificate
+        env:
+          MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/pvs-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 18)
+          installer_cert="$RUNNER_TEMP/dev-id-installer.p12"
+
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64" | base64 --decode > "$installer_cert"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+
+          existing_keychains=$(security list-keychains -d user | tr -d '"')
+          security list-keychains -d user -s "$keychain" $existing_keychains
+
+          security import "$installer_cert" \
+            -k "$keychain" \
+            -P "$MACOS_DEV_ID_INSTALLER_CERT_PASSWORD" \
+            -T /usr/bin/productsign \
+            -T /usr/bin/pkgbuild \
+            -T /usr/bin/security
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign:,productsign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain"
+
+      - name: Build signed installer package
+        id: pkg
+        env:
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+          PVS_PKG_NAME: ${{ needs['build-macos-arm64'].outputs.pkg_name }}
+          PVS_PKG_VERSION: ${{ needs['build-macos-arm64'].outputs.pkg_version }}
+        run: |
+          pkg_dir="$RUNNER_TEMP/pkg-artifacts"
+          notary_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+
+          printf '%s' "$MACOS_NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$notary_key"
+          chmod 600 "$notary_key"
+          export MACOS_NOTARY_KEY_FILE="$notary_key"
+
+          ./.github/scripts/build-macos-pkg.sh \
+            --bundle-dir '${{ steps.bundle.outputs.bundle_path }}' \
+            --output-dir "$pkg_dir" \
+            --pkg-name "$PVS_PKG_NAME" \
+            --pkg-identifier "$PVS_PKG_IDENTIFIER" \
+            --pkg-version "$PVS_PKG_VERSION" \
+            --install-base "$PVS_PKG_INSTALL_BASE"
+
+      - name: Upload signed installer package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-silicon-pkg
+          path: ${{ steps.pkg.outputs.pkg_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Apple Silicon package"
+            echo
+            echo "- Runner: \`macos-15\`"
+            echo "- Source tarball artifact: \`pvs-apple-silicon-tgz\`"
+            echo "- Signed installer package artifact: \`pvs-apple-silicon-pkg\`"
+            echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
+            if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
+              echo "- Package notarization: completed and stapled"
+            else
+              echo "- Package notarization: skipped"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
