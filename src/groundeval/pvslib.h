@@ -58,18 +58,18 @@ extern void *safe_realloc(void *ptr, size_t size) __attribute__ ((malloc));
  * is NULL. It's safer to check anyway.
  */
 static inline void safe_free(void *ptr) {
-  printf("\nFreeing %p", ptr);
+  //printf("\nFreeing %p", ptr);
   if (ptr != NULL) free(ptr);
 }
 
 static inline void release_mpz(mpz_ptr_t x){
-  printf("\nClearing mpz pointer %p", x);
+  //  printf("\nClearing mpz pointer %p", x);
   mpz_clear(x);
   safe_free(x);
 }
 
 static inline void release_mpq(mpq_ptr_t x){
-  printf("\nClearing mpq pointer %p", x);  
+  //  printf("\nClearing mpq pointer %p", x);  
   mpq_clear(x);
   safe_free(x);
 }
@@ -82,7 +82,7 @@ extern double get_cpu_time(void);
 
 static inline bool_t u_undef_quant_expr(void){
   return false;
-};
+}
 
 extern uint32_t mpz_hash(mpz_t x);
 extern uint32_t uint64_hash(uint64_t x);
@@ -295,6 +295,7 @@ struct file_s {
   char * name; 
   char * contents; 
 };
+
 typedef struct file_s * file_t;
 
 extern void release_file__file(file_t file);

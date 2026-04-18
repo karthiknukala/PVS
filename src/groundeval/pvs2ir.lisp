@@ -3658,7 +3658,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 
 (defun rename-variable (ir-vartype livevars bindings)
   (with-slots (ir-vtype) ir-vartype  ;;don't need livevars any more since pp-in-type does not mark
-    (setf (ir-vtype ir-vartype) (preprocess-in-type ir-vtype livevars bindings)
+    (setf (ir-vtype ir-vartype) (preprocess-type* ir-vtype livevars bindings)
 	  (ir-freevars ir-vartype) 'unbound)
     ir-vartype))
 
@@ -3785,9 +3785,6 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 ;Irrelevant let-bindings are discarded
 (defmethod preprocess-ir* ((ir-expr ir-let) livevars bindings)
   (with-slots (ir-vartype ir-bind-expr ir-body) ir-expr
-;    (format t "~%let ~s with livevars ~s" (print-ir ir-vartype)(print-ir livevars))
-;    (when (eq (ir-name ir-vartype) '|ivar_117|) (break "ivar_117"))
-;;    (when (memq (ir-name ir-vartype) '(|ivar_69| |ivar_74|)) (break "preprocess-ir*(ir-let)"))
     (let ((body-freevars (pvs2ir-freevars* ir-body)));;apply-bindings to get livevars as below
       ;;(format t "preprocess-ir* (irlet): expr = ~a)" (print-ir ir-expr))
 					;(loop for iv in body-freevars do (format t "~% free: ~a" (ir-name iv)))
@@ -3797,8 +3794,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 		 (new-ir-vartype (rename-variable ir-vartype livevars-with-body  bindings)) ;does an in-place substitution
 		 (new-ir-bind-expr
 		  (preprocess-ir* ir-bind-expr livevars-with-body
-				  bindings)));; (when (and (ir-arraytype? (ir-vtype ir-vartype))
-					     ;; 		(ir-offset? (high (ir-vtype ir-vartype))))(break "pp-ir*(ir-let)"))
+				  bindings)))
 	    (if (and (eq ir-vartype ir-body)
 		     (not (ir-arraytype? (ir-vtype ir-vartype))))
 		new-ir-bind-expr;;for let x = a in b, if x ~ b, then simplify to a
@@ -3806,11 +3802,11 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 				(not (mpnumber-type? (ir-vtype new-ir-bind-expr))));;(4/8-26)check if this is still needed?
 			   (ir-last? new-ir-bind-expr))
 		       (ir2c-tcompatible-but (ir-vtype ir-vartype)(ir-vtype (get-ir-last-var new-ir-bind-expr)))
-		       );(break "ir-let-compatible")
+		       )
 					;binds var to var' with same type, then replace var with var'
 		  (preprocess-ir* ir-body livevars
 				  (acons ir-vartype ; should be eq to new-ir-vartype
-					 (get-assoc (get-ir-last-var new-ir-bind-expr) bindings)
+					 (get-ir-last-var new-ir-bind-expr); (get-assoc (get-ir-last-var new-ir-bind-expr) bindings)
 					 bindings))
 		(let* ((new-ir-body (preprocess-ir* ir-body livevars bindings))) 
 		  ;;(acons ir-vartype new-ir-vartype bindings)
@@ -6709,6 +6705,9 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 ;		    mp-final
 		    release-instrs))
 	  (let* ((fvars (pvs2ir-freevars* ir-expr))
+		 (fvars (loop for fv in fvars
+			      when (not (ir-const-formal? fv))
+			      collect fv))
 		 ;;(lastvars (ir-lastvars ir-expr))
 		 (c-return-type (add-c-type-definition return-type))
 		 (closure-name (add-closure-definition ir-expr c-return-type))
@@ -6976,6 +6975,9 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     ;(break "add-c-defn")
     (or (and closure-fdefn (op-name closure-fdefn))
 	(let* ((ir-freevars (pvs2ir-freevars* ir-lambda-expr))
+	       (ir-freevars (loop for fv in ir-freevars
+				  when (not (ir-const-formal? fv))
+				  collect fv))
 	       (ir-fvar-types (loop for fvar in ir-freevars collect (freevar-type fvar)))
 	       (ir-fvar-ctypes (loop for fvtype in ir-fvar-types collect
 				     (add-c-type-definition (ir2c-type fvtype))))
@@ -7541,7 +7543,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 				 )
 				(type-decl (format nil "struct ~a;~%~8Ttypedef struct ~a * ~a;" struct-name
 						   struct-name type-name))
-				(type-defn (format nil "struct ~a {uint32_t count;~%~8T~a_ftbl_t ftbl;~%~8T~a_htbl_t htbl;};~%typedef struct ~a * ~a;" struct-name  type-name-root type-name-root struct-name type-name))
+				(type-defn (format nil "struct ~a {uint32_t count;~%~8T~a_ftbl_t ftbl;~%~8T~a_htbl_t htbl;};" struct-name  type-name-root type-name-root ;struct-name type-name
+						   ))
 				(hashtype (ir-hashable-index? ir-domain))
 				;;need range to be a fixed-width int
 				(release-info (make-function-release-info type-name-root c-param-decl-string))
@@ -7828,11 +7831,11 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
  ~%~8Tnew->json_ptr = (json_ptr_t)(*json_~a_ptr);
  ~%~{~%~8T~a~}
  ~%~8Treturn new;
- };"
+ }"
  		       type-name-root type-name-root ;removed ~{type_actual_t ~a~^,~} type-param-ids
 		       (if (> (length c-param-decl-string) 2)
 			   (subseq c-param-decl-string 2) ;remove leading comma+space
-			   "")
+			   "void")
  		       type-name-root type-name-root type-name-root
 		       type-name-root type-name-root type-name-root ;;for equal/release/json_ptr
  		       (loop for param in theory-params collect
