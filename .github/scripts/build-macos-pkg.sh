@@ -18,13 +18,17 @@ Required environment variables:
 Optional environment variables for notarization:
   MACOS_NOTARY_KEY_FILE
   MACOS_NOTARY_KEY_ID
-  MACOS_NOTARY_ISSUER_ID
+  MACOS_NOTARY_ISSUER_ID (Team API key issuer UUID)
 EOF
 }
 
 fail() {
   echo "error: $*" >&2
   exit 1
+}
+
+is_uuid() {
+  [[ $1 =~ ^[[:xdigit:]]{8}-([[:xdigit:]]{4}-){3}[[:xdigit:]]{12}$ ]]
 }
 
 bundle_dir=
@@ -78,6 +82,20 @@ done
 [[ -d $bundle_dir ]] || fail "bundle directory not found: $bundle_dir"
 [[ -n ${MACOS_INSTALLER_SIGN_IDENTITY:-} ]] || fail "MACOS_INSTALLER_SIGN_IDENTITY is required"
 
+notary_key_file=${MACOS_NOTARY_KEY_FILE:-}
+notary_key_id=${MACOS_NOTARY_KEY_ID:-}
+notary_issuer_id=${MACOS_NOTARY_ISSUER_ID:-}
+notarization_enabled=false
+
+if [[ -n $notary_key_file || -n $notary_key_id || -n $notary_issuer_id ]]; then
+  [[ -n $notary_key_file ]] || fail "MACOS_NOTARY_KEY_FILE is required when notarization is enabled"
+  [[ -f $notary_key_file ]] || fail "MACOS_NOTARY_KEY_FILE does not exist: $notary_key_file"
+  [[ -n $notary_key_id ]] || fail "MACOS_NOTARY_KEY_ID is required when notarization is enabled"
+  [[ -n $notary_issuer_id ]] || fail "MACOS_NOTARY_ISSUER_ID is required when notarization is enabled"
+  is_uuid "$notary_issuer_id" || fail "MACOS_NOTARY_ISSUER_ID must be the App Store Connect Issuer ID UUID for a Team API key; Individual API keys cannot be used with notarytool"
+  notarization_enabled=true
+fi
+
 mkdir -p "$output_dir"
 
 stage_root=$(mktemp -d "${TMPDIR:-/tmp}/pvs-pkg-stage.XXXXXX")
@@ -113,13 +131,13 @@ echo "Checking installer package signature"
 pkgutil --check-signature "$signed_pkg"
 
 notarized=false
-if [[ -n ${MACOS_NOTARY_KEY_FILE:-} && -n ${MACOS_NOTARY_KEY_ID:-} && -n ${MACOS_NOTARY_ISSUER_ID:-} ]]; then
+if [[ $notarization_enabled == true ]]; then
   echo "Submitting $signed_pkg for notarization"
   xcrun notarytool submit \
     "$signed_pkg" \
-    --key "$MACOS_NOTARY_KEY_FILE" \
-    --key-id "$MACOS_NOTARY_KEY_ID" \
-    --issuer "$MACOS_NOTARY_ISSUER_ID" \
+    --key "$notary_key_file" \
+    --key-id "$notary_key_id" \
+    --issuer "$notary_issuer_id" \
     --wait
   echo "Stapling notarization ticket"
   xcrun stapler staple "$signed_pkg"

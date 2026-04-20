@@ -1,7 +1,7 @@
 name: Linux x86 Build
 
 on:
-  push:
+  # Temporarily manual-only while this workflow is being fixed.
   workflow_dispatch:
 
 permissions:

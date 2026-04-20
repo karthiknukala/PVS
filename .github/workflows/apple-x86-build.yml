@@ -1,7 +1,7 @@
 name: Apple x86 Build
 
 on:
-  push:
+  # Temporarily manual-only while this workflow is being fixed.
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,12 @@ jobs:
     name: Build macOS x86_64 bundle
     runs-on: macos-15-intel
     timeout-minutes: 120
+    outputs:
+      bundle_dir: ${{ steps.artifacts.outputs.bundle_dir }}
+      pkg_enabled: ${{ steps.pkg_mode.outputs.enabled }}
+      pkg_name: ${{ steps.artifacts.outputs.pkg_name }}
+      pkg_version: ${{ steps.artifacts.outputs.pkg_version }}
+      tgz: ${{ steps.artifacts.outputs.tgz }}
     defaults:
       run:
         shell: bash
@@ -69,12 +75,118 @@ jobs:
             exit 1
           fi
 
+          pkg_name="$(basename "${files[0]%.tgz}").pkg"
+          pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
+
           echo "tgz=${files[0]}" >> "$GITHUB_OUTPUT"
           echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+          echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether notarized packaging is enabled
+        id: pkg_mode
+        env:
+          MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+          MACOS_DEV_ID_INSTALLER_CERT_NAME: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          if [ -n "$MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_PASSWORD" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_NAME" ] \
+            && [ -n "$MACOS_NOTARY_ISSUER_ID" ] \
+            && [ -n "$MACOS_NOTARY_KEY_ID" ] \
+            && [ -n "$MACOS_NOTARY_API_KEY_P8_BASE64" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload standalone tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-x86-tgz
+          path: ${{ steps.artifacts.outputs.tgz }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload standalone bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-x86-bundle
+          path: ${{ steps.artifacts.outputs.bundle_dir }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Apple x86 bundle"
+            echo
+            echo "- Runner: \`macos-15-intel\`"
+            echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
+            echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
+            if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
+              echo "- Signed installer package artifact: produced by the \`package-macos-x86\` job"
+              echo "- Package notarization: scheduled because all signing and notary credentials were configured"
+            else
+              echo "- Signed installer package artifact: skipped because notarization credentials were not fully configured"
+            fi
+            echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  package-macos-x86:
+    name: Build notarized macOS x86_64 package
+    runs-on: macos-15-intel
+    needs: build-macos-x86
+    if: ${{ needs['build-macos-x86'].outputs.pkg_enabled == 'true' }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.x86_64
+      PVS_PKG_INSTALL_BASE: /Applications
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Download standalone tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pvs-apple-x86-tgz
+          path: ${{ runner.temp }}/standalone-artifacts
+
+      - name: Restore standalone bundle from tarball
+        id: bundle
+        env:
+          PVS_BUNDLE_DIR: ${{ needs['build-macos-x86'].outputs.bundle_dir }}
+          PVS_TGZ: ${{ needs['build-macos-x86'].outputs.tgz }}
+        run: |
+          artifact_root="$RUNNER_TEMP/standalone-artifacts"
+          tgz_path="$artifact_root/$PVS_TGZ"
+          extract_root="$RUNNER_TEMP/standalone-bundle"
+
+          if [ ! -f "$tgz_path" ]; then
+            echo "Expected standalone tarball to exist at '$tgz_path'" >&2
+            exit 1
+          fi
+
+          mkdir -p "$extract_root"
+          tar xzf "$tgz_path" -C "$extract_root"
+
+          bundle_path="$extract_root/$PVS_BUNDLE_DIR"
+          if [ ! -d "$bundle_path" ]; then
+            echo "Expected unpacked bundle directory to exist at '$bundle_path'" >&2
+            exit 1
+          fi
+
+          echo "bundle_path=$bundle_path" >> "$GITHUB_OUTPUT"
 
       - name: Import Apple installer signing certificate
-        id: signing
-        if: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 != '' && secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD != '' && secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME != '' }}
         env:
           MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
           MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
@@ -106,55 +218,32 @@ jobs:
             -k "$keychain_password" \
             "$keychain"
 
-          echo "keychain=$keychain" >> "$GITHUB_OUTPUT"
-
       - name: Build signed installer package
         id: pkg
-        if: ${{ steps.signing.outcome == 'success' }}
         env:
           MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+          PVS_PKG_NAME: ${{ needs['build-macos-x86'].outputs.pkg_name }}
+          PVS_PKG_VERSION: ${{ needs['build-macos-x86'].outputs.pkg_version }}
         run: |
           pkg_dir="$RUNNER_TEMP/pkg-artifacts"
-          tgz_path='${{ steps.artifacts.outputs.tgz }}'
-          pkg_name="$(basename "${tgz_path%.tgz}").pkg"
-          pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
+          notary_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
 
-          if [ -n "$MACOS_NOTARY_KEY_ID" ] && [ -n "$MACOS_NOTARY_ISSUER_ID" ] && [ -n "$MACOS_NOTARY_API_KEY_P8_BASE64" ]; then
-            notary_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
-            printf '%s' "$MACOS_NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$notary_key"
-            chmod 600 "$notary_key"
-            export MACOS_NOTARY_KEY_FILE="$notary_key"
-          fi
+          printf '%s' "$MACOS_NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$notary_key"
+          chmod 600 "$notary_key"
+          export MACOS_NOTARY_KEY_FILE="$notary_key"
 
           ./.github/scripts/build-macos-pkg.sh \
-            --bundle-dir '${{ steps.artifacts.outputs.bundle_dir }}' \
+            --bundle-dir '${{ steps.bundle.outputs.bundle_path }}' \
             --output-dir "$pkg_dir" \
-            --pkg-name "$pkg_name" \
+            --pkg-name "$PVS_PKG_NAME" \
             --pkg-identifier "$PVS_PKG_IDENTIFIER" \
-            --pkg-version "$pkg_version" \
+            --pkg-version "$PVS_PKG_VERSION" \
             --install-base "$PVS_PKG_INSTALL_BASE"
 
-      - name: Upload standalone tarball
-        uses: actions/upload-artifact@v4
-        with:
-          name: pvs-apple-x86-tgz
-          path: ${{ steps.artifacts.outputs.tgz }}
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload standalone bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: pvs-apple-x86-bundle
-          path: ${{ steps.artifacts.outputs.bundle_dir }}/
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Upload signed installer package
-        if: ${{ steps.pkg.outputs.pkg_path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: pvs-apple-x86-pkg
@@ -165,21 +254,15 @@ jobs:
       - name: Summarize outputs
         run: |
           {
-            echo "### Apple x86 bundle"
+            echo "### Apple x86 package"
             echo
             echo "- Runner: \`macos-15-intel\`"
-            echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
-            echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
-            if [ -n '${{ steps.pkg.outputs.pkg_path }}' ]; then
-              echo "- Signed installer package artifact: \`pvs-apple-x86-pkg\`"
-              echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
-              if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
-                echo "- Package notarization: completed and stapled"
-              else
-                echo "- Package notarization: skipped because notary credentials were not configured"
-              fi
+            echo "- Source tarball artifact: \`pvs-apple-x86-tgz\`"
+            echo "- Signed installer package artifact: \`pvs-apple-x86-pkg\`"
+            echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
+            if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
+              echo "- Package notarization: completed and stapled"
             else
-              echo "- Signed installer package artifact: skipped because signing credentials were not configured"
+              echo "- Package notarization: skipped"
             fi
-            echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
           } >> "$GITHUB_STEP_SUMMARY"

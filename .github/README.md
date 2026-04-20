@@ -101,6 +101,7 @@ Important:
 
 - Use a `Team Key`
 - Do not use an `Individual Key`
+- `MACOS_NOTARY_ISSUER_ID` must be the Team Key `Issuer ID` in UUID format
 
 Apple's documentation says individual App Store Connect API keys cannot be used with `notarytool`.
 
@@ -175,7 +176,14 @@ If notarization fails:
 
 - Confirm that the `MACOS_NOTARY_KEY_ID` matches the downloaded `.p8` file.
 - Confirm that the `MACOS_NOTARY_ISSUER_ID` belongs to the same App Store Connect team key.
+- Confirm that `MACOS_NOTARY_ISSUER_ID` is the Issuer ID UUID, not the Team ID, key name, or some other identifier.
 - Confirm that the `.p8` file uploaded into `MACOS_NOTARY_API_KEY_P8_BASE64` is the original Team API key downloaded from App Store Connect.
+
+If `notarytool` exits with an error like `must be a valid UUID` for `--issuer`:
+
+- The `MACOS_NOTARY_ISSUER_ID` secret is malformed or is not an App Store Connect Team Key Issuer ID.
+- Recreate or re-copy the Issuer ID from `Users and Access` -> `Integrations` -> `App Store Connect API` -> `Team Keys`.
+- Do not use an Individual API key here; Apple's current documentation says Individual keys cannot be used with `notarytool`.
 
 ## References
 
