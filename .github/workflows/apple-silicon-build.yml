@@ -3,12 +3,6 @@ name: Apple Silicon Build
 on:
   push:
   workflow_dispatch:
-    inputs:
-      build_pkg:
-        description: Build the signed and notarized installer package
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -140,13 +134,11 @@ jobs:
             echo "- Runner: \`macos-15\`"
             echo "- Tarball artifact: \`pvs-apple-silicon-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-silicon-bundle\`"
-            if [ '${{ github.event_name }}' = 'workflow_dispatch' ] \
-              && [ '${{ inputs.build_pkg }}' = 'true' ] \
-              && [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
+            if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
               echo "- Signed installer package artifact: produced by the \`package-macos-arm64\` job"
-              echo "- Package notarization: requested manually and enabled because all signing and notary credentials were configured"
+              echo "- Package notarization: runs automatically because all signing and notary credentials were configured"
             else
-              echo "- Signed installer package artifact: skipped unless this workflow is manually dispatched with \`build_pkg=true\` and all signing/notary secrets are configured"
+              echo "- Signed installer package artifact: skipped because one or more signing/notary secrets are missing"
             fi
             echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -155,7 +147,7 @@ jobs:
     name: Build notarized macOS arm64 package
     runs-on: macos-15
     needs: build-macos-arm64
-    if: ${{ needs['build-macos-arm64'].outputs.pkg_enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.build_pkg }}
+    if: ${{ needs['build-macos-arm64'].outputs.pkg_enabled == 'true' }}
     timeout-minutes: 120
     defaults:
       run:

@@ -2,7 +2,7 @@
 
 This directory contains the GitHub Actions workflows used to build PVS bundles for Apple Silicon, Apple x86, Linux ARM, and Linux x86.
 
-This README focuses on the current Apple Silicon packaging and notarization flow because that is the only workflow here that builds a signed and notarized macOS installer package.
+This README focuses on the current macOS packaging and notarization flow, using Apple Silicon as the concrete example. The Apple x86 workflow mirrors the same structure.
 
 ## Current Apple Silicon Flow
 
@@ -16,7 +16,7 @@ It has two jobs:
    - `pvs-apple-silicon-bundle`
 
 2. `package-macos-arm64`
-   This job only runs when the workflow is manually dispatched with `build_pkg=true` and all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
+   This job runs automatically whenever all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
    - `pvs-apple-silicon-pkg`
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
@@ -49,7 +49,7 @@ The `package-macos-arm64` job only runs if all of these secrets are non-empty:
 - `MACOS_NOTARY_KEY_ID`
 - `MACOS_NOTARY_API_KEY_P8_BASE64`
 
-If any one of these is missing, the workflow still produces the tarball and unpacked bundle, but it skips the pkg/notarization job. The pkg job is also skipped unless `build_pkg=true` is selected in a manual workflow dispatch.
+If any one of these is missing, the workflow still produces the tarball and unpacked bundle, but it skips the pkg/notarization job.
 
 ## What The Certificate Files Mean
 
@@ -186,7 +186,7 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_AP
 
 ## What Happens Once All Secrets Are Set
 
-Once all nine secrets are present and you manually dispatch the workflow with `build_pkg=true`:
+Once all nine secrets are present:
 
 1. `build-macos-arm64` builds and uploads the standalone tarball and unpacked bundle.
 2. `package-macos-arm64` runs automatically.
