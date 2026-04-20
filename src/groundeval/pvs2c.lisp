@@ -678,6 +678,17 @@
       (format t "~%Generates C definition = ~%~a" c-defn))
     (mk-c-defn-info ir-function-name (format nil "~a;" c-header) c-defn
 		    c-defn-arg-types c-defn-result-type)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun replace-in-file (in out filename)
+  (let ((backup-file (concatenate 'string filename ".bak")))
+    (uiop:copy-file filename backup-file)
+    (with-open-file (in-stream backup-file :direction :input)
+      (with-open-file (out-stream filename :direction :output 
+                                  :if-exists :supersede)
+	(loop for line = (read-line in-stream nil)
+              while line
+              do (write-line  (replace-all line in out)
+			      out-stream))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -697,9 +708,14 @@
 	  (cond (*pvs2c-library-path*
 		 (format nil "~a/include/~a.pvs2c" *pvs2c-library-path* theory-id))
 		(t (ensure-directories-exist "pvs2c/src/test")
-		   (format nil "pvs2c/src/~a.deps" theory-id)))))
+		   (format nil "pvs2c/src/~a.deps" theory-id))))
+	 )
     (unless *pvs2c-library-path*
       (ensure-directories-exist "pvs2c/include/test"))
+    (unless (or *pvs2c-library-path* (file-exists-p "Makefile"))
+      (uiop::copy-file (format nil "~a/src/groundeval/pvs2c-Makefile" *pvs-path*)
+		       "Makefile")
+      (replace-in-file "<pvspath>" (format nil "~a" *pvs-path*) "Makefile"))
     (with-open-file (output dependency-file-string :direction :output
 			    :if-exists :supersede :if-does-not-exist :create)
       (let ((importings-string
@@ -944,7 +960,28 @@ successful."
 		   (format main "~2%~Tprintf(\"~a.~a ==> %s\\n\", ~a() ? \"true\" : \"false\");"
 			   (id (module tform)) (id tform) (op-name (cdefn (eval-info tform)))))
 		 (format main "~%}~%")
-		 (format t "Writing ~a" filename)))))))
+		 (format t "~%Wrote ~a" filename))
+	       (let* ((theory-id (id theory))
+		      (mkfile-string (cond (*pvs2c-library-path*
+					    (format nil "~a/include/~a.mk" *pvs2c-library-path* theory-id))
+					   (t (ensure-directories-exist "pvs2c/src/test")
+					      (format nil "pvs2c/include/~a.mk" theory-id)))))
+		 (with-open-file (output mkfile-string :direction :output
+					 :if-exists :supersede :if-does-not-exist :create)
+		   (format output "# Auto-generated fragment for ~a" theory-id)
+		   (format output "~%OBJS_~a := $(SRCDIR)~a.o ~{~a_c.o ~} ~{~a_c.o ~}" theory-id theory-id
+			   (loop for thy in *pvs2c-theory-importings*
+				 when (not (from-prelude? thy))
+				 collect (format nil "$(SRCDIR)/~a"  (id thy)))
+			   (loop for thy in  *preceding-mono-theories* collect (format nil "o$(SRCDIR)/~a" (id thy))))
+		   (format output "~%pvs2c/bin/~a: $(OBJS_~a) | $(BINDIR)~%~c$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)" theory-id theory-id #\Tab)
+		   (format output "~%~%.PHONY: ~a" theory-id)
+		   (format output "~%~a: pvs2c/bin/~a" theory-id theory-id)
+		   (format output "~%~%.PHONY: run_~a" theory-id)
+		   (format output "~%run_~a: ~a~%~c./pvs2c/bin/~a~%"  theory-id theory-id #\Tab theory-id)
+		   (format t "~%Wrote pvs2c/include/~a.mk" theory-id)
+		   ))
+	       )))))
 
 (defun collect-test-formulas ()
   (let ((th-hash (current-pvs-theories))
