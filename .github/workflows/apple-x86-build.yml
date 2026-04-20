@@ -196,8 +196,10 @@ jobs:
         env:
           MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 }}
           MACOS_DEV_ID_APPLICATION_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_PASSWORD }}
+          MACOS_DEV_ID_APPLICATION_CERT_NAME: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_NAME }}
           MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
           MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+          MACOS_DEV_ID_INSTALLER_CERT_NAME: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
         run: |
           keychain="$RUNNER_TEMP/pvs-signing.keychain-db"
           keychain_password=$(openssl rand -hex 18)
@@ -235,6 +237,21 @@ jobs:
             -k "$keychain_password" \
             "$keychain"
 
+          echo "Available code-signing identities in $keychain:"
+          security find-identity -v -p codesigning "$keychain"
+          echo "Available basic identities in $keychain:"
+          security find-identity -v -p basic "$keychain"
+
+          security find-identity -v -p codesigning "$keychain" | grep -F "$MACOS_DEV_ID_APPLICATION_CERT_NAME" >/dev/null || {
+            echo "Expected Developer ID Application identity '$MACOS_DEV_ID_APPLICATION_CERT_NAME' was not found in $keychain" >&2
+            exit 1
+          }
+
+          security find-identity -v -p basic "$keychain" | grep -F "$MACOS_DEV_ID_INSTALLER_CERT_NAME" >/dev/null || {
+            echo "Expected Developer ID Installer identity '$MACOS_DEV_ID_INSTALLER_CERT_NAME' was not found in $keychain" >&2
+            exit 1
+          }
+
       - name: Build signed installer package
         id: pkg
         env:
@@ -243,6 +260,7 @@ jobs:
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
           MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+          MACOS_SIGNING_KEYCHAIN: ${{ runner.temp }}/pvs-signing.keychain-db
           PVS_PKG_NAME: ${{ needs['build-macos-x86'].outputs.pkg_name }}
           PVS_PKG_VERSION: ${{ needs['build-macos-x86'].outputs.pkg_version }}
         run: |

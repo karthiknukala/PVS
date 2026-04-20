@@ -22,6 +22,7 @@ Optional environment variables for notarization:
 
 Optional environment variables for payload signing:
   MACOS_APPLICATION_SIGN_IDENTITY
+  MACOS_SIGNING_KEYCHAIN
 EOF
 }
 
@@ -37,17 +38,28 @@ is_uuid() {
 sign_macho_payload() {
   local root=$1
   local identity=$2
+  local keychain_path=${3:-}
   local signed_any=false
 
   while IFS= read -r -d '' path; do
     if file -b "$path" | grep -q 'Mach-O'; then
       echo "Signing Mach-O payload $path"
-      codesign \
-        --force \
-        --options runtime \
-        --sign "$identity" \
-        --timestamp \
-        "$path"
+      if [[ -n $keychain_path ]]; then
+        codesign \
+          --force \
+          --keychain "$keychain_path" \
+          --options runtime \
+          --sign "$identity" \
+          --timestamp \
+          "$path"
+      else
+        codesign \
+          --force \
+          --options runtime \
+          --sign "$identity" \
+          --timestamp \
+          "$path"
+      fi
       signed_any=true
     fi
   done < <(find "$root" -type f -print0)
@@ -111,6 +123,7 @@ done
 notary_key_file=${MACOS_NOTARY_KEY_FILE:-}
 notary_key_id=${MACOS_NOTARY_KEY_ID:-}
 notary_issuer_id=${MACOS_NOTARY_ISSUER_ID:-}
+signing_keychain=${MACOS_SIGNING_KEYCHAIN:-}
 notarization_enabled=false
 
 if [[ -n $notary_key_file || -n $notary_key_id || -n $notary_issuer_id ]]; then
@@ -135,7 +148,7 @@ cp -R "$bundle_dir" "$stage_root$install_base/"
 
 if [[ -n ${MACOS_APPLICATION_SIGN_IDENTITY:-} ]]; then
   echo "Signing staged Mach-O payload with $MACOS_APPLICATION_SIGN_IDENTITY"
-  sign_macho_payload "$stage_root$install_base/$(basename "$bundle_dir")" "$MACOS_APPLICATION_SIGN_IDENTITY"
+  sign_macho_payload "$stage_root$install_base/$(basename "$bundle_dir")" "$MACOS_APPLICATION_SIGN_IDENTITY" "$signing_keychain"
 fi
 
 pkg_stem=${pkg_name%.pkg}
@@ -151,10 +164,18 @@ pkgbuild \
   "$unsigned_pkg"
 
 echo "Signing installer package $signed_pkg"
-productsign \
-  --sign "$MACOS_INSTALLER_SIGN_IDENTITY" \
-  "$unsigned_pkg" \
-  "$signed_pkg"
+if [[ -n $signing_keychain ]]; then
+  productsign \
+    --sign "$MACOS_INSTALLER_SIGN_IDENTITY" \
+    --keychain "$signing_keychain" \
+    "$unsigned_pkg" \
+    "$signed_pkg"
+else
+  productsign \
+    --sign "$MACOS_INSTALLER_SIGN_IDENTITY" \
+    "$unsigned_pkg" \
+    "$signed_pkg"
+fi
 
 rm -f "$unsigned_pkg"
 
