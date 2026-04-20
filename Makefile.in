@@ -790,6 +790,11 @@ allegro-devel-distdir: $(ALLEGRO_DEVEL_DISTFILES)
 
 sbclisp-distdir: $(SBCLISP_DISTFILES)
 	$(create-distdir)
+	@case "$(PLATFORM)" in \
+	  *MacOSX*) \
+	    "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime" ;; \
+	  *) : ;; \
+	esac
 
 dist-gzip: dist-allegro-gzip dist-sbclisp-gzip
 
@@ -848,6 +853,16 @@ smoke-sbcl-release: $(dist-sbclisp-gzip)
 	root=`cd "$$tmpdir/$(DISTDIR)" && pwd -P` && \
 	echo "Smoke check: runtime directory contents" && \
 	ls -l "$$root/bin/$(PLATFORM)/runtime" && \
+	case "$(PLATFORM)" in \
+	  *MacOSX*) \
+	    echo "Smoke check: runtime dylibs are self-contained" && \
+	    if ! "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$$root/bin/$(PLATFORM)/runtime" --check-only; then \
+	      echo "Found external runtime dylib references" >&2; \
+	      exit 1; \
+	    fi \
+	    ;; \
+	  *) : ;; \
+	esac && \
 	echo "Smoke check: pvs -raw -version with PVSMINUSQ" && \
 	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvs" -raw -version >/dev/null || { echo "pvs -raw -version with PVSMINUSQ failed" >&2; exit 1; } && \
 	echo "Smoke check: pvs -raw -version without PVSMINUSQ" && \

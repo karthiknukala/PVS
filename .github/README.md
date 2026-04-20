@@ -16,7 +16,7 @@ It has two jobs:
    - `pvs-apple-silicon-bundle`
 
 2. `package-macos-arm64`
-   This job only runs when all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
+   This job only runs when the workflow is manually dispatched with `build_pkg=true` and all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
    - `pvs-apple-silicon-pkg`
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
@@ -25,7 +25,7 @@ The split is intentional: the signed and notarized package path should not block
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact.
 
-The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current workflow signs Mach-O payload files in the bundle copy used for packaging, signs the installer package, and notarizes that packaged distribution. It does not mutate the standalone tarball artifact.
+The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current release flow now vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
 
 For the SBCL runtime, the packaged bundle now uses:
 
@@ -49,7 +49,7 @@ The `package-macos-arm64` job only runs if all of these secrets are non-empty:
 - `MACOS_NOTARY_KEY_ID`
 - `MACOS_NOTARY_API_KEY_P8_BASE64`
 
-If any one of these is missing, the workflow still produces the tarball and unpacked bundle, but it skips the pkg/notarization job.
+If any one of these is missing, the workflow still produces the tarball and unpacked bundle, but it skips the pkg/notarization job. The pkg job is also skipped unless `build_pkg=true` is selected in a manual workflow dispatch.
 
 ## What The Certificate Files Mean
 
@@ -186,7 +186,7 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_AP
 
 ## What Happens Once All Secrets Are Set
 
-Once all nine secrets are present:
+Once all nine secrets are present and you manually dispatch the workflow with `build_pkg=true`:
 
 1. `build-macos-arm64` builds and uploads the standalone tarball and unpacked bundle.
 2. `package-macos-arm64` runs automatically.

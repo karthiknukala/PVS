@@ -3,6 +3,12 @@ name: Apple x86 Build
 on:
   # Temporarily manual-only while this workflow is being fixed.
   workflow_dispatch:
+    inputs:
+      build_pkg:
+        description: Build the signed and notarized installer package
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -134,11 +140,12 @@ jobs:
             echo "- Runner: \`macos-15-intel\`"
             echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
-            if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
+            if [ '${{ inputs.build_pkg }}' = 'true' ] \
+              && [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
               echo "- Signed installer package artifact: produced by the \`package-macos-x86\` job"
-              echo "- Package notarization: scheduled because all signing and notary credentials were configured"
+              echo "- Package notarization: requested manually and enabled because all signing and notary credentials were configured"
             else
-              echo "- Signed installer package artifact: skipped because notarization credentials were not fully configured"
+              echo "- Signed installer package artifact: skipped unless this workflow is manually dispatched with \`build_pkg=true\` and all signing/notary secrets are configured"
             fi
             echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -147,7 +154,7 @@ jobs:
     name: Build notarized macOS x86_64 package
     runs-on: macos-15-intel
     needs: build-macos-x86
-    if: ${{ needs['build-macos-x86'].outputs.pkg_enabled == 'true' }}
+    if: ${{ needs['build-macos-x86'].outputs.pkg_enabled == 'true' && inputs.build_pkg }}
     timeout-minutes: 120
     defaults:
       run:

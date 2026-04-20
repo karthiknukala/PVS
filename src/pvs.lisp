@@ -115,6 +115,11 @@
   (ignore-errors (uiop:clear-configuration))
   (ignore-errors (asdf/source-registry:clear-source-registry))
   (ignore-errors (asdf/output-translations:clear-output-translations))
+  ;; UIOP caches the resolved user cache directory in the dumped image.
+  ;; Recompute it on the target machine before rebuilding output translations.
+  (ignore-errors
+    (setf uiop/configuration:*user-cache*
+          (uiop/configuration::compute-user-cache)))
   (asdf/source-registry:initialize-source-registry)
   (asdf/output-translations:initialize-output-translations)
   (setq *pvs-path* (initial-pvs-path path))

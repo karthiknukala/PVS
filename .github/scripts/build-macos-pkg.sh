@@ -69,6 +69,25 @@ sign_macho_payload() {
   fi
 }
 
+bundle_macos_runtime_deps() {
+  local bundle_root=$1
+  local helper
+  local found_any=false
+
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/bundle-macos-runtime-deps.sh"
+  [[ -x $helper ]] || fail "runtime dependency helper not found: $helper"
+
+  while IFS= read -r -d '' runtime_dir; do
+    echo "Bundling non-system runtime dependencies in $runtime_dir"
+    "$helper" --runtime-dir "$runtime_dir"
+    found_any=true
+  done < <(find "$bundle_root/bin" -type d -name runtime -print0)
+
+  if [[ $found_any == false ]]; then
+    echo "No runtime directories found under $bundle_root/bin"
+  fi
+}
+
 bundle_dir=
 output_dir=
 pkg_name=
@@ -145,6 +164,8 @@ trap cleanup EXIT
 
 mkdir -p "$stage_root$install_base"
 cp -R "$bundle_dir" "$stage_root$install_base/"
+
+bundle_macos_runtime_deps "$stage_root$install_base/$(basename "$bundle_dir")"
 
 if [[ -n ${MACOS_APPLICATION_SIGN_IDENTITY:-} ]]; then
   echo "Signing staged Mach-O payload with $MACOS_APPLICATION_SIGN_IDENTITY"

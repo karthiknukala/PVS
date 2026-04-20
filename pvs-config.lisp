@@ -109,6 +109,9 @@
   (ignore-errors (asdf/source-registry:clear-source-registry))
   (ignore-errors (asdf/output-translations:clear-output-translations))
   (ignore-errors (uiop:clear-configuration))
+  (ignore-errors
+    (setf uiop/configuration:*user-cache*
+          (uiop/configuration::compute-user-cache)))
   (ignore-errors (when (fboundp 'close-pvs-log) (close-pvs-log)))
   (setf asdf:*central-registry* nil)
   (setq *pvs-log-stream* nil
