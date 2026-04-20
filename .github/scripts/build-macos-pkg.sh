@@ -19,6 +19,9 @@ Optional environment variables for notarization:
   MACOS_NOTARY_KEY_FILE
   MACOS_NOTARY_KEY_ID
   MACOS_NOTARY_ISSUER_ID (Team API key issuer UUID)
+
+Optional environment variables for payload signing:
+  MACOS_APPLICATION_SIGN_IDENTITY
 EOF
 }
 
@@ -29,6 +32,29 @@ fail() {
 
 is_uuid() {
   [[ $1 =~ ^[[:xdigit:]]{8}-([[:xdigit:]]{4}-){3}[[:xdigit:]]{12}$ ]]
+}
+
+sign_macho_payload() {
+  local root=$1
+  local identity=$2
+  local signed_any=false
+
+  while IFS= read -r -d '' path; do
+    if file -b "$path" | grep -q 'Mach-O'; then
+      echo "Signing Mach-O payload $path"
+      codesign \
+        --force \
+        --options runtime \
+        --sign "$identity" \
+        --timestamp \
+        "$path"
+      signed_any=true
+    fi
+  done < <(find "$root" -type f -print0)
+
+  if [[ $signed_any == false ]]; then
+    echo "No Mach-O payload files found under $root"
+  fi
 }
 
 bundle_dir=
@@ -107,6 +133,11 @@ trap cleanup EXIT
 mkdir -p "$stage_root$install_base"
 cp -R "$bundle_dir" "$stage_root$install_base/"
 
+if [[ -n ${MACOS_APPLICATION_SIGN_IDENTITY:-} ]]; then
+  echo "Signing staged Mach-O payload with $MACOS_APPLICATION_SIGN_IDENTITY"
+  sign_macho_payload "$stage_root$install_base/$(basename "$bundle_dir")" "$MACOS_APPLICATION_SIGN_IDENTITY"
+fi
+
 pkg_stem=${pkg_name%.pkg}
 unsigned_pkg="$output_dir/$pkg_stem-unsigned.pkg"
 signed_pkg="$output_dir/$pkg_name"
@@ -132,13 +163,40 @@ pkgutil --check-signature "$signed_pkg"
 
 notarized=false
 if [[ $notarization_enabled == true ]]; then
+  submit_plist="$output_dir/$pkg_stem-notary-submit.plist"
+  submit_status=
+  submission_id=
+
   echo "Submitting $signed_pkg for notarization"
   xcrun notarytool submit \
     "$signed_pkg" \
     --key "$notary_key_file" \
     --key-id "$notary_key_id" \
     --issuer "$notary_issuer_id" \
-    --wait
+    --wait \
+    --output-format plist \
+    > "$submit_plist"
+
+  submission_id=$(plutil -extract id raw -o - "$submit_plist")
+  submit_status=$(plutil -extract status raw -o - "$submit_plist")
+
+  if [[ $submit_status != Accepted ]]; then
+    echo "Notarization completed with status: $submit_status"
+    if [[ -n $submission_id ]]; then
+      echo "Fetching notarization log for submission $submission_id"
+      xcrun notarytool log \
+        "$submission_id" \
+        "$output_dir/$pkg_stem-notary-log.json" \
+        --key "$notary_key_file" \
+        --key-id "$notary_key_id" \
+        --issuer "$notary_issuer_id" || true
+      if [[ -f $output_dir/$pkg_stem-notary-log.json ]]; then
+        cat "$output_dir/$pkg_stem-notary-log.json"
+      fi
+    fi
+    fail "notarization failed for $signed_pkg"
+  fi
+
   echo "Stapling notarization ticket"
   xcrun stapler staple "$signed_pkg"
   notarized=true

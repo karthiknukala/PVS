@@ -25,12 +25,15 @@ The split is intentional: the signed and notarized package path should not block
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact.
 
-The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current workflow signs and notarizes the installer package, not the raw tarball contents.
+The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current workflow signs Mach-O payload files in the bundle copy used for packaging, signs the installer package, and notarizes that packaged distribution. It does not mutate the standalone tarball artifact.
 
 ## Required Secrets
 
 The `package-macos-arm64` job only runs if all of these secrets are non-empty:
 
+- `MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64`
+- `MACOS_DEV_ID_APPLICATION_CERT_PASSWORD`
+- `MACOS_DEV_ID_APPLICATION_CERT_NAME`
 - `MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64`
 - `MACOS_DEV_ID_INSTALLER_CERT_PASSWORD`
 - `MACOS_DEV_ID_INSTALLER_CERT_NAME`
@@ -44,6 +47,9 @@ If any one of these is missing, the workflow still produces the tarball and unpa
 
 There are two separate pieces involved in the notarized package path:
 
+- `Developer ID Application` `.p12`
+  This is the exported `Developer ID Application` identity, including the private key. It is used to sign Mach-O executables and dynamic libraries inside the staged bundle before packaging.
+
 - `Certificates.p12`
   This is the exported `Developer ID Installer` identity, including the private key. It is used to sign the installer package.
 
@@ -52,8 +58,37 @@ There are two separate pieces involved in the notarized package path:
 
 These files are used for different purposes:
 
-- `.p12` = package signing
+- `Developer ID Application` `.p12` = payload signing
+- `Developer ID Installer` `.p12` = package signing
 - `.p8` = notarization authentication
+
+## Developer ID Application Certificate Setup
+
+The payload signing path uses a `Developer ID Application` certificate.
+
+Typical flow:
+
+1. Create a certificate signing request.
+2. Request the `Developer ID Application` certificate from Apple.
+3. Download the `.cer`.
+4. Import the `.cer` into the login keychain.
+5. Verify that the matching identity is available.
+6. Export that identity as a `.p12`.
+
+Useful commands:
+
+```bash
+security import ~/cert/developerID_application.cer -k ~/Library/Keychains/login.keychain-db
+security find-identity -v -p codesigning ~/Library/Keychains/login.keychain-db | grep "Developer ID Application"
+```
+
+The identity name you put in `MACOS_DEV_ID_APPLICATION_CERT_NAME` must match the imported identity exactly.
+
+Example:
+
+```text
+Developer ID Application: Your Name (TEAMID)
+```
 
 ## Developer ID Installer Certificate Setup
 
@@ -83,13 +118,14 @@ Example:
 Developer ID Installer: Your Name (TEAMID)
 ```
 
-## Export The `.p12`
+## Export The `.p12` Files
 
-After the `Developer ID Installer` identity appears in the keychain, export it as a `.p12` with a password.
+After the `Developer ID Application` and `Developer ID Installer` identities appear in the keychain, export each identity as a `.p12` with a password.
 
-Once exported, base64-encode it for GitHub Secrets:
+Once exported, base64-encode them for GitHub Secrets:
 
 ```bash
+base64 < ~/cert/DeveloperIDApplication.p12 | tr -d '\n'
 base64 < ~/cert/Certificates.p12 | tr -d '\n'
 ```
 
@@ -127,6 +163,10 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n'
 Examples below use `karthiknukala/PVS`. Replace that if you are configuring a different repository.
 
 ```bash
+base64 < ~/cert/DeveloperIDApplication.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 -R karthiknukala/PVS
+gh secret set MACOS_DEV_ID_APPLICATION_CERT_PASSWORD -R karthiknukala/PVS
+gh secret set MACOS_DEV_ID_APPLICATION_CERT_NAME -R karthiknukala/PVS --body "Developer ID Application: Your Name (TEAMID)"
+
 base64 < ~/cert/Certificates.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 -R karthiknukala/PVS
 gh secret set MACOS_DEV_ID_INSTALLER_CERT_PASSWORD -R karthiknukala/PVS
 gh secret set MACOS_DEV_ID_INSTALLER_CERT_NAME -R karthiknukala/PVS --body "Developer ID Installer: Your Name (TEAMID)"
@@ -138,13 +178,14 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_AP
 
 ## What Happens Once All Secrets Are Set
 
-Once all six secrets are present:
+Once all nine secrets are present:
 
 1. `build-macos-arm64` builds and uploads the standalone tarball and unpacked bundle.
 2. `package-macos-arm64` runs automatically.
 3. The second job:
-   - imports the `.p12` into a temporary keychain
+   - imports the `Developer ID Application` and `Developer ID Installer` identities into a temporary keychain
    - reconstructs the standalone bundle from the tarball artifact
+   - signs Mach-O payload files in the staged bundle copy
    - builds a signed installer package
    - submits the package to Apple's notarization service
    - staples the notarization ticket
@@ -164,10 +205,10 @@ It does not currently use the alternate Apple ID + app-specific password flow fo
 
 If the pkg job is skipped:
 
-- Check that all six secrets are present.
+- Check that all nine secrets are present.
 - `gh secret list -R karthiknukala/PVS` will show secret names, but not values.
 
-If the `Developer ID Installer` identity does not appear after importing the `.cer`:
+If the `Developer ID Application` or `Developer ID Installer` identity does not appear after importing the `.cer`:
 
 - The certificate may not be imported yet.
 - The matching private key may not be in the current keychain.
@@ -178,6 +219,7 @@ If notarization fails:
 - Confirm that the `MACOS_NOTARY_ISSUER_ID` belongs to the same App Store Connect team key.
 - Confirm that `MACOS_NOTARY_ISSUER_ID` is the Issuer ID UUID, not the Team ID, key name, or some other identifier.
 - Confirm that the `.p8` file uploaded into `MACOS_NOTARY_API_KEY_P8_BASE64` is the original Team API key downloaded from App Store Connect.
+- If the submission reaches Apple and returns `Invalid`, inspect the notarization log. Unsigned or ad hoc-signed Mach-O payload files are a common cause.
 
 If `notarytool` exits with an error like `must be a valid UUID` for `--issuer`:
 
