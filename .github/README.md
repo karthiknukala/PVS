@@ -27,6 +27,14 @@ If the goal is to minimize Gatekeeper friction for end users, distribute the not
 
 The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current workflow signs Mach-O payload files in the bundle copy used for packaging, signs the installer package, and notarizes that packaged distribution. It does not mutate the standalone tarball artifact.
 
+For the SBCL runtime, the packaged bundle now uses:
+
+- `pvs-sbclisp`: a shell launcher
+- `pvs-sbclisp-bin`: the signed SBCL runtime executable
+- `pvs-sbclisp.core`: the SBCL core image data file
+
+This avoids Apple's strict validation failure for a monolithic self-contained SBCL executable with an appended core payload.
+
 ## Required Secrets
 
 The `package-macos-arm64` job only runs if all of these secrets are non-empty:

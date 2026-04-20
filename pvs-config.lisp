@@ -416,9 +416,13 @@ targets and copying them to the corresponding bin directory."
   (let* ((platform (pvs-platform))
 	 (lext #-(or macosx os-macosx) "so" #+(or macosx os-macosx) "dylib")
 	 (build-dir (platform-build-dir platform "runtime"))
-	 (pvs-prog (format nil "~apvs-sbclisp" build-dir)))
-    (format t "~%Creating SBCL core image in ~a" pvs-prog)
-    (ensure-directories-exist pvs-prog)
+	 (pvs-prog (format nil "~apvs-sbclisp" build-dir))
+	 (pvs-core (format nil "~apvs-sbclisp.core" build-dir))
+	 (pvs-runtime (format nil "~apvs-sbclisp-bin" build-dir))
+	 (sbcl-runtime (namestring sb-ext:*runtime-pathname*)))
+    (format t "~%Creating SBCL runtime launcher in ~a and core image in ~a"
+	    pvs-prog pvs-core)
+    (ensure-directories-exist pvs-core)
     (let* ((lib (format nil "file_utils.~a" lext))
 	   (lib-src (format nil "~asrc/utils/~a/~a" *pvs-path* platform lib))
 	   (lib-dst (format nil "~a/~a" build-dir lib)))
@@ -440,8 +444,18 @@ targets and copying them to the corresponding bin directory."
 	;;(setf (sb-alien::shared-object-dont-save shobj) t)
 	))
     (scrub-runtime-image-state)
+    (alexandria:copy-file sbcl-runtime pvs-runtime)
+    (with-open-file (stream pvs-prog
+			    :direction :output
+			    :if-exists :supersede
+			    :if-does-not-exist :create)
+      (format stream "#!/bin/sh~%")
+      (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "exec \"$script_dir/pvs-sbclisp-bin\" --core \"$script_dir/pvs-sbclisp.core\" \"$@\"~%"))
+    (chmod "a+rx" pvs-prog)
+    (chmod "a+rx" pvs-runtime)
     (sb-ext:save-lisp-and-die
-     pvs-prog
+     pvs-core
      :toplevel (function startup-pvs)
-     :executable t
+     :executable nil
      :save-runtime-options t)))

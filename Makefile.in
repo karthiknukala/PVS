@@ -193,6 +193,8 @@ ALLEGRO_DEVEL_FILES = $(bindir)/devel/files.bu \
 	$(bindir)/devel/ws1s.$(LOAD-FOREIGN-EXTENSION)
 
 SBCLISP_FILES = $(bindir)/runtime/pvs-sbclisp \
+	$(bindir)/runtime/pvs-sbclisp-bin \
+	$(bindir)/runtime/pvs-sbclisp.core \
 	$(bindir)/runtime/file_utils.$(LOAD-FOREIGN-EXTENSION) \
 	$(bindir)/runtime/mu.$(LOAD-FOREIGN-EXTENSION) \
 	$(bindir)/runtime/ws1s.$(LOAD-FOREIGN-EXTENSION)
@@ -849,7 +851,7 @@ smoke-sbcl-release: $(dist-sbclisp-gzip)
 	sysdir=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" --no-userinit --eval '(progn (let ((dir (ignore-errors (asdf:system-source-directory :pvs)))) (format t "SYSDIR=~S~%" dir))(pvs::bye))' | sed -n 's/^SYSDIR=//p'` && \
 	test "$$sysdir" = "NIL" && \
 	! rg -F "$(abspath .)" "$$root/pvs" "$$root/pvsio" "$$root/proveit" "$$root/provethem" >/dev/null && \
-	! strings "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" | rg -F "$(abspath .)" >/dev/null && \
+	! strings "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp.core" | rg -F "$(abspath .)" >/dev/null && \
 	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvsio" --version >/dev/null && \
 	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/proveit" --version >/dev/null
 
