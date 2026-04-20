@@ -10,7 +10,7 @@ Usage: build-macos-pkg.sh \
   --pkg-name <name.pkg> \
   --pkg-identifier <identifier> \
   --pkg-version <version> \
-  [--install-base </Applications>]
+  [--install-base </PVS>]
 
 Required environment variables:
   MACOS_INSTALLER_SIGN_IDENTITY
@@ -93,7 +93,7 @@ output_dir=
 pkg_name=
 pkg_identifier=
 pkg_version=
-install_base=/Applications
+install_base=/PVS
 
 while [[ $# -gt 0 ]]; do
   case $1 in

@@ -21,6 +21,11 @@ It has two jobs:
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
+The packaged install base is `/PVS`. That means:
+
+- installing with `-target /` places the bundle at `/PVS/pvs-8.0`
+- installing with `-target CurrentUserHomeDirectory` places it at `~/PVS/pvs-8.0`
+
 ## Which Artifact To Distribute
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact.

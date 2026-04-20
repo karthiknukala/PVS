@@ -28,7 +28,7 @@ jobs:
     env:
       PVS_ARTIFACT_GLOB: pvs*-ix86-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.x86_64
-      PVS_PKG_INSTALL_BASE: /Applications
+      PVS_PKG_INSTALL_BASE: /PVS
 
     steps:
       - name: Check out sources
@@ -154,7 +154,7 @@ jobs:
         shell: bash
     env:
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.x86_64
-      PVS_PKG_INSTALL_BASE: /Applications
+      PVS_PKG_INSTALL_BASE: /PVS
 
     steps:
       - name: Check out sources
