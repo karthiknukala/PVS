@@ -1,0 +1,93 @@
+name: Linux x86 Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-x86-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux-x86_64:
+    name: Build Linux x86_64 bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      PVS_ARTIFACT_GLOB: pvs*-ix86_64-Linux-sbclisp.tgz
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ripgrep sbcl
+
+      - name: Prepare isolated build home
+        run: |
+          CI_HOME="$RUNNER_TEMP/pvs-home"
+          mkdir -p "$CI_HOME"
+          echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
+
+      - name: Configure source tree
+        run: |
+          HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+
+      - name: Build and smoke-test standalone bundle
+        run: |
+          HOME="$CI_HOME" make smoke-sbcl-release
+
+      - name: Capture artifact paths
+        id: artifacts
+        run: |
+          shopt -s nullglob
+          files=( $PVS_ARTIFACT_GLOB )
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one standalone tarball, found ${#files[@]}" >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+
+          bundle_dir=$(make print-DISTDIR | sed -n 's/^DISTDIR=//p')
+          if [ -z "$bundle_dir" ] || [ ! -d "$bundle_dir" ]; then
+            echo "Expected unpacked bundle directory to exist, got '$bundle_dir'" >&2
+            exit 1
+          fi
+
+          echo "tgz=${files[0]}" >> "$GITHUB_OUTPUT"
+          echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload standalone tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-linux-x86-tgz
+          path: ${{ steps.artifacts.outputs.tgz }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload standalone bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-linux-x86-bundle
+          path: ${{ steps.artifacts.outputs.bundle_dir }}/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Linux x86 bundle"
+            echo
+            echo "- Runner: \`ubuntu-24.04\`"
+            echo "- Tarball artifact: \`pvs-linux-x86-tgz\`"
+            echo "- Ready-to-unzip bundle artifact: \`pvs-linux-x86-bundle\`"
+            echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
+          } >> "$GITHUB_STEP_SUMMARY"

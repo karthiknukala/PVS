@@ -6,6 +6,7 @@ PVS Specification and Verification System
 PVS is a verification system: that is, a specification language integrated with support tools and a theorem prover. It is intended to capture the state-of-the-art in mechanized formal methods and to be sufficiently rugged that it can be used for significant applications. PVS is a research prototype: it evolves and improves as we develop or apply new capabilities, and as the stress of real use exposes new requirements.
 
 For documentation and pre-built binaries, please visit http://pvs.csl.sri.com/.
+For GitHub Actions build, macOS packaging, and notarization notes, see [.github/README.md](.github/README.md).
 
 Making PVS 8.0 from sources
 ---------------------------
