@@ -85,7 +85,9 @@ bundle_runtime_dir() {
     path=${pending[$index]}
     index=$((index + 1))
 
-    contains_path "$path" "${seen[@]}" && continue
+    if [[ ${#seen[@]} -gt 0 ]]; then
+      contains_path "$path" "${seen[@]}" && continue
+    fi
     seen+=("$path")
 
     while IFS= read -r dep; do
@@ -108,7 +110,7 @@ bundle_runtime_dir() {
         install_name_tool -id "@loader_path/$dep_name" "$dest"
       fi
 
-      if is_macho "$dest" && ! contains_path "$dest" "${pending[@]}"; then
+      if is_macho "$dest" && { [[ ${#pending[@]} -eq 0 ]] || ! contains_path "$dest" "${pending[@]}"; }; then
         pending+=("$dest")
       fi
     done < <(otool -L "$path" | tail -n +2 | awk '{print $1}')
