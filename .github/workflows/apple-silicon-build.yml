@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
-      contents: write
+      contents: read
     outputs:
       bundle_dir: ${{ steps.artifacts.outputs.bundle_dir }}
       pkg_enabled: ${{ steps.pkg_mode.outputs.enabled }}
@@ -201,7 +201,7 @@ jobs:
     if: ${{ needs['build-macos-arm64'].outputs.pkg_enabled == 'true' }}
     timeout-minutes: 120
     permissions:
-      contents: write
+      contents: read
     defaults:
       run:
         shell: bash
