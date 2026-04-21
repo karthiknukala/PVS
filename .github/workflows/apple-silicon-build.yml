@@ -37,6 +37,7 @@ jobs:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
       PVS_PKG_INSTALL_BASE: /PVS
+      PVS_SBCL_SOURCE_VERSION: 2.6.3
 
     steps:
       - name: Check out sources
@@ -57,7 +58,8 @@ jobs:
           brew list sbcl >/dev/null 2>&1 || brew install sbcl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
           {
-            echo "PVS_SBCL_BIN=$(brew --prefix sbcl)/bin/sbcl"
+            echo "PVS_SBCL_BOOTSTRAP_BIN=$(brew --prefix sbcl)/bin/sbcl"
+            echo "PVS_SBCL_BOOTSTRAP_HOME=$(brew --prefix sbcl)/lib/sbcl"
           } >> "$GITHUB_ENV"
 
       - name: Prepare isolated build home
@@ -66,13 +68,31 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
+      - name: Build custom SBCL runtime
+        run: |
+          PVS_BUILT_SBCL_PREFIX="$RUNNER_TEMP/pvs-sbcl-built"
+          bootstrap_xc_host="$PVS_SBCL_BOOTSTRAP_BIN --disable-debugger --no-userinit --no-sysinit"
+          bash ./.github/scripts/install-patched-sbcl-source.sh \
+            --prefix "$PVS_BUILT_SBCL_PREFIX" \
+            --version "$PVS_SBCL_SOURCE_VERSION" \
+            --xc-host "$bootstrap_xc_host" \
+            --host-home "$PVS_SBCL_BOOTSTRAP_HOME" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Archive custom SBCL runtime
+        id: custom_sbcl
+        run: |
+          archive="$RUNNER_TEMP/pvs-sbcl-${PVS_SBCL_SOURCE_VERSION}-arm64-darwin.tgz"
+          tar czf "$archive" -C "$(dirname "$PVS_BUILT_SBCL_PREFIX")" "$(basename "$PVS_BUILT_SBCL_PREFIX")"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
       - name: Configure source tree
         run: |
-          SBCL="$PVS_SBCL_BIN" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
-          SBCL="$PVS_SBCL_BIN" HOME="$CI_HOME" make smoke-sbcl-release
+          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
@@ -134,6 +154,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Upload custom SBCL runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvs-apple-silicon-custom-sbcl
+          path: ${{ steps.custom_sbcl.outputs.archive }}
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload standalone bundle
         uses: actions/upload-artifact@v4
         with:
@@ -174,6 +202,7 @@ jobs:
             echo
             echo "- Runner: \`macos-15\`"
             echo "- Tarball artifact: \`pvs-apple-silicon-tgz\`"
+            echo "- Custom SBCL runtime artifact: \`pvs-apple-silicon-custom-sbcl\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-silicon-bundle\`"
             if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
               echo "- GitHub release publication: \`${{ steps.release_policy.outputs.release_tag }}\` (\`${{ steps.release_policy.outputs.channel }}\`)"
@@ -186,6 +215,7 @@ jobs:
             else
               echo "- Signed installer package artifact: skipped because one or more signing/notary secrets are missing"
             fi
+            echo "- To test the custom-built SBCL directly on another Apple Silicon Mac, extract \`pvs-apple-silicon-custom-sbcl\`, then run \`SBCL_HOME=<extract>/pvs-sbcl-built/lib/sbcl <extract>/pvs-sbcl-built/bin/sbcl --version\`."
             echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -8,7 +8,7 @@ Usage: install-patched-sbcl-source.sh --prefix DIR [options]
 
 Options:
   --prefix DIR        Installation prefix for the built SBCL
-  --version VERSION   SBCL source version to build. Default: 2.6.1
+  --version VERSION   SBCL source version to build. Default: 2.6.3
   --xc-host CMD       Bootstrap Lisp command to use for --xc-host
   --host-home DIR     Optional SBCL_HOME for the bootstrap host
   --github-env FILE   Append built SBCL exports to this env file
@@ -17,7 +17,7 @@ EOF
 }
 
 prefix=""
-version="2.6.1"
+version="2.6.3"
 xc_host=""
 host_home=""
 github_env=""
@@ -134,13 +134,15 @@ chmod +x "$wrapper"
 
 if [ -n "$github_env" ]; then
   {
+    echo "PVS_BUILT_SBCL_PREFIX=$prefix"
     echo "PVS_BUILT_SBCL_BIN=$sbcl_bin"
     echo "PVS_BUILT_SBCL_HOME=$sbcl_home"
     echo "PVS_BUILT_SBCL_WRAPPER=$wrapper"
   } >> "$github_env"
 fi
 
-echo "Installed relocatable SBCL at $prefix"
+echo "Installed source-built SBCL at $prefix"
+echo "PVS_BUILT_SBCL_PREFIX=$prefix"
 echo "PVS_BUILT_SBCL_BIN=$sbcl_bin"
 echo "PVS_BUILT_SBCL_HOME=$sbcl_home"
 echo "PVS_BUILT_SBCL_WRAPPER=$wrapper"

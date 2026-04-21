@@ -13,6 +13,7 @@ It has two jobs:
 1. `build-macos-arm64`
    This job always runs. It builds the standalone Apple Silicon bundle, smoke-tests it, and uploads:
    - `pvs-apple-silicon-tgz`
+   - `pvs-apple-silicon-custom-sbcl`
    - `pvs-apple-silicon-bundle`
 
 2. `package-macos-arm64`
@@ -21,7 +22,9 @@ It has two jobs:
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
-Before building PVS itself, the Apple Silicon workflow installs Homebrew's native Apple Silicon `sbcl` package and builds PVS against that installed SBCL. The bundle step then copies the active SBCL support tree discovered from the running SBCL into the release, so the packaged runtime matches the SBCL layout used during the build instead of repackaging the older upstream `arm64-darwin` binary distro.
+Before building PVS itself, the Apple Silicon workflow installs Homebrew's native Apple Silicon `sbcl` package only as the bootstrap host, then builds a custom SBCL `2.6.3` install tree from source via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh). PVS is built against that custom SBCL, and the bundle step copies that active SBCL support tree into the release so the packaged runtime matches the source-built SBCL layout instead of shipping Homebrew's SBCL runtime directly.
+
+That same job also uploads the source-built SBCL install tree itself as `pvs-apple-silicon-custom-sbcl`. This is useful when testing whether the custom runtime binary survives relocation to another Apple Silicon Mac before going through the full PVS bundle or pkg path.
 
 For the SBCL runtime, the packaged bundle now carries the generated `pvs-sbclisp` and `pvs-sbclisp-bin` launchers, the saved `pvs-sbclisp.core`, and a bundled `runtime/sbcl/` tree containing the SBCL executable plus its `lib/sbcl/` support files. The launchers set `SBCL_HOME` to that bundled tree at runtime instead of assuming only a copied bare executable is sufficient.
 
@@ -49,6 +52,14 @@ This keeps both stable and nightly builds on the same GitHub Releases page while
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact.
 
 The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current release flow now vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
+
+If the goal is to isolate an Apple Silicon SBCL runtime problem before involving the rest of the PVS bundle, use `pvs-apple-silicon-custom-sbcl` first. After extracting it on another machine, run:
+
+```bash
+SBCL_HOME=<extract>/pvs-sbcl-built/lib/sbcl <extract>/pvs-sbcl-built/bin/sbcl --version
+```
+
+If that fails with the same allocation error, the remaining issue is in the shipped SBCL runtime binary itself rather than in the PVS launchers, dylib loading, or pkg relocation.
 
 ## Release Tracks
 
