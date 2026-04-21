@@ -2,11 +2,13 @@
 
 This directory contains the GitHub Actions workflows used to build PVS bundles for Apple Silicon, Apple x86, Linux ARM, and Linux x86.
 
+The top-level release entry point is [.github/workflows/release-builds.yml](./workflows/release-builds.yml). It runs the four platform workflows as reusable builders, waits for them to finish, then performs GitHub Release publication and stale-asset cleanup in one final job. The per-platform workflows still support `workflow_dispatch` for standalone debugging, but they no longer publish directly to GitHub Releases on push.
+
 This README focuses on the current packaging, notarization, and release flow, using Apple Silicon as the concrete example. The Apple x86 and Linux workflows mirror the same structure.
 
 ## Current Apple Silicon Flow
 
-The Apple Silicon workflow is defined in [.github/workflows/apple-silicon-build.yml](./workflows/apple-silicon-build.yml).
+The Apple Silicon workflow is defined in [.github/workflows/apple-silicon-build.yml](./workflows/apple-silicon-build.yml). In normal release operation it is called from [.github/workflows/release-builds.yml](./workflows/release-builds.yml).
 
 It has two jobs:
 
@@ -44,7 +46,9 @@ The current release policy is:
 
 - pushes to the configured nightly branch publish or update a prerelease tagged `nightly-YYYYMMDD`
 - pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
+- the `publish-release` job in [.github/workflows/release-builds.yml](./workflows/release-builds.yml) is the only job that mutates GitHub Releases
 - the GitHub Releases page publishes the standalone platform tarballs for successful builds; macOS notarized `.pkg` assets are published in addition to those tarballs when signing and notarization are enabled
+- each nightly or stable asset family is reconciled once in that final publish job, so the release keeps only the latest asset for each platform/package kind
 
 This keeps both stable and nightly builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
 
@@ -67,6 +71,7 @@ If that fails with the same allocation error, the remaining issue is in the ship
 - Stable releases are intended to come from version tags whose commits are on the configured stable branch.
 - Nightly releases are prereleases named with the UTC date in `YYYYMMDD` form, for example `nightly-20260420`.
 - If multiple nightly builds run on the same UTC date, they update the same nightly release and replace its assets in place.
+- Asset cleanup is centralized in the final publish job so old Linux/macOS tarballs and notarized macOS packages are pruned in one pass instead of by the individual builders.
 
 For the SBCL runtime, the packaged bundle now uses:
 

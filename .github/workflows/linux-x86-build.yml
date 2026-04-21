@@ -1,7 +1,7 @@
 name: Linux x86 Build
 
 on:
-  push:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -88,27 +88,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish rolling release tarball
-        if: ${{ steps.release_policy.outputs.publish == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          release_args=()
-          if [ '${{ steps.release_policy.outputs.prerelease }}' = 'true' ]; then
-            release_args+=(--prerelease)
-          fi
-          if [ '${{ steps.release_policy.outputs.move_tag }}' = 'true' ]; then
-            release_args+=(--move-tag)
-          fi
-          bash ./.github/scripts/publish-github-release.sh \
-            --tag '${{ steps.release_policy.outputs.release_tag }}' \
-            --title '${{ steps.release_policy.outputs.release_title }}' \
-            --asset '${{ steps.artifacts.outputs.tgz }}' \
-            --asset-name pvs-linux-x86_64.tgz \
-            --prune-asset-glob 'pvs*-ix86_64-Linux-sbclisp.tgz' \
-            --prune-asset-glob 'pvs-linux-x86_64.tgz' \
-            "${release_args[@]}"
-
       - name: Summarize outputs
         run: |
           {
@@ -118,7 +97,7 @@ jobs:
             echo "- Tarball artifact: \`pvs-linux-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-linux-x86-bundle\`"
             if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
-              echo "- GitHub release publication: \`${{ steps.release_policy.outputs.release_tag }}\` (\`${{ steps.release_policy.outputs.channel }}\`)"
+              echo "- GitHub release publication: handled by the consolidated release workflow"
             else
               echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
             fi

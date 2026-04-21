@@ -217,7 +217,7 @@ if [[ ${#prune_asset_globs[@]} -gt 0 ]]; then
   while IFS=$'\t' read -r asset_id existing_asset existing_label; do
     [[ -n $asset_id ]] || continue
     [[ -n $existing_asset ]] || continue
-    if [[ $existing_asset == "$asset_name" ]] || [[ -n $existing_label && $existing_label == "$asset_name" ]]; then
+    if [[ $existing_asset == "$asset_name" ]]; then
       continue
     fi
     if matches_asset_glob "$existing_asset" "${prune_asset_globs[@]}" || { [[ -n $existing_label ]] && matches_asset_glob "$existing_label" "${prune_asset_globs[@]}"; }; then

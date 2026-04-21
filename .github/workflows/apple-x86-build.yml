@@ -1,7 +1,7 @@
 name: Apple x86 Build
 
 on:
-  push:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -139,27 +139,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish rolling release standalone tarball
-        if: ${{ steps.release_policy.outputs.publish == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          release_args=()
-          if [ '${{ steps.release_policy.outputs.prerelease }}' = 'true' ]; then
-            release_args+=(--prerelease)
-          fi
-          if [ '${{ steps.release_policy.outputs.move_tag }}' = 'true' ]; then
-            release_args+=(--move-tag)
-          fi
-          bash ./.github/scripts/publish-github-release.sh \
-            --tag '${{ steps.release_policy.outputs.release_tag }}' \
-            --title '${{ steps.release_policy.outputs.release_title }}' \
-            --asset '${{ steps.artifacts.outputs.tgz }}' \
-            --asset-name pvs-macos-x86_64.tgz \
-            --prune-asset-glob 'pvs*-ix86-MacOSX-sbclisp.tgz' \
-            --prune-asset-glob 'pvs-macos-x86_64.tgz' \
-            "${release_args[@]}"
-
       - name: Summarize outputs
         run: |
           {
@@ -169,7 +148,7 @@ jobs:
             echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
             if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
-              echo "- GitHub release asset: \`pvs-macos-x86_64.tgz\`"
+              echo "- GitHub release publication: handled by the consolidated release workflow"
             else
               echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
             fi
@@ -329,27 +308,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish rolling release package
-        if: ${{ needs['build-macos-x86'].outputs.release_publish == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          release_args=()
-          if [ '${{ needs['build-macos-x86'].outputs.release_prerelease }}' = 'true' ]; then
-            release_args+=(--prerelease)
-          fi
-          if [ '${{ needs['build-macos-x86'].outputs.release_move_tag }}' = 'true' ]; then
-            release_args+=(--move-tag)
-          fi
-          bash ./.github/scripts/publish-github-release.sh \
-            --tag '${{ needs['build-macos-x86'].outputs.release_tag }}' \
-            --title '${{ needs['build-macos-x86'].outputs.release_title }}' \
-            --asset '${{ steps.pkg.outputs.pkg_path }}' \
-            --asset-name pvs-macos-x86_64.pkg \
-            --prune-asset-glob 'pvs*-ix86-MacOSX-sbclisp.pkg' \
-            --prune-asset-glob 'pvs-macos-x86_64.pkg' \
-            "${release_args[@]}"
-
       - name: Summarize outputs
         run: |
           {
@@ -359,7 +317,7 @@ jobs:
             echo "- Source tarball artifact: \`pvs-apple-x86-tgz\`"
             echo "- Signed installer package artifact: \`pvs-apple-x86-pkg\`"
             echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
-            echo "- GitHub release assets: \`pvs-macos-x86_64.tgz\` and \`pvs-macos-x86_64.pkg\`"
+            echo "- GitHub release publication: handled by the consolidated release workflow"
             if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
               echo "- Package notarization: completed and stapled"
             else

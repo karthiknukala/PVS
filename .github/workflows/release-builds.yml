@@ -1,0 +1,203 @@
+name: Release Builds
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-policy:
+    name: Resolve release policy
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.policy.outputs.channel }}
+      move_tag: ${{ steps.policy.outputs.move_tag }}
+      prerelease: ${{ steps.policy.outputs.prerelease }}
+      publish: ${{ steps.policy.outputs.publish }}
+      release_tag: ${{ steps.policy.outputs.release_tag }}
+      release_title: ${{ steps.policy.outputs.release_title }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Resolve release policy
+        id: policy
+        run: |
+          bash ./.github/scripts/resolve-release-policy.sh
+
+  linux-x86:
+    name: Linux x86 build
+    uses: ./.github/workflows/linux-x86-build.yml
+
+  linux-arm:
+    name: Linux ARM build
+    uses: ./.github/workflows/linux-arm-build.yml
+
+  macos-arm:
+    name: macOS arm64 build
+    uses: ./.github/workflows/apple-silicon-build.yml
+    secrets: inherit
+
+  macos-x86:
+    name: macOS x86_64 build
+    uses: ./.github/workflows/apple-x86-build.yml
+    secrets: inherit
+
+  publish-release:
+    name: Publish release assets
+    runs-on: ubuntu-24.04
+    needs:
+      - release-policy
+      - linux-x86
+      - linux-arm
+      - macos-arm
+      - macos-x86
+    if: ${{ always() && needs.release-policy.outputs.publish == 'true' && needs.linux-x86.result == 'success' && needs.linux-arm.result == 'success' && needs.macos-arm.result == 'success' && needs.macos-x86.result == 'success' }}
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_MOVE_TAG: ${{ needs.release-policy.outputs.move_tag }}
+      RELEASE_PRERELEASE: ${{ needs.release-policy.outputs.prerelease }}
+      RELEASE_TAG: ${{ needs.release-policy.outputs.release_tag }}
+      RELEASE_TITLE: ${{ needs.release-policy.outputs.release_title }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/release-artifacts
+
+      - name: Publish release assets
+        run: |
+          artifact_root="$RUNNER_TEMP/release-artifacts"
+          first_publish=true
+
+          find_one_required() {
+            local dir=$1
+            local pattern=$2
+            local -a matches=()
+            if [[ ! -d $dir ]]; then
+              echo "Expected artifact directory $dir" >&2
+              exit 1
+            fi
+            while IFS= read -r path; do
+              matches+=("$path")
+            done < <(find "$dir" -type f -name "$pattern" -print | sort)
+            if [[ ${#matches[@]} -ne 1 ]]; then
+              echo "Expected exactly one file matching $pattern under $dir, found ${#matches[@]}" >&2
+              printf '%s\n' "${matches[@]}" >&2
+              exit 1
+            fi
+            printf '%s\n' "${matches[0]}"
+          }
+
+          find_one_optional() {
+            local dir=$1
+            local pattern=$2
+            local -a matches=()
+            if [[ ! -d $dir ]]; then
+              return 0
+            fi
+            while IFS= read -r path; do
+              matches+=("$path")
+            done < <(find "$dir" -type f -name "$pattern" -print | sort)
+            if [[ ${#matches[@]} -eq 0 ]]; then
+              return 0
+            fi
+            if [[ ${#matches[@]} -ne 1 ]]; then
+              echo "Expected at most one file matching $pattern under $dir, found ${#matches[@]}" >&2
+              printf '%s\n' "${matches[@]}" >&2
+              exit 1
+            fi
+            printf '%s\n' "${matches[0]}"
+          }
+
+          publish_asset() {
+            local file=$1
+            local stable_name=$2
+            shift 2
+            local -a args=(
+              --tag "$RELEASE_TAG"
+              --title "$RELEASE_TITLE"
+              --asset "$file"
+              --asset-name "$stable_name"
+            )
+            local glob
+            for glob in "$@"; do
+              args+=(--prune-asset-glob "$glob")
+            done
+            if [[ $RELEASE_PRERELEASE == 'true' ]]; then
+              args+=(--prerelease)
+            fi
+            if [[ $first_publish == true && $RELEASE_MOVE_TAG == 'true' ]]; then
+              args+=(--move-tag)
+            fi
+            bash ./.github/scripts/publish-github-release.sh "${args[@]}"
+            first_publish=false
+          }
+
+          linux_x86_tgz=$(find_one_required "$artifact_root/pvs-linux-x86-tgz" '*.tgz')
+          linux_arm_tgz=$(find_one_required "$artifact_root/pvs-linux-arm-tgz" '*.tgz')
+          macos_arm_tgz=$(find_one_required "$artifact_root/pvs-apple-silicon-tgz" '*.tgz')
+          macos_x86_tgz=$(find_one_required "$artifact_root/pvs-apple-x86-tgz" '*.tgz')
+          macos_arm_pkg=$(find_one_optional "$artifact_root/pvs-apple-silicon-pkg" '*.pkg')
+          macos_x86_pkg=$(find_one_optional "$artifact_root/pvs-apple-x86-pkg" '*.pkg')
+
+          publish_asset "$linux_x86_tgz" pvs-linux-x86_64.tgz \
+            'pvs*-ix86_64-Linux-sbclisp.tgz' \
+            'pvs-linux-x86_64.tgz'
+          publish_asset "$linux_arm_tgz" pvs-linux-aarch64.tgz \
+            'pvs*-aarch64-Linux-sbclisp.tgz' \
+            'pvs-linux-aarch64.tgz'
+          publish_asset "$macos_arm_tgz" pvs-macos-arm64.tgz \
+            'pvs*-arm-MacOSX-sbclisp.tgz' \
+            'pvs-macos-arm64.tgz'
+          publish_asset "$macos_x86_tgz" pvs-macos-x86_64.tgz \
+            'pvs*-ix86-MacOSX-sbclisp.tgz' \
+            'pvs-macos-x86_64.tgz'
+
+          if [[ -n $macos_arm_pkg ]]; then
+            publish_asset "$macos_arm_pkg" pvs-macos-arm64.pkg \
+              'pvs*-arm-MacOSX-sbclisp.pkg' \
+              'pvs-macos-arm64.pkg'
+          fi
+
+          if [[ -n $macos_x86_pkg ]]; then
+            publish_asset "$macos_x86_pkg" pvs-macos-x86_64.pkg \
+              'pvs*-ix86-MacOSX-sbclisp.pkg' \
+              'pvs-macos-x86_64.pkg'
+          fi
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Release publication"
+            echo
+            echo "- GitHub release: \`$RELEASE_TAG\`"
+            echo "- Release channel: \`${{ needs.release-policy.outputs.channel }}\`"
+            echo "- Uploaded assets:"
+            echo "  - \`pvs-linux-aarch64.tgz\`"
+            echo "  - \`pvs-linux-x86_64.tgz\`"
+            echo "  - \`pvs-macos-arm64.tgz\`"
+            echo "  - \`pvs-macos-x86_64.tgz\`"
+            if [[ -d "$RUNNER_TEMP/release-artifacts/pvs-apple-silicon-pkg" ]]; then
+              echo "  - \`pvs-macos-arm64.pkg\`"
+            fi
+            if [[ -d "$RUNNER_TEMP/release-artifacts/pvs-apple-x86-pkg" ]]; then
+              echo "  - \`pvs-macos-x86_64.pkg\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
