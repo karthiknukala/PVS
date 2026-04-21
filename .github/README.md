@@ -26,7 +26,7 @@ Before building PVS itself, the Apple Silicon workflow now stays entirely on SBC
 - it installs the current Homebrew `sbcl` package as the bootstrap host
 - then it uses that bootstrap SBCL to build a pinned SBCL `2.6.1` source release via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh)
 
-The source-build helper now mirrors the closest known-working Darwin arm64 source-build shape we could verify while staying pure-SBCL: it uses `--arch=arm64`, `--with-sb-thread`, `--with-mark-region-gc`, `--with-immobile-space`, and `--with-relocatable-static-space`. That targets the startup failure pattern `failed to allocate 1048576 bytes at 0x300100000`, which is coming from SBCL's hardwired startup spaces on some newer Apple Silicon machines, while keeping the entire build and shipped runtime on SBCL.
+The source-build helper now uses the pure-SBCL Darwin arm64 feature combination that SBCL `2.6.1` itself accepts for relocatable static space: `--arch=arm64`, `--with-sb-thread`, `--with-immobile-space`, and `--with-relocatable-static-space`. We intentionally do not enable `--with-mark-region-gc` here, because in SBCL `2.6.1` that GC choice removes `:immobile-space` during bootstrap, which directly conflicts with `:relocatable-static-space` on arm64. This still targets the startup failure pattern `failed to allocate 1048576 bytes at 0x300100000`, while keeping the entire build and shipped runtime on SBCL.
 
 The packaged install base is `/PVS`. That means:
 

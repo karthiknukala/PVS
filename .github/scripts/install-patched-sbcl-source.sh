@@ -93,7 +93,6 @@ if ! (
     --prefix="$prefix" \
     --arch=arm64 \
     --with-sb-thread \
-    --with-mark-region-gc \
     --with-immobile-space \
     --with-relocatable-static-space \
     --xc-host="$xc_host"
