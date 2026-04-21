@@ -9,6 +9,7 @@ Usage: publish-github-release.sh \
   --title <title> \
   --asset <path> \
   [--asset-name <name>] \
+  [--keep-asset-name <name>] \
   [--notes <text>] \
   [--target <sha>] \
   [--repo <owner/repo>] \
@@ -29,6 +30,7 @@ tag=
 title=
 asset=
 asset_name=
+keep_asset_names=()
 notes=
 target=
 repo=${GITHUB_REPOSITORY:-}
@@ -51,6 +53,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --asset-name)
       asset_name=$2
+      shift 2
+      ;;
+    --keep-asset-name)
+      keep_asset_names+=("$2")
       shift 2
       ;;
     --notes)
@@ -89,6 +95,16 @@ done
 [[ -n $asset ]] || fail "--asset is required"
 [[ -f $asset ]] || fail "asset not found: $asset"
 [[ -n $repo ]] || fail "--repo is required or GITHUB_REPOSITORY must be set"
+
+contains_asset_name() {
+  local needle=$1
+  shift
+  local item
+  for item in "$@"; do
+    [[ $item == "$needle" ]] && return 0
+  done
+  return 1
+}
 
 if [[ -z $target ]]; then
   target=${GITHUB_SHA:-$(git rev-parse HEAD)}
@@ -136,3 +152,12 @@ else
 fi
 
 gh release upload "$tag" -R "$repo" "$asset#$asset_name" --clobber
+
+if [[ ${#keep_asset_names[@]} -gt 0 ]]; then
+  while IFS= read -r existing_asset; do
+    [[ -n $existing_asset ]] || continue
+    if ! contains_asset_name "$existing_asset" "${keep_asset_names[@]}"; then
+      gh release delete-asset "$tag" "$existing_asset" -R "$repo" --yes
+    fi
+  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name')
+fi

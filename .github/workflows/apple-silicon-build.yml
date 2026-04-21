@@ -159,6 +159,12 @@ jobs:
             --title '${{ steps.release_policy.outputs.release_title }}' \
             --asset '${{ steps.artifacts.outputs.tgz }}' \
             --asset-name pvs-macos-arm64.tgz \
+            --keep-asset-name pvs-macos-arm64.tgz \
+            --keep-asset-name pvs-macos-arm64.pkg \
+            --keep-asset-name pvs-macos-x86_64.tgz \
+            --keep-asset-name pvs-macos-x86_64.pkg \
+            --keep-asset-name pvs-linux-aarch64.tgz \
+            --keep-asset-name pvs-linux-x86_64.tgz \
             "${release_args[@]}"
 
       - name: Summarize outputs
@@ -346,6 +352,12 @@ jobs:
             --title '${{ needs['build-macos-arm64'].outputs.release_title }}' \
             --asset '${{ steps.pkg.outputs.pkg_path }}' \
             --asset-name pvs-macos-arm64.pkg \
+            --keep-asset-name pvs-macos-arm64.tgz \
+            --keep-asset-name pvs-macos-arm64.pkg \
+            --keep-asset-name pvs-macos-x86_64.tgz \
+            --keep-asset-name pvs-macos-x86_64.pkg \
+            --keep-asset-name pvs-linux-aarch64.tgz \
+            --keep-asset-name pvs-linux-x86_64.tgz \
             "${release_args[@]}"
 
       - name: Summarize outputs
