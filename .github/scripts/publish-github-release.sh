@@ -106,6 +106,33 @@ contains_asset_name() {
   return 1
 }
 
+release_asset_names() {
+  gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name'
+}
+
+delete_release_asset() {
+  local asset_id=$1
+  local asset_name=$2
+  local current_assets
+
+  if gh api --method DELETE "repos/$repo/releases/assets/$asset_id" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! current_assets=$(release_asset_names); then
+    echo "error: failed to refresh release assets after deletion error for $asset_name" >&2
+    return 1
+  fi
+
+  if ! printf '%s\n' "$current_assets" | grep -Fx -- "$asset_name" >/dev/null 2>&1; then
+    echo "Skipping already-removed asset $asset_name"
+    return 0
+  fi
+
+  echo "error: failed to delete release asset $asset_name" >&2
+  return 1
+}
+
 if [[ -z $target ]]; then
   target=${GITHUB_SHA:-$(git rev-parse HEAD)}
 fi
@@ -154,10 +181,11 @@ fi
 gh release upload "$tag" -R "$repo" "$asset#$asset_name" --clobber
 
 if [[ ${#keep_asset_names[@]} -gt 0 ]]; then
-  while IFS= read -r existing_asset; do
+  while IFS=$'\t' read -r asset_id existing_asset; do
+    [[ -n $asset_id ]] || continue
     [[ -n $existing_asset ]] || continue
     if ! contains_asset_name "$existing_asset" "${keep_asset_names[@]}"; then
-      gh release delete-asset "$tag" "$existing_asset" -R "$repo" --yes
+      delete_release_asset "$asset_id" "$existing_asset"
     fi
-  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name')
+  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[] | "\(.id)\t\(.name)"')
 fi
