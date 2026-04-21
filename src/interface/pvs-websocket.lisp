@@ -83,25 +83,35 @@
 
 (defvar *ws* nil "The websocket structure")
 
-(defun available-port-p (address port)
+(defun port-availability-status (address port)
   (let (socket)
     (unwind-protect
 	(handler-case
 	    (progn
 	      (setq socket (usocket:socket-listen address port :reuse-address t))
-	      t)
-           (usocket:address-in-use-error () nil)
+	      :available)
+           (usocket:address-in-use-error () :in-use)
            (usocket:socket-error (e)
-             (warn "USOCKET:SOCKET-ERROR: ~A" e)
-             nil))
+             (values :error e)))
       (when socket
         (usocket:socket-close socket)
         t))))
 
 (defun start-pvs-server (&key (port 23456) (max-attempts 100))
-  (if (available-port-p "127.0.0.1" port)
-      (setq *websocket-server* (clack:clackup #'websocket-pvs-server :port port))
-    (start-pvs-server :port (1+ port) :max-attempts (1- max-attempts))))
+  (when (minusp max-attempts)
+    (error "Unable to find an open port for the PVS server starting at ~a" port))
+  (multiple-value-bind (status condition)
+      (port-availability-status "127.0.0.1" port)
+    (case status
+      (:available
+       ;; Clack's default server is still :HUNCHENTOOT, but newer releases load
+       ;; handlers from separate systems, so keep the intended backend explicit.
+       (setq *websocket-server*
+	     (clack:clackup #'websocket-pvs-server :server :hunchentoot :port port)))
+      (:in-use
+       (start-pvs-server :port (1+ port) :max-attempts (1- max-attempts)))
+      (:error
+       (error "Unable to start the PVS server on port ~a: ~a" port condition)))))
 
 (defun stop-pvs-server ()
   (when *websocket-server*
