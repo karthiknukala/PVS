@@ -124,13 +124,14 @@ matches_asset_glob() {
   return 1
 }
 
-release_asset_names() {
-  gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name'
+release_assets_tsv() {
+  gh api "repos/$repo/releases/tags/$tag" --jq '.assets[] | "\(.id)\t\(.name)\t\(.label // "")"'
 }
 
 delete_release_asset() {
   local asset_id=$1
   local asset_name=$2
+  local asset_label=$3
   local current_assets
   local attempt
 
@@ -139,9 +140,9 @@ delete_release_asset() {
       return 0
     fi
 
-    if current_assets=$(release_asset_names 2>/dev/null); then
-      if ! printf '%s\n' "$current_assets" | grep -Fx -- "$asset_name" >/dev/null 2>&1; then
-        echo "Skipping already-removed asset $asset_name"
+    if current_assets=$(release_assets_tsv 2>/dev/null); then
+      if ! printf '%s\n' "$current_assets" | awk -F '\t' -v id="$asset_id" '$1 == id { found = 1 } END { exit found ? 0 : 1 }'; then
+        echo "Skipping already-removed asset ${asset_label:-$asset_name}"
         return 0
       fi
     fi
@@ -151,7 +152,7 @@ delete_release_asset() {
     fi
   done
 
-  echo "warning: failed to delete release asset $asset_name; leaving it in the release" >&2
+  echo "warning: failed to delete release asset ${asset_label:-$asset_name}; leaving it in the release" >&2
   return 0
 }
 
@@ -213,20 +214,22 @@ fi
 gh release upload "$tag" -R "$repo" "$upload_asset" --clobber
 
 if [[ ${#prune_asset_globs[@]} -gt 0 ]]; then
-  while IFS=$'\t' read -r asset_id existing_asset; do
+  while IFS=$'\t' read -r asset_id existing_asset existing_label; do
     [[ -n $asset_id ]] || continue
     [[ -n $existing_asset ]] || continue
-    [[ $existing_asset == "$asset_name" ]] && continue
-    if matches_asset_glob "$existing_asset" "${prune_asset_globs[@]}"; then
-      delete_release_asset "$asset_id" "$existing_asset"
+    if [[ $existing_asset == "$asset_name" ]] || [[ -n $existing_label && $existing_label == "$asset_name" ]]; then
+      continue
     fi
-  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[] | "\(.id)\t\(.name)"')
+    if matches_asset_glob "$existing_asset" "${prune_asset_globs[@]}" || { [[ -n $existing_label ]] && matches_asset_glob "$existing_label" "${prune_asset_globs[@]}"; }; then
+      delete_release_asset "$asset_id" "$existing_asset" "$existing_label"
+    fi
+  done < <(release_assets_tsv)
 elif [[ ${#keep_asset_names[@]} -gt 0 ]]; then
-  while IFS=$'\t' read -r asset_id existing_asset; do
+  while IFS=$'\t' read -r asset_id existing_asset existing_label; do
     [[ -n $asset_id ]] || continue
     [[ -n $existing_asset ]] || continue
-    if ! contains_asset_name "$existing_asset" "${keep_asset_names[@]}"; then
-      delete_release_asset "$asset_id" "$existing_asset"
+    if ! contains_asset_name "$existing_asset" "${keep_asset_names[@]}" && ! { [[ -n $existing_label ]] && contains_asset_name "$existing_label" "${keep_asset_names[@]}"; }; then
+      delete_release_asset "$asset_id" "$existing_asset" "$existing_label"
     fi
-  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[] | "\(.id)\t\(.name)"')
+  done < <(release_assets_tsv)
 fi
