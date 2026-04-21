@@ -122,26 +122,64 @@
 	(error "Cannot determine SBCL_HOME for runtime bundling")))))
 
 #+sbcl
+(defun copy-sbcl-runtime-binary (sbcl-runtime bundled-runtime)
+  (uiop:run-program
+   (list "cp" "-fpL" sbcl-runtime bundled-runtime)
+   :output *standard-output*
+   :error-output *error-output*))
+
+#+(or macosx os-macosx)
+(defun sbcl-runtime-loader-path-dependencies (sbcl-runtime)
+  (let ((prefix "@loader_path/"))
+    (loop for line in (cdr (uiop:split-string
+			    (uiop:run-program
+			     (list "otool" "-L" sbcl-runtime)
+			     :output :string
+			     :error-output *error-output*)
+			    :separator '(#\Newline)))
+	  for trimmed = (string-trim '(#\Space #\Tab) line)
+	  for dep = (car (uiop:split-string trimmed :separator '(#\Space #\Tab)))
+	  when (and dep
+		    (<= (length prefix) (length dep))
+		    (string= prefix dep :end2 (length prefix)))
+	    collect dep)))
+
+#+(or macosx os-macosx)
+(defun copy-sbcl-runtime-loader-dependencies (sbcl-runtime source-runtime-dir-path bundled-bin-path)
+  (dolist (dep (sbcl-runtime-loader-path-dependencies sbcl-runtime))
+    (let* ((relative (subseq dep (length "@loader_path/")))
+	   (source-path (merge-pathnames relative source-runtime-dir-path))
+	   (target-path (merge-pathnames relative bundled-bin-path)))
+      (unless (probe-file source-path)
+	(error "Missing SBCL runtime sibling dependency ~a referenced by ~a"
+	       dep sbcl-runtime))
+      (ensure-directories-exist target-path)
+      (uiop:run-program
+       (list "cp" "-fpL" (namestring source-path) (namestring target-path))
+       :output *standard-output*
+       :error-output *error-output*))))
+
+#+sbcl
 (defun copy-sbcl-install-tree (sbcl-home sbcl-runtime bundled-root)
   (let* ((bundled-root-path (uiop:ensure-directory-pathname bundled-root))
 	 (bundled-bin-path (merge-pathnames #P"bin/" bundled-root-path))
 	 (bundled-runtime (namestring (merge-pathnames #P"bin/sbcl" bundled-root-path)))
 	 (bundled-home-path (merge-pathnames #P"lib/sbcl/" bundled-root-path))
 	 (source-home-path (uiop:ensure-directory-pathname sbcl-home))
+	 #+(or macosx os-macosx)
 	 (source-runtime-dir-path
 	   (uiop:pathname-directory-pathname (truename sbcl-runtime))))
     (when (probe-file bundled-root-path)
       (uiop:delete-directory-tree bundled-root-path :validate t))
     (ensure-directories-exist (merge-pathnames #P"bin/.keep" bundled-root-path))
     (ensure-directories-exist (merge-pathnames #P"lib/sbcl/.keep" bundled-root-path))
-    ;; Copy the full runtime executable directory so @loader_path sibling dylibs
-    ;; used by the build-host SBCL land next to the bundled sbcl binary too.
-    (uiop:run-program
-     (list "cp" "-pRL"
-	   (format nil "~a." (namestring source-runtime-dir-path))
-	   (namestring bundled-bin-path))
-     :output *standard-output*
-     :error-output *error-output*)
+    ;; Copy the runtime binary itself everywhere. Some hosts install sbcl under
+    ;; broad bin directories (for example /usr/bin or /usr/local/bin) that may
+    ;; contain unrelated broken or cyclic symlinks, so avoid cloning the whole
+    ;; directory. On macOS, also copy the binary's direct @loader_path siblings.
+    (copy-sbcl-runtime-binary sbcl-runtime bundled-runtime)
+    #+(or macosx os-macosx)
+    (copy-sbcl-runtime-loader-dependencies sbcl-runtime source-runtime-dir-path bundled-bin-path)
     (chmod "a+rx" bundled-runtime)
     (uiop:run-program
      (list "cp" "-pR" (format nil "~a." (namestring source-home-path)) (namestring bundled-home-path))

@@ -44,15 +44,15 @@ The current release policy is:
 
 - pushes to the configured nightly branch publish or update a prerelease tagged `nightly-YYYYMMDD`
 - pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
-- for macOS, the GitHub Releases page publishes only notarized `.pkg` assets; the standalone tarballs, unpacked bundles, and custom SBCL runtime artifacts remain in GitHub Actions artifacts
+- the GitHub Releases page publishes the standalone platform tarballs for successful builds; macOS notarized `.pkg` assets are published in addition to those tarballs when signing and notarization are enabled
 
 This keeps both stable and nightly builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
 
 ## Which Artifact To Distribute
 
-If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact. That is also the only macOS asset type now published on the GitHub Releases page.
+If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact when one is available. The standalone platform tarballs are also published on the GitHub Releases page for successful builds.
 
-The standalone tarball, unpacked bundle, and Apple Silicon custom-SBCL tarball are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path and they now stay in GitHub Actions artifacts instead of being published on the release page. The current release flow vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
+The standalone tarball, unpacked bundle, and Apple Silicon custom-SBCL tarball are still useful build artifacts. The standalone tarball is published on the GitHub Releases page, while the unpacked bundle and Apple Silicon custom-SBCL tarball remain GitHub Actions artifacts. The current release flow vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
 
 If the goal is to isolate an Apple Silicon SBCL runtime problem before involving the rest of the PVS bundle, use `pvs-apple-silicon-custom-sbcl` first. After extracting it on another machine, run:
 
