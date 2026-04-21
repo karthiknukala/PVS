@@ -10,6 +10,7 @@ Options:
   --prefix DIR        Installation prefix for the built SBCL.
   --version VERSION   SBCL source version to build. Default: 2.6.3
   --host-sbcl PATH    Bootstrap SBCL executable to use. Default: first sbcl on PATH
+  --xc-host CMD       Full cross-compilation host command to pass to make.sh
   --github-env FILE   Append SBCL_HOME and PVS_SBCL_BIN exports to this env file
   --help              Show this help text
 EOF
@@ -18,6 +19,7 @@ EOF
 version="2.6.3"
 prefix=""
 host_sbcl=""
+xc_host=""
 github_env=""
 
 while [ "$#" -gt 0 ]; do
@@ -32,6 +34,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --host-sbcl)
       host_sbcl="${2:-}"
+      shift 2
+      ;;
+    --xc-host)
+      xc_host="${2:-}"
       shift 2
       ;;
     --github-env)
@@ -56,13 +62,17 @@ if [ -z "$prefix" ]; then
   exit 1
 fi
 
-if [ -z "$host_sbcl" ]; then
-  host_sbcl="$(command -v sbcl || true)"
-fi
+if [ -z "$xc_host" ]; then
+  if [ -z "$host_sbcl" ]; then
+    host_sbcl="$(command -v sbcl || true)"
+  fi
 
-if [ -z "$host_sbcl" ] || [ ! -x "$host_sbcl" ]; then
-  echo "Could not find an executable bootstrap SBCL. Install sbcl first or pass --host-sbcl." >&2
-  exit 1
+  if [ -z "$host_sbcl" ] || [ ! -x "$host_sbcl" ]; then
+    echo "Could not find an executable bootstrap SBCL. Install sbcl first, or pass --host-sbcl or --xc-host." >&2
+    exit 1
+  fi
+
+  xc_host="${host_sbcl} --disable-debugger --no-userinit --no-sysinit"
 fi
 
 archive="sbcl-${version}-source.tar.bz2"
@@ -81,7 +91,6 @@ echo "Extracting SBCL ${version} source"
 tar -xjf "$build_root/$archive" -C "$build_root"
 
 srcdir="$build_root/sbcl-${version}"
-xc_host="${host_sbcl} --disable-debugger --no-userinit --no-sysinit"
 
 echo "Building SBCL ${version} with relocatable static space"
 (

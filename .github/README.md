@@ -21,7 +21,12 @@ It has two jobs:
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
-Before building PVS itself, the Apple Silicon workflow now source-builds SBCL with `--with-immobile-space --with-relocatable-static-space` via [.github/scripts/install-relocatable-sbcl.sh](./scripts/install-relocatable-sbcl.sh). This avoids the low-address startup failure seen on some newer Apple Silicon Macs, for example `failed to allocate 1048576 bytes at 0x300100000`, which comes from SBCL's hardwired low-memory spaces rather than from a normal heap shortage.
+Before building PVS itself, the Apple Silicon workflow now stays entirely on SBCL:
+
+- it installs the official SBCL `2.4.0` arm64 Darwin binary via [.github/scripts/install-official-sbcl-binary.sh](./scripts/install-official-sbcl-binary.sh)
+- then it uses that bootstrap SBCL to source-build SBCL `2.6.3` with `--with-immobile-space --with-relocatable-static-space` via [.github/scripts/install-relocatable-sbcl.sh](./scripts/install-relocatable-sbcl.sh)
+
+This avoids the low-address startup failure seen on some newer Apple Silicon Macs, for example `failed to allocate 1048576 bytes at 0x300100000`, which comes from SBCL's hardwired low-memory spaces rather than from a normal heap shortage, while keeping the entire PVS build and runtime pipeline on SBCL.
 
 The packaged install base is `/PVS`. That means:
 
