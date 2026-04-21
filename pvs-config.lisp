@@ -104,8 +104,12 @@
   (format nil "~abin/~a/~a/" (build-target-root) platform subdir))
 
 (defun default-pvs-sbcl-dynamic-space-size ()
-  (or (uiop:getenv "PVS_SBCL_DYNAMIC_SPACE_SIZE")
-      "6000"))
+  (let ((value (string-trim '(#\Space #\Tab #\Newline #\Return)
+			    (or (uiop:getenv "PVS_SBCL_DYNAMIC_SPACE_SIZE")
+				"6000"))))
+    (if (string= value "")
+	"6000"
+	value)))
 
 #+sbcl
 (defun current-sbcl-home ()
