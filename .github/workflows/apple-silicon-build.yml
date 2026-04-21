@@ -37,6 +37,7 @@ jobs:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
       PVS_PKG_INSTALL_BASE: /PVS
+      PVS_SBCL_SOURCE_VERSION: 2.6.3
 
     steps:
       - name: Check out sources
@@ -63,13 +64,21 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
+      - name: Build relocatable SBCL host runtime
+        run: |
+          PVS_SBCL_PREFIX="$RUNNER_TEMP/pvs-sbcl"
+          bash ./.github/scripts/install-relocatable-sbcl.sh \
+            --version "$PVS_SBCL_SOURCE_VERSION" \
+            --prefix "$PVS_SBCL_PREFIX" \
+            --github-env "$GITHUB_ENV"
+
       - name: Configure source tree
         run: |
-          HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL_HOME="$SBCL_HOME" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
-          HOME="$CI_HOME" make smoke-sbcl-release
+          SBCL_HOME="$SBCL_HOME" HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
