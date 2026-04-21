@@ -86,8 +86,8 @@ srcdir="$build_root/sbcl-${version}"
 
 xc_host="${host_sbcl} --disable-debugger --no-userinit --no-sysinit"
 
-echo "Building relocatable SBCL ${version}"
-(
+echo "Building patched SBCL ${version}"
+if ! (
   cd "$srcdir"
   SBCL_HOME="$host_home" sh make.sh \
     --prefix="$prefix" \
@@ -98,7 +98,18 @@ echo "Building relocatable SBCL ${version}"
     --with-relocatable-static-space \
     --xc-host="$xc_host"
   sh install.sh
-)
+); then
+  echo "SBCL source build failed in $srcdir" >&2
+  if [ -f "$srcdir/local-target-features.lisp-expr" ]; then
+    echo "Generated local-target-features.lisp-expr:" >&2
+    sed -n '1,80p' "$srcdir/local-target-features.lisp-expr" >&2
+  fi
+  if [ -f "$srcdir/output/build-config" ]; then
+    echo "Generated output/build-config:" >&2
+    sed -n '1,80p' "$srcdir/output/build-config" >&2
+  fi
+  exit 1
+fi
 
 sbcl_home="$prefix/lib/sbcl"
 sbcl_bin="$prefix/bin/sbcl"

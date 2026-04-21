@@ -37,8 +37,6 @@ jobs:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
       PVS_PKG_INSTALL_BASE: /PVS
-      PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
-      PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
       PVS_SBCL_SOURCE_VERSION: 2.6.1
 
     steps:
@@ -57,6 +55,7 @@ jobs:
         run: |
           brew list make >/dev/null 2>&1 || brew install make
           brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          brew list sbcl >/dev/null 2>&1 || brew install sbcl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Prepare isolated build home
@@ -65,14 +64,23 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
-      - name: Install official SBCL bootstrap
+      - name: Capture Homebrew SBCL bootstrap
         run: |
-          PVS_BOOTSTRAP_PREFIX="$RUNNER_TEMP/pvs-sbcl-bootstrap"
-          bash ./.github/scripts/install-official-sbcl-binary.sh \
-            --version "$PVS_SBCL_BOOTSTRAP_VERSION" \
-            --platform "$PVS_SBCL_BOOTSTRAP_PLATFORM" \
-            --prefix "$PVS_BOOTSTRAP_PREFIX" \
-            --github-env "$GITHUB_ENV"
+          bootstrap_prefix="$(brew --prefix sbcl)"
+          bootstrap_bin="$bootstrap_prefix/bin/sbcl"
+          bootstrap_home="$bootstrap_prefix/lib/sbcl"
+          if [ ! -x "$bootstrap_bin" ]; then
+            echo "Expected Homebrew SBCL at $bootstrap_bin" >&2
+            exit 1
+          fi
+          if [ ! -d "$bootstrap_home" ]; then
+            echo "Expected Homebrew SBCL_HOME at $bootstrap_home" >&2
+            exit 1
+          fi
+          {
+            echo "PVS_BOOTSTRAP_SBCL_BIN=$bootstrap_bin"
+            echo "PVS_BOOTSTRAP_SBCL_HOME=$bootstrap_home"
+          } >> "$GITHUB_ENV"
 
       - name: Build patched SBCL runtime
         run: |
