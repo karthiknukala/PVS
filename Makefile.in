@@ -637,6 +637,7 @@ $(sbcl-rt) : $(QUICKLISP_SETUP) $(PVSPATH)pvs.asd $(image-deps)
 	@-$(MKDIR_P) $(PVS_BUILD_CACHE)
 	@-$(MKDIR_P) $(PVS_BUILD_LOGDIR)
 	XDG_CACHE_HOME="$(PVS_BUILD_CACHE)" PVS_LOG_DIR="$(PVS_BUILD_LOGDIR)" QUICKLISP_SETUP="$(QUICKLISP_SETUP)" TARGETPATH="$(TARGETPATH)" \
+	PVS_SBCL_DYNAMIC_SPACE_SIZE="$(SBCL_SPACE_SIZE)" \
 	$(SBCL) --dynamic-space-size $(SBCL_SPACE_SIZE) \
 	        --control-stack-size $(SBCL_STACK_SIZE) \
 		--eval "(require :asdf)" \
@@ -790,6 +791,9 @@ allegro-devel-distdir: $(ALLEGRO_DEVEL_DISTFILES)
 
 sbclisp-distdir: $(SBCLISP_DISTFILES)
 	$(create-distdir)
+	@if test -d "$(bindir)/runtime/sbcl"; then \
+	  cp -fpR "$(bindir)/runtime/sbcl" "$(DISTDIR)/bin/$(PLATFORM)/runtime/" || exit 1; \
+	fi
 	@case "$(PLATFORM)" in \
 	  *MacOSX*) \
 	    "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime" ;; \

@@ -37,7 +37,8 @@ jobs:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
       PVS_PKG_INSTALL_BASE: /PVS
-      PVS_SBCL_SOURCE_VERSION: 2.6.1
+      PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
+      PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
 
     steps:
       - name: Check out sources
@@ -55,7 +56,6 @@ jobs:
         run: |
           brew list make >/dev/null 2>&1 || brew install make
           brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
-          brew list ecl >/dev/null 2>&1 || brew install ecl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Prepare isolated build home
@@ -64,30 +64,18 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
-      - name: Capture Homebrew ECL bootstrap
+      - name: Install official SBCL bootstrap
         run: |
-          bootstrap_prefix="$(brew --prefix ecl)"
-          bootstrap_bin="$bootstrap_prefix/bin/ecl"
-          if [ ! -x "$bootstrap_bin" ]; then
-            echo "Expected Homebrew ECL at $bootstrap_bin" >&2
-            exit 1
-          fi
-          {
-            echo "PVS_BOOTSTRAP_XC_HOST=$bootstrap_bin --norc"
-          } >> "$GITHUB_ENV"
-
-      - name: Build patched SBCL runtime
-        run: |
-          PVS_BUILT_PREFIX="$RUNNER_TEMP/pvs-sbcl-built"
-          bash ./.github/scripts/install-patched-sbcl-source.sh \
-            --version "$PVS_SBCL_SOURCE_VERSION" \
-            --prefix "$PVS_BUILT_PREFIX" \
-            --xc-host "$PVS_BOOTSTRAP_XC_HOST" \
+          PVS_BOOTSTRAP_PREFIX="$RUNNER_TEMP/pvs-sbcl-bootstrap"
+          bash ./.github/scripts/install-official-sbcl-binary.sh \
+            --version "$PVS_SBCL_BOOTSTRAP_VERSION" \
+            --platform "$PVS_SBCL_BOOTSTRAP_PLATFORM" \
+            --prefix "$PVS_BOOTSTRAP_PREFIX" \
             --github-env "$GITHUB_ENV"
 
       - name: Configure source tree
         run: |
-          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_BOOTSTRAP_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |

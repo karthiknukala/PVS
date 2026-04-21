@@ -103,6 +103,36 @@
 (defun platform-build-dir (platform subdir)
   (format nil "~abin/~a/~a/" (build-target-root) platform subdir))
 
+(defun default-pvs-sbcl-dynamic-space-size ()
+  (or (uiop:getenv "PVS_SBCL_DYNAMIC_SPACE_SIZE")
+      "6000"))
+
+#+sbcl
+(defun current-sbcl-home ()
+  (namestring
+   (uiop:ensure-directory-pathname
+    (or (uiop:getenv "SBCL_HOME")
+	(and (boundp 'sb-ext:*core-pathname*)
+	     sb-ext:*core-pathname*
+	     (uiop:pathname-directory-pathname sb-ext:*core-pathname*))
+	(error "Cannot determine SBCL_HOME for runtime bundling")))))
+
+#+sbcl
+(defun copy-sbcl-install-tree (sbcl-home sbcl-runtime bundled-root)
+  (let* ((bundled-root-path (uiop:ensure-directory-pathname bundled-root))
+	 (bundled-home-path (merge-pathnames #P"lib/sbcl/" bundled-root-path))
+	 (source-home-path (uiop:ensure-directory-pathname sbcl-home)))
+    (when (probe-file bundled-root-path)
+      (uiop:delete-directory-tree bundled-root-path :validate t))
+    (ensure-directories-exist (merge-pathnames #P"bin/sbcl" bundled-root-path))
+    (ensure-directories-exist (merge-pathnames #P"lib/sbcl/.keep" bundled-root-path))
+    (alexandria:copy-file sbcl-runtime (namestring (merge-pathnames #P"bin/sbcl" bundled-root-path)))
+    (uiop:run-program
+     (list "cp" "-pR" (format nil "~a." (namestring source-home-path)) (namestring bundled-home-path))
+     :output *standard-output*
+     :error-output *error-output*)
+    (namestring bundled-root-path)))
+
 #+sbcl
 (defun scrub-runtime-image-state ()
   (ignore-errors (asdf:clear-system :pvs))
@@ -422,7 +452,10 @@ targets and copying them to the corresponding bin directory."
 	 (pvs-prog (format nil "~apvs-sbclisp" build-dir))
 	 (pvs-core (format nil "~apvs-sbclisp.core" build-dir))
 	 (pvs-runtime (format nil "~apvs-sbclisp-bin" build-dir))
-	 (sbcl-runtime (namestring sb-ext:*runtime-pathname*)))
+	 (bundled-sbcl-root (format nil "~asbcl/" build-dir))
+	 (sbcl-runtime (namestring sb-ext:*runtime-pathname*))
+	 (sbcl-home (current-sbcl-home))
+	 (dynamic-space-size (default-pvs-sbcl-dynamic-space-size)))
     (format t "~%Creating SBCL runtime launcher in ~a and core image in ~a"
 	    pvs-prog pvs-core)
     (ensure-directories-exist pvs-core)
@@ -447,14 +480,23 @@ targets and copying them to the corresponding bin directory."
 	;;(setf (sb-alien::shared-object-dont-save shobj) t)
 	))
     (scrub-runtime-image-state)
-    (alexandria:copy-file sbcl-runtime pvs-runtime)
+    (copy-sbcl-install-tree sbcl-home sbcl-runtime bundled-sbcl-root)
+    (with-open-file (stream pvs-runtime
+			    :direction :output
+			    :if-exists :supersede
+			    :if-does-not-exist :create)
+      (format stream "#!/bin/sh~%")
+      (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "export SBCL_HOME=\"$script_dir/sbcl/lib/sbcl\"~%")
+      (format stream "exec \"$script_dir/sbcl/bin/sbcl\" \"$@\"~%"))
     (with-open-file (stream pvs-prog
 			    :direction :output
 			    :if-exists :supersede
 			    :if-does-not-exist :create)
       (format stream "#!/bin/sh~%")
       (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
-      (format stream "exec \"$script_dir/pvs-sbclisp-bin\" --core \"$script_dir/pvs-sbclisp.core\" \"$@\"~%"))
+      (format stream "dynamic_space_size=${PVS_SBCL_DYNAMIC_SPACE_SIZE:-~a}~%" dynamic-space-size)
+      (format stream "exec \"$script_dir/pvs-sbclisp-bin\" --dynamic-space-size \"$dynamic_space_size\" --core \"$script_dir/pvs-sbclisp.core\" \"$@\"~%"))
     (chmod "a+rx" pvs-prog)
     (chmod "a+rx" pvs-runtime)
     (sb-ext:save-lisp-and-die

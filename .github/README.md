@@ -21,12 +21,12 @@ It has two jobs:
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
-Before building PVS itself, the Apple Silicon workflow now uses ECL only as the bootstrap host for building the shipped SBCL runtime:
+Before building PVS itself, the Apple Silicon workflow uses the official SBCL binary distribution directly:
 
-- it installs the current Homebrew `ecl` package as the bootstrap host
-- then it uses that bootstrap host to build a pinned SBCL `2.6.1` source release via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh)
+- it installs the official SBCL `2.4.0` `arm64-darwin` binary distribution via [.github/scripts/install-official-sbcl-binary.sh](./scripts/install-official-sbcl-binary.sh)
+- then it builds PVS against that installed SBCL and bundles that SBCL runtime tree into the release
 
-The source-build helper now follows the simpler `aarch64-darwin` bootstrap shape used by nixpkgs: it invokes `make.sh` with `--arch=arm64`, `--with-sb-thread`, and `--with-mark-region-gc`, using ECL as the `--xc-host`. This backs out the earlier relocatable-static-space experiments so we can first confirm that an ECL-bootstrapped Apple Silicon SBCL build is stable in CI.
+For the SBCL runtime, the packaged bundle now carries the generated `pvs-sbclisp` and `pvs-sbclisp-bin` launchers, the saved `pvs-sbclisp.core`, and a bundled `runtime/sbcl/` tree containing the SBCL executable plus its `lib/sbcl/` support files. The launchers set `SBCL_HOME` to that bundled tree at runtime instead of assuming only a copied bare executable is sufficient.
 
 The packaged install base is `/PVS`. That means:
 
@@ -62,10 +62,12 @@ The standalone tarball and unpacked bundle are still useful build artifacts, but
 For the SBCL runtime, the packaged bundle now uses:
 
 - `pvs-sbclisp`: a shell launcher
-- `pvs-sbclisp-bin`: the signed SBCL runtime executable
+- `pvs-sbclisp-bin`: a shell launcher that sets `SBCL_HOME` and invokes the bundled SBCL
 - `pvs-sbclisp.core`: the SBCL core image data file
+- `runtime/sbcl/`: the bundled SBCL executable plus its `lib/sbcl/` support tree
 
 This avoids Apple's strict validation failure for a monolithic self-contained SBCL executable with an appended core payload.
+The `pvs-sbclisp` launcher also passes an explicit `--dynamic-space-size` to SBCL, defaulting to the build-time `SBCL_SPACE_SIZE` and overridable with `PVS_SBCL_DYNAMIC_SPACE_SIZE`, so the installed runtime does not depend on whatever default heap size the bootstrap-built SBCL binary happens to carry.
 
 ## Required Secrets
 
