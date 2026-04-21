@@ -84,32 +84,16 @@ tar -xjf "$build_root/$archive" -C "$build_root"
 
 srcdir="$build_root/sbcl-${version}"
 
-echo "Patching SBCL Darwin fixed-address allocation"
-python3 - <<'PY' "$srcdir/src/runtime/bsd-os.c"
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-old = """#ifndef LISP_FEATURE_DARWIN // Do not use MAP_FIXED, because the OS is sane.\n    /* The *BSD family of OSes seem to ignore 'addr' when it is outside\n"""
-new = """    /* The *BSD family of OSes seem to ignore 'addr' when it is outside\n"""
-if old not in text:
-    raise SystemExit("Could not find Darwin MAP_FIXED guard in bsd-os.c")
-text = text.replace(old, new, 1)
-old = """    // ALLOCATE_LOW seems never to get what we want\n    if (!(attributes & MOVABLE) || (attributes & ALLOCATE_LOW)) flags |= MAP_FIXED;\n#endif\n\n#ifdef MAP_EXCL // not defined in OpenBSD, NetBSD, DragonFlyBSD\n"""
-new = """    // ALLOCATE_LOW seems never to get what we want\n    if (!(attributes & MOVABLE) || (attributes & ALLOCATE_LOW)) flags |= MAP_FIXED;\n\n#ifdef MAP_EXCL // not defined in OpenBSD, NetBSD, DragonFlyBSD\n"""
-if old not in text:
-    raise SystemExit("Could not find Darwin MAP_FIXED closing guard in bsd-os.c")
-text = text.replace(old, new, 1)
-path.write_text(text)
-PY
-
 xc_host="${host_sbcl} --disable-debugger --no-userinit --no-sysinit"
 
-echo "Building patched SBCL ${version}"
+echo "Building relocatable SBCL ${version}"
 (
   cd "$srcdir"
-  SBCL_HOME="$host_home" sh make.sh --prefix="$prefix" --xc-host="$xc_host"
+  SBCL_HOME="$host_home" sh make.sh \
+    --prefix="$prefix" \
+    --with-immobile-space \
+    --with-relocatable-static-space \
+    --xc-host="$xc_host"
   sh install.sh
 )
 
@@ -122,7 +106,11 @@ if [ ! -x "$sbcl_bin" ]; then
 fi
 
 SBCL_HOME="$sbcl_home" "$sbcl_bin" --noinform --non-interactive \
-  --eval "(unless (string= (lisp-implementation-version) \"$version\") (error \"Unexpected SBCL version ~A\" (lisp-implementation-version)))"
+  --eval "(unless (string= (lisp-implementation-version) \"$version\") (error \"Unexpected SBCL version ~A\" (lisp-implementation-version)))" \
+  --eval '(unless (member :immobile-space *features*)
+             (error "SBCL was built without :immobile-space"))' \
+  --eval '(unless (member :relocatable-static-space *features*)
+             (error "SBCL was built without :relocatable-static-space"))'
 
 mkdir -p "$prefix/bin"
 wrapper="$prefix/bin/pvs-built-sbcl"
@@ -142,7 +130,7 @@ if [ -n "$github_env" ]; then
   } >> "$github_env"
 fi
 
-echo "Installed patched SBCL at $prefix"
+echo "Installed relocatable SBCL at $prefix"
 echo "PVS_BUILT_SBCL_BIN=$sbcl_bin"
 echo "PVS_BUILT_SBCL_HOME=$sbcl_home"
 echo "PVS_BUILT_SBCL_WRAPPER=$wrapper"
