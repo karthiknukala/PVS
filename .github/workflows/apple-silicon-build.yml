@@ -55,7 +55,7 @@ jobs:
         run: |
           brew list make >/dev/null 2>&1 || brew install make
           brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
-          brew list sbcl >/dev/null 2>&1 || brew install sbcl
+          brew list ecl >/dev/null 2>&1 || brew install ecl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Prepare isolated build home
@@ -64,22 +64,16 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
-      - name: Capture Homebrew SBCL bootstrap
+      - name: Capture Homebrew ECL bootstrap
         run: |
-          bootstrap_prefix="$(brew --prefix sbcl)"
-          bootstrap_bin="$bootstrap_prefix/bin/sbcl"
-          bootstrap_home="$bootstrap_prefix/lib/sbcl"
+          bootstrap_prefix="$(brew --prefix ecl)"
+          bootstrap_bin="$bootstrap_prefix/bin/ecl"
           if [ ! -x "$bootstrap_bin" ]; then
-            echo "Expected Homebrew SBCL at $bootstrap_bin" >&2
-            exit 1
-          fi
-          if [ ! -d "$bootstrap_home" ]; then
-            echo "Expected Homebrew SBCL_HOME at $bootstrap_home" >&2
+            echo "Expected Homebrew ECL at $bootstrap_bin" >&2
             exit 1
           fi
           {
-            echo "PVS_BOOTSTRAP_SBCL_BIN=$bootstrap_bin"
-            echo "PVS_BOOTSTRAP_SBCL_HOME=$bootstrap_home"
+            echo "PVS_BOOTSTRAP_XC_HOST=$bootstrap_bin --norc"
           } >> "$GITHUB_ENV"
 
       - name: Build patched SBCL runtime
@@ -88,8 +82,7 @@ jobs:
           bash ./.github/scripts/install-patched-sbcl-source.sh \
             --version "$PVS_SBCL_SOURCE_VERSION" \
             --prefix "$PVS_BUILT_PREFIX" \
-            --host-sbcl "$PVS_BOOTSTRAP_SBCL_BIN" \
-            --host-home "$PVS_BOOTSTRAP_SBCL_HOME" \
+            --xc-host "$PVS_BOOTSTRAP_XC_HOST" \
             --github-env "$GITHUB_ENV"
 
       - name: Configure source tree

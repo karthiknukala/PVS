@@ -21,12 +21,12 @@ It has two jobs:
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
-Before building PVS itself, the Apple Silicon workflow now stays entirely on SBCL:
+Before building PVS itself, the Apple Silicon workflow now uses ECL only as the bootstrap host for building the shipped SBCL runtime:
 
-- it installs the current Homebrew `sbcl` package as the bootstrap host
-- then it uses that bootstrap SBCL to build a pinned SBCL `2.6.1` source release via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh)
+- it installs the current Homebrew `ecl` package as the bootstrap host
+- then it uses that bootstrap host to build a pinned SBCL `2.6.1` source release via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh)
 
-The source-build helper now uses the pure-SBCL Darwin arm64 feature combination that SBCL `2.6.1` itself accepts for relocatable static space: `--arch=arm64`, `--with-sb-thread`, `--with-immobile-space`, and `--with-relocatable-static-space`. We intentionally do not enable `--with-mark-region-gc` here, because in SBCL `2.6.1` that GC choice removes `:immobile-space` during bootstrap, which directly conflicts with `:relocatable-static-space` on arm64. This still targets the startup failure pattern `failed to allocate 1048576 bytes at 0x300100000`, while keeping the entire build and shipped runtime on SBCL.
+The source-build helper now follows the simpler `aarch64-darwin` bootstrap shape used by nixpkgs: it invokes `make.sh` with `--arch=arm64`, `--with-sb-thread`, and `--with-mark-region-gc`, using ECL as the `--xc-host`. This backs out the earlier relocatable-static-space experiments so we can first confirm that an ECL-bootstrapped Apple Silicon SBCL build is stable in CI.
 
 The packaged install base is `/PVS`. That means:
 

@@ -9,8 +9,8 @@ Usage: install-patched-sbcl-source.sh --prefix DIR [options]
 Options:
   --prefix DIR        Installation prefix for the built SBCL
   --version VERSION   SBCL source version to build. Default: 2.6.1
-  --host-sbcl PATH    Bootstrap SBCL executable to use
-  --host-home DIR     SBCL_HOME for the bootstrap SBCL
+  --xc-host CMD       Bootstrap Lisp command to use for --xc-host
+  --host-home DIR     Optional SBCL_HOME for the bootstrap host
   --github-env FILE   Append built SBCL exports to this env file
   --help              Show this help text
 EOF
@@ -18,7 +18,7 @@ EOF
 
 prefix=""
 version="2.6.1"
-host_sbcl=""
+xc_host=""
 host_home=""
 github_env=""
 
@@ -32,8 +32,8 @@ while [ "$#" -gt 0 ]; do
       version="${2:-}"
       shift 2
       ;;
-    --host-sbcl)
-      host_sbcl="${2:-}"
+    --xc-host)
+      xc_host="${2:-}"
       shift 2
       ;;
     --host-home)
@@ -56,14 +56,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -z "$prefix" ] || [ -z "$host_sbcl" ]; then
-  echo "--prefix and --host-sbcl are required" >&2
+if [ -z "$prefix" ] || [ -z "$xc_host" ]; then
+  echo "--prefix and --xc-host are required" >&2
   usage >&2
-  exit 1
-fi
-
-if [ ! -x "$host_sbcl" ]; then
-  echo "Bootstrap SBCL is not executable: $host_sbcl" >&2
   exit 1
 fi
 
@@ -84,18 +79,24 @@ tar -xjf "$build_root/$archive" -C "$build_root"
 
 srcdir="$build_root/sbcl-${version}"
 
-xc_host="${host_sbcl} --disable-debugger --no-userinit --no-sysinit"
-
 echo "Building patched SBCL ${version}"
 if ! (
   cd "$srcdir"
-  SBCL_HOME="$host_home" sh make.sh \
-    --prefix="$prefix" \
-    --arch=arm64 \
-    --with-sb-thread \
-    --with-immobile-space \
-    --with-relocatable-static-space \
-    --xc-host="$xc_host"
+  if [ -n "$host_home" ]; then
+    SBCL_HOME="$host_home" sh make.sh \
+      --prefix="$prefix" \
+      --arch=arm64 \
+      --with-sb-thread \
+      --with-mark-region-gc \
+      --xc-host="$xc_host"
+  else
+    sh make.sh \
+      --prefix="$prefix" \
+      --arch=arm64 \
+      --with-sb-thread \
+      --with-mark-region-gc \
+      --xc-host="$xc_host"
+  fi
   sh install.sh
 ); then
   echo "SBCL source build failed in $srcdir" >&2
@@ -119,11 +120,7 @@ if [ ! -x "$sbcl_bin" ]; then
 fi
 
 SBCL_HOME="$sbcl_home" "$sbcl_bin" --noinform --non-interactive \
-  --eval "(unless (string= (lisp-implementation-version) \"$version\") (error \"Unexpected SBCL version ~A\" (lisp-implementation-version)))" \
-  --eval '(unless (member :immobile-space *features*)
-             (error "SBCL was built without :immobile-space"))' \
-  --eval '(unless (member :relocatable-static-space *features*)
-             (error "SBCL was built without :relocatable-static-space"))'
+  --eval "(unless (string= (lisp-implementation-version) \"$version\") (error \"Unexpected SBCL version ~A\" (lisp-implementation-version)))"
 
 mkdir -p "$prefix/bin"
 wrapper="$prefix/bin/pvs-built-sbcl"
