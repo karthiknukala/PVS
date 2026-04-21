@@ -77,6 +77,7 @@ For the SBCL runtime, the packaged bundle now uses:
 
 This avoids Apple's strict validation failure for a monolithic self-contained SBCL executable with an appended core payload.
 The `pvs-sbclisp` launcher also passes an explicit `--dynamic-space-size` to SBCL, defaulting to the build-time `SBCL_SPACE_SIZE` and overridable with `PVS_SBCL_DYNAMIC_SPACE_SIZE`, so the installed runtime does not depend on whatever default heap size the bootstrap-built SBCL binary happens to carry.
+When the notarized macOS pkg path signs the bundled `runtime/sbcl/bin/sbcl` executable with Hardened Runtime, it also applies the `com.apple.security.cs.allow-jit` entitlement from [.github/macos-sbcl-entitlements.plist](./macos-sbcl-entitlements.plist). Without that entitlement, the signed pkg-installed SBCL runtime can behave differently from the unsigned/debug bundle on Apple Silicon Macs.
 
 ## Required Secrets
 

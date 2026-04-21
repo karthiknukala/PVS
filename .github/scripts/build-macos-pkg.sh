@@ -39,27 +39,30 @@ sign_macho_payload() {
   local root=$1
   local identity=$2
   local keychain_path=${3:-}
+  local sbcl_entitlements=${4:-}
   local signed_any=false
 
   while IFS= read -r -d '' path; do
-    if file -b "$path" | grep -q 'Mach-O'; then
+    local file_desc
+    file_desc=$(file -b "$path")
+    if grep -q 'Mach-O' <<<"$file_desc"; then
       echo "Signing Mach-O payload $path"
+      local -a codesign_args=(
+        --force
+        --options runtime
+        --sign "$identity"
+        --timestamp
+      )
       if [[ -n $keychain_path ]]; then
-        codesign \
-          --force \
-          --keychain "$keychain_path" \
-          --options runtime \
-          --sign "$identity" \
-          --timestamp \
-          "$path"
-      else
-        codesign \
-          --force \
-          --options runtime \
-          --sign "$identity" \
-          --timestamp \
-          "$path"
+        codesign_args+=(--keychain "$keychain_path")
       fi
+      if [[ -n $sbcl_entitlements ]] \
+        && [[ $path == */runtime/sbcl/bin/sbcl ]] \
+        && grep -q 'executable' <<<"$file_desc"; then
+        echo "Applying SBCL JIT entitlement to $path"
+        codesign_args+=(--entitlements "$sbcl_entitlements")
+      fi
+      codesign "${codesign_args[@]}" "$path"
       signed_any=true
     fi
   done < <(find "$root" -type f -print0)
@@ -143,6 +146,7 @@ notary_key_file=${MACOS_NOTARY_KEY_FILE:-}
 notary_key_id=${MACOS_NOTARY_KEY_ID:-}
 notary_issuer_id=${MACOS_NOTARY_ISSUER_ID:-}
 signing_keychain=${MACOS_SIGNING_KEYCHAIN:-}
+application_sign_entitlements=${MACOS_APPLICATION_SIGN_ENTITLEMENTS_FILE:-}
 notarization_enabled=false
 
 if [[ -n $notary_key_file || -n $notary_key_id || -n $notary_issuer_id ]]; then
@@ -169,7 +173,14 @@ bundle_macos_runtime_deps "$stage_root$install_base/$(basename "$bundle_dir")"
 
 if [[ -n ${MACOS_APPLICATION_SIGN_IDENTITY:-} ]]; then
   echo "Signing staged Mach-O payload with $MACOS_APPLICATION_SIGN_IDENTITY"
-  sign_macho_payload "$stage_root$install_base/$(basename "$bundle_dir")" "$MACOS_APPLICATION_SIGN_IDENTITY" "$signing_keychain"
+  if [[ -n $application_sign_entitlements ]]; then
+    [[ -f $application_sign_entitlements ]] || fail "MACOS_APPLICATION_SIGN_ENTITLEMENTS_FILE does not exist: $application_sign_entitlements"
+  fi
+  sign_macho_payload \
+    "$stage_root$install_base/$(basename "$bundle_dir")" \
+    "$MACOS_APPLICATION_SIGN_IDENTITY" \
+    "$signing_keychain" \
+    "$application_sign_entitlements"
 fi
 
 pkg_stem=${pkg_name%.pkg}

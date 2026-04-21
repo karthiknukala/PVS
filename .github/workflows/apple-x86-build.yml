@@ -276,6 +276,7 @@ jobs:
         id: pkg
         env:
           MACOS_APPLICATION_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_NAME }}
+          MACOS_APPLICATION_SIGN_ENTITLEMENTS_FILE: ${{ github.workspace }}/.github/macos-sbcl-entitlements.plist
           MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
           MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
           MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
