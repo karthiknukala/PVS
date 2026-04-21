@@ -139,31 +139,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish rolling release tarball
-        if: ${{ steps.release_policy.outputs.publish == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          release_args=()
-          if [ '${{ steps.release_policy.outputs.prerelease }}' = 'true' ]; then
-            release_args+=(--prerelease)
-          fi
-          if [ '${{ steps.release_policy.outputs.move_tag }}' = 'true' ]; then
-            release_args+=(--move-tag)
-          fi
-          bash ./.github/scripts/publish-github-release.sh \
-            --tag '${{ steps.release_policy.outputs.release_tag }}' \
-            --title '${{ steps.release_policy.outputs.release_title }}' \
-            --asset '${{ steps.artifacts.outputs.tgz }}' \
-            --asset-name pvs-macos-x86_64.tgz \
-            --keep-asset-name pvs-macos-arm64.tgz \
-            --keep-asset-name pvs-macos-arm64.pkg \
-            --keep-asset-name pvs-macos-x86_64.tgz \
-            --keep-asset-name pvs-macos-x86_64.pkg \
-            --keep-asset-name pvs-linux-aarch64.tgz \
-            --keep-asset-name pvs-linux-x86_64.tgz \
-            "${release_args[@]}"
-
       - name: Summarize outputs
         run: |
           {
@@ -173,7 +148,7 @@ jobs:
             echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
             if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
-              echo "- GitHub release publication: \`${{ steps.release_policy.outputs.release_tag }}\` (\`${{ steps.release_policy.outputs.channel }}\`)"
+              echo "- GitHub release publication: macOS assets are published only by the notarized \`package-macos-x86\` job"
             else
               echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
             fi
@@ -349,9 +324,7 @@ jobs:
             --title '${{ needs['build-macos-x86'].outputs.release_title }}' \
             --asset '${{ steps.pkg.outputs.pkg_path }}' \
             --asset-name pvs-macos-x86_64.pkg \
-            --keep-asset-name pvs-macos-arm64.tgz \
             --keep-asset-name pvs-macos-arm64.pkg \
-            --keep-asset-name pvs-macos-x86_64.tgz \
             --keep-asset-name pvs-macos-x86_64.pkg \
             --keep-asset-name pvs-linux-aarch64.tgz \
             --keep-asset-name pvs-linux-x86_64.tgz \
@@ -363,9 +336,11 @@ jobs:
             echo "### Apple x86 package"
             echo
             echo "- Runner: \`macos-15-intel\`"
-            echo "- Source tarball artifact: \`pvs-apple-x86-tgz\`"
+            echo "- Source tarball artifact: \`pvs-apple-x86-tgz\` (Actions artifact only)"
             echo "- Signed installer package artifact: \`pvs-apple-x86-pkg\`"
             echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
+            echo "- GitHub release asset: \`pvs-macos-x86_64.pkg\`"
+            echo "- The macOS Releases page intentionally publishes only notarized \`.pkg\` assets; raw bundles stay in Actions artifacts."
             if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
               echo "- Package notarization: completed and stapled"
             else
