@@ -37,8 +37,6 @@ jobs:
       PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
       PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
       PVS_PKG_INSTALL_BASE: /PVS
-      PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
-      PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
 
     steps:
       - name: Check out sources
@@ -56,7 +54,12 @@ jobs:
         run: |
           brew list make >/dev/null 2>&1 || brew install make
           brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          brew list sbcl >/dev/null 2>&1 || brew install sbcl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+          {
+            echo "PVS_SBCL_BIN=$(brew --prefix sbcl)/bin/sbcl"
+            echo "PVS_SBCL_HOME=$(brew --prefix sbcl)/lib/sbcl"
+          } >> "$GITHUB_ENV"
 
       - name: Prepare isolated build home
         run: |
@@ -64,22 +67,13 @@ jobs:
           mkdir -p "$CI_HOME"
           echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
 
-      - name: Install official SBCL bootstrap
-        run: |
-          PVS_BOOTSTRAP_PREFIX="$RUNNER_TEMP/pvs-sbcl-bootstrap"
-          bash ./.github/scripts/install-official-sbcl-binary.sh \
-            --version "$PVS_SBCL_BOOTSTRAP_VERSION" \
-            --platform "$PVS_SBCL_BOOTSTRAP_PLATFORM" \
-            --prefix "$PVS_BOOTSTRAP_PREFIX" \
-            --github-env "$GITHUB_ENV"
-
       - name: Configure source tree
         run: |
-          SBCL="$PVS_BOOTSTRAP_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_SBCL_BIN" SBCL_HOME="$PVS_SBCL_HOME" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
-          HOME="$CI_HOME" make smoke-sbcl-release
+          SBCL="$PVS_SBCL_BIN" SBCL_HOME="$PVS_SBCL_HOME" HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
