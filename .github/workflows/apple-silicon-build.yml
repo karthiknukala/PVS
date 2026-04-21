@@ -58,7 +58,6 @@ jobs:
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
           {
             echo "PVS_SBCL_BIN=$(brew --prefix sbcl)/bin/sbcl"
-            echo "PVS_SBCL_HOME=$(brew --prefix sbcl)/lib/sbcl"
           } >> "$GITHUB_ENV"
 
       - name: Prepare isolated build home
@@ -69,11 +68,11 @@ jobs:
 
       - name: Configure source tree
         run: |
-          SBCL="$PVS_SBCL_BIN" SBCL_HOME="$PVS_SBCL_HOME" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_SBCL_BIN" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
-          SBCL="$PVS_SBCL_BIN" SBCL_HOME="$PVS_SBCL_HOME" HOME="$CI_HOME" make smoke-sbcl-release
+          SBCL="$PVS_SBCL_BIN" HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
