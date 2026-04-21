@@ -52,6 +52,24 @@ should_bundle_dependency() {
   esac
 }
 
+check_loader_path_dependency() {
+  local owner=$1
+  local dep=$2
+  local resolved
+
+  case $dep in
+    @loader_path/*)
+      resolved="$(dirname "$owner")/${dep#@loader_path/}"
+      if [[ ! -e $resolved ]]; then
+        echo "Missing @loader_path dependency: $owner -> $dep (expected $resolved)" >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  return 0
+}
+
 audit_runtime_dir() {
   local runtime_dir=$1
   local path dep
@@ -60,6 +78,9 @@ audit_runtime_dir() {
   while IFS= read -r -d '' path; do
     is_macho "$path" || continue
     while IFS= read -r dep; do
+      if ! check_loader_path_dependency "$path" "$dep"; then
+        clean=false
+      fi
       should_bundle_dependency "$dep" || continue
       echo "External dependency: $path -> $dep" >&2
       clean=false

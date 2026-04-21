@@ -124,14 +124,24 @@
 #+sbcl
 (defun copy-sbcl-install-tree (sbcl-home sbcl-runtime bundled-root)
   (let* ((bundled-root-path (uiop:ensure-directory-pathname bundled-root))
+	 (bundled-bin-path (merge-pathnames #P"bin/" bundled-root-path))
 	 (bundled-runtime (namestring (merge-pathnames #P"bin/sbcl" bundled-root-path)))
 	 (bundled-home-path (merge-pathnames #P"lib/sbcl/" bundled-root-path))
-	 (source-home-path (uiop:ensure-directory-pathname sbcl-home)))
+	 (source-home-path (uiop:ensure-directory-pathname sbcl-home))
+	 (source-runtime-dir-path
+	   (uiop:pathname-directory-pathname (truename sbcl-runtime))))
     (when (probe-file bundled-root-path)
       (uiop:delete-directory-tree bundled-root-path :validate t))
-    (ensure-directories-exist (merge-pathnames #P"bin/sbcl" bundled-root-path))
+    (ensure-directories-exist (merge-pathnames #P"bin/.keep" bundled-root-path))
     (ensure-directories-exist (merge-pathnames #P"lib/sbcl/.keep" bundled-root-path))
-    (alexandria:copy-file sbcl-runtime bundled-runtime)
+    ;; Copy the full runtime executable directory so @loader_path sibling dylibs
+    ;; used by the build-host SBCL land next to the bundled sbcl binary too.
+    (uiop:run-program
+     (list "cp" "-pRL"
+	   (format nil "~a." (namestring source-runtime-dir-path))
+	   (namestring bundled-bin-path))
+     :output *standard-output*
+     :error-output *error-output*)
     (chmod "a+rx" bundled-runtime)
     (uiop:run-program
      (list "cp" "-pR" (format nil "~a." (namestring source-home-path)) (namestring bundled-home-path))
