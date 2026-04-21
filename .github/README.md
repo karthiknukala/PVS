@@ -24,9 +24,9 @@ The split is intentional: the signed and notarized package path should not block
 Before building PVS itself, the Apple Silicon workflow now stays entirely on SBCL:
 
 - it installs the official SBCL `2.4.0` arm64 Darwin binary via [.github/scripts/install-official-sbcl-binary.sh](./scripts/install-official-sbcl-binary.sh)
-- then it uses that official SBCL binary directly as the build host and shipped runtime for the Apple Silicon bundle
+- then it uses that bootstrap SBCL to build a pinned SBCL `2.6.3` source release via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh)
 
-This avoids the unstable source-bootstrap path we hit in CI, keeps the entire PVS build and runtime pipeline on SBCL, and gives the macOS arm64 release a single pinned upstream SBCL runtime instead of whichever Homebrew build happens to be current on the runner.
+The source-build helper applies a small Darwin runtime patch in `src/runtime/bsd-os.c` so fixed-address low-memory reservations use `MAP_FIXED` on macOS as well. That targets the startup failure pattern `failed to allocate 1048576 bytes at 0x300100000`, which is coming from SBCL's hardwired startup spaces on some newer Apple Silicon machines, while keeping the entire build and shipped runtime on SBCL.
 
 The packaged install base is `/PVS`. That means:
 

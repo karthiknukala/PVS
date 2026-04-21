@@ -39,6 +39,7 @@ jobs:
       PVS_PKG_INSTALL_BASE: /PVS
       PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
       PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
+      PVS_SBCL_SOURCE_VERSION: 2.6.3
 
     steps:
       - name: Check out sources
@@ -73,9 +74,19 @@ jobs:
             --prefix "$PVS_BOOTSTRAP_PREFIX" \
             --github-env "$GITHUB_ENV"
 
+      - name: Build patched SBCL runtime
+        run: |
+          PVS_BUILT_PREFIX="$RUNNER_TEMP/pvs-sbcl-built"
+          bash ./.github/scripts/install-patched-sbcl-source.sh \
+            --version "$PVS_SBCL_SOURCE_VERSION" \
+            --prefix "$PVS_BUILT_PREFIX" \
+            --host-sbcl "$PVS_BOOTSTRAP_SBCL_BIN" \
+            --host-home "$PVS_BOOTSTRAP_SBCL_HOME" \
+            --github-env "$GITHUB_ENV"
+
       - name: Configure source tree
         run: |
-          SBCL="$PVS_BOOTSTRAP_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
