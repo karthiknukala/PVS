@@ -88,6 +88,7 @@ echo "Building SBCL ${version} with relocatable static space"
   cd "$srcdir"
   sh make.sh \
     --prefix="$prefix" \
+    --with-immobile-space \
     --with-relocatable-static-space \
     --xc-host="$xc_host"
   sh install.sh
@@ -108,6 +109,8 @@ sbcl_home="$(dirname "$run_sbcl")"
 
 echo "Verifying relocatable static space support"
 "$sbcl_bin" --noinform --non-interactive \
+  --eval '(unless (member :immobile-space *features*)
+             (error "SBCL was built without :immobile-space"))' \
   --eval '(unless (member :relocatable-static-space *features*)
              (error "SBCL was built without :relocatable-static-space"))'
 
