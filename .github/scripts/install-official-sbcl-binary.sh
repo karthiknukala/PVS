@@ -78,7 +78,10 @@ if [ -z "$distdir" ] || [ ! -x "$distdir/install.sh" ]; then
 fi
 
 echo "Installing SBCL binary distribution to $prefix"
-INSTALL_ROOT="$prefix" sh "$distdir/install.sh"
+(
+  cd "$distdir"
+  INSTALL_ROOT="$prefix" sh ./install.sh
+)
 
 sbcl_home="$prefix/lib/sbcl"
 sbcl_bin="$prefix/bin/sbcl"
