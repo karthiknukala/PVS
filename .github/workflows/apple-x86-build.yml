@@ -16,11 +16,19 @@ jobs:
     name: Build macOS x86_64 bundle
     runs-on: macos-15-intel
     timeout-minutes: 120
+    permissions:
+      contents: write
     outputs:
       bundle_dir: ${{ steps.artifacts.outputs.bundle_dir }}
       pkg_enabled: ${{ steps.pkg_mode.outputs.enabled }}
       pkg_name: ${{ steps.artifacts.outputs.pkg_name }}
       pkg_version: ${{ steps.artifacts.outputs.pkg_version }}
+      release_channel: ${{ steps.release_policy.outputs.channel }}
+      release_move_tag: ${{ steps.release_policy.outputs.move_tag }}
+      release_prerelease: ${{ steps.release_policy.outputs.prerelease }}
+      release_publish: ${{ steps.release_policy.outputs.publish }}
+      release_tag: ${{ steps.release_policy.outputs.release_tag }}
+      release_title: ${{ steps.release_policy.outputs.release_title }}
       tgz: ${{ steps.artifacts.outputs.tgz }}
     defaults:
       run:
@@ -33,6 +41,11 @@ jobs:
     steps:
       - name: Check out sources
         uses: actions/checkout@v4
+
+      - name: Resolve release policy
+        id: release_policy
+        run: |
+          bash ./.github/scripts/resolve-release-policy.sh
 
       - name: Install build dependencies
         env:
@@ -126,6 +139,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Publish rolling release tarball
+        if: ${{ steps.release_policy.outputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_args=()
+          if [ '${{ steps.release_policy.outputs.prerelease }}' = 'true' ]; then
+            release_args+=(--prerelease)
+          fi
+          if [ '${{ steps.release_policy.outputs.move_tag }}' = 'true' ]; then
+            release_args+=(--move-tag)
+          fi
+          bash ./.github/scripts/publish-github-release.sh \
+            --tag '${{ steps.release_policy.outputs.release_tag }}' \
+            --title '${{ steps.release_policy.outputs.release_title }}' \
+            --asset '${{ steps.artifacts.outputs.tgz }}' \
+            --asset-name pvs-macos-x86_64.tgz \
+            "${release_args[@]}"
+
       - name: Summarize outputs
         run: |
           {
@@ -134,6 +166,11 @@ jobs:
             echo "- Runner: \`macos-15-intel\`"
             echo "- Tarball artifact: \`pvs-apple-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-apple-x86-bundle\`"
+            if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
+              echo "- GitHub release publication: \`${{ steps.release_policy.outputs.release_tag }}\` (\`${{ steps.release_policy.outputs.channel }}\`)"
+            else
+              echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
+            fi
             if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
               echo "- Signed installer package artifact: produced by the \`package-macos-x86\` job"
               echo "- Package notarization: runs automatically because all signing and notary credentials were configured"
@@ -149,6 +186,8 @@ jobs:
     needs: build-macos-x86
     if: ${{ needs['build-macos-x86'].outputs.pkg_enabled == 'true' }}
     timeout-minutes: 120
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -286,6 +325,25 @@ jobs:
           path: ${{ steps.pkg.outputs.pkg_path }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish rolling release package
+        if: ${{ needs['build-macos-x86'].outputs.release_publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_args=()
+          if [ '${{ needs['build-macos-x86'].outputs.release_prerelease }}' = 'true' ]; then
+            release_args+=(--prerelease)
+          fi
+          if [ '${{ needs['build-macos-x86'].outputs.release_move_tag }}' = 'true' ]; then
+            release_args+=(--move-tag)
+          fi
+          bash ./.github/scripts/publish-github-release.sh \
+            --tag '${{ needs['build-macos-x86'].outputs.release_tag }}' \
+            --title '${{ needs['build-macos-x86'].outputs.release_title }}' \
+            --asset '${{ steps.pkg.outputs.pkg_path }}' \
+            --asset-name pvs-macos-x86_64.pkg \
+            "${release_args[@]}"
 
       - name: Summarize outputs
         run: |

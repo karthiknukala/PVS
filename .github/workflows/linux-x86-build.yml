@@ -1,7 +1,7 @@
 name: Linux x86 Build
 
 on:
-  # Temporarily manual-only while this workflow is being fixed.
+  push:
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,8 @@ jobs:
     name: Build Linux x86_64 bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -25,6 +27,11 @@ jobs:
     steps:
       - name: Check out sources
         uses: actions/checkout@v4
+
+      - name: Resolve release policy
+        id: release_policy
+        run: |
+          bash ./.github/scripts/resolve-release-policy.sh
 
       - name: Install build dependencies
         run: |
@@ -81,6 +88,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Publish rolling release tarball
+        if: ${{ steps.release_policy.outputs.publish == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_args=()
+          if [ '${{ steps.release_policy.outputs.prerelease }}' = 'true' ]; then
+            release_args+=(--prerelease)
+          fi
+          if [ '${{ steps.release_policy.outputs.move_tag }}' = 'true' ]; then
+            release_args+=(--move-tag)
+          fi
+          bash ./.github/scripts/publish-github-release.sh \
+            --tag '${{ steps.release_policy.outputs.release_tag }}' \
+            --title '${{ steps.release_policy.outputs.release_title }}' \
+            --asset '${{ steps.artifacts.outputs.tgz }}' \
+            --asset-name pvs-linux-x86_64.tgz \
+            "${release_args[@]}"
+
       - name: Summarize outputs
         run: |
           {
@@ -89,5 +115,10 @@ jobs:
             echo "- Runner: \`ubuntu-24.04\`"
             echo "- Tarball artifact: \`pvs-linux-x86-tgz\`"
             echo "- Ready-to-unzip bundle artifact: \`pvs-linux-x86-bundle\`"
+            if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
+              echo "- GitHub release publication: \`${{ steps.release_policy.outputs.release_tag }}\` (\`${{ steps.release_policy.outputs.channel }}\`)"
+            else
+              echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
+            fi
             echo "- After downloading the bundle artifact, unzip it and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
           } >> "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,7 @@
 
 This directory contains the GitHub Actions workflows used to build PVS bundles for Apple Silicon, Apple x86, Linux ARM, and Linux x86.
 
-This README focuses on the current macOS packaging and notarization flow, using Apple Silicon as the concrete example. The Apple x86 workflow mirrors the same structure.
+This README focuses on the current packaging, notarization, and release flow, using Apple Silicon as the concrete example. The Apple x86 and Linux workflows mirror the same structure.
 
 ## Current Apple Silicon Flow
 
@@ -26,11 +26,31 @@ The packaged install base is `/PVS`. That means:
 - installing with `-target /` places the bundle at `/PVS/pvs-8.0`
 - installing with `-target CurrentUserHomeDirectory` places it at `~/PVS/pvs-8.0`
 
+Release publication is controlled by [.github/release-config.env](./release-config.env):
+
+- `PVS_RELEASE_STABLE_BRANCH`
+- `PVS_RELEASE_NIGHTLY_BRANCH`
+
+Those two variables determine which branch is treated as the stable source branch and which branch is treated as the nightly source branch.
+
+The current release policy is:
+
+- pushes to the configured nightly branch publish or update a prerelease tagged `nightly-YYYYMMDD`
+- pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
+
+This keeps both stable and nightly builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
+
 ## Which Artifact To Distribute
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact.
 
 The standalone tarball and unpacked bundle are still useful build artifacts, but they are not the Gatekeeper-friendly distribution path. The current release flow now vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
+
+## Release Tracks
+
+- Stable releases are intended to come from version tags whose commits are on the configured stable branch.
+- Nightly releases are prereleases named with the UTC date in `YYYYMMDD` form, for example `nightly-20260420`.
+- If multiple nightly builds run on the same UTC date, they update the same nightly release and replace its assets in place.
 
 For the SBCL runtime, the packaged bundle now uses:
 
@@ -249,3 +269,13 @@ If `notarytool` exits with an error like `must be a valid UUID` for `--issuer`:
 - [Apple Developer: App Store Connect API setup](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api)
 - [Apple Developer: Creating API Keys for App Store Connect API](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api)
 - [Apple Developer: TN3147 Migrating to the latest notarization tool](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool)
+
+## Installation
+
+Once the pkg is built and downloaded onto a machine, run
+
+```
+installer -pkg ./pvs8.0-<build>-arm-MacOSX-sbclisp.pkg -target CurrentUserHomeDirectory
+```
+
+to have PVS installed at ~/PVS.
