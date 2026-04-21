@@ -70,6 +70,20 @@ check_loader_path_dependency() {
   return 0
 }
 
+loader_path_reference() {
+  local owner=$1
+  local target=$2
+  local owner_dir target_dir target_abs rel
+
+  owner_dir="$(cd "$(dirname "$owner")" && pwd -P)"
+  target_dir="$(cd "$(dirname "$target")" && pwd -P)"
+  target_abs="$target_dir/$(basename "$target")"
+  rel="$(perl -MFile::Spec -e 'print File::Spec->abs2rel($ARGV[1], $ARGV[0])' \
+    "$owner_dir" "$target_abs")"
+
+  printf '@loader_path/%s\n' "$rel"
+}
+
 audit_runtime_dir() {
   local runtime_dir=$1
   local path dep
@@ -94,7 +108,7 @@ bundle_runtime_dir() {
   local runtime_dir=$1
   local pending=()
   local seen=()
-  local path dep dep_name dest
+  local path dep dep_name dest loader_ref
   local index=0
 
   while IFS= read -r -d '' path; do
@@ -123,9 +137,10 @@ bundle_runtime_dir() {
         cp -fL "$dep" "$dest"
       fi
 
+      loader_ref="$(loader_path_reference "$path" "$dest")"
       chmod u+w "$path" "$dest"
-      echo "Rewriting dependency in $path: $dep -> @loader_path/$dep_name"
-      install_name_tool -change "$dep" "@loader_path/$dep_name" "$path"
+      echo "Rewriting dependency in $path: $dep -> $loader_ref"
+      install_name_tool -change "$dep" "$loader_ref" "$path"
 
       if is_shared_library "$dest"; then
         install_name_tool -id "@loader_path/$dep_name" "$dest"
