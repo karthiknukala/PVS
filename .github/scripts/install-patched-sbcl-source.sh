@@ -8,7 +8,7 @@ Usage: install-patched-sbcl-source.sh --prefix DIR [options]
 
 Options:
   --prefix DIR        Installation prefix for the built SBCL
-  --version VERSION   SBCL source version to build. Default: 2.6.3
+  --version VERSION   SBCL source version to build. Default: 2.6.1
   --host-sbcl PATH    Bootstrap SBCL executable to use
   --host-home DIR     SBCL_HOME for the bootstrap SBCL
   --github-env FILE   Append built SBCL exports to this env file
@@ -17,7 +17,7 @@ EOF
 }
 
 prefix=""
-version="2.6.3"
+version="2.6.1"
 host_sbcl=""
 host_home=""
 github_env=""
@@ -91,6 +91,9 @@ echo "Building relocatable SBCL ${version}"
   cd "$srcdir"
   SBCL_HOME="$host_home" sh make.sh \
     --prefix="$prefix" \
+    --arch=arm64 \
+    --with-sb-thread \
+    --with-mark-region-gc \
     --with-immobile-space \
     --with-relocatable-static-space \
     --xc-host="$xc_host"

@@ -39,7 +39,7 @@ jobs:
       PVS_PKG_INSTALL_BASE: /PVS
       PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
       PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
-      PVS_SBCL_SOURCE_VERSION: 2.6.3
+      PVS_SBCL_SOURCE_VERSION: 2.6.1
 
     steps:
       - name: Check out sources
