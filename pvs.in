@@ -123,6 +123,7 @@ pvsemacsinit=
 pvsimagepath=
 pvsruntime=
 rawmode=
+minusq=
 
 # Process the command-line options
 
@@ -182,7 +183,7 @@ do
 	 esac;;
      -name|-title|-xrm) emacsargs="$emacsargs $1 $2"
                         shift;;
-     -q|-no-init-file) emacsargs="$emacsargs $1"
+     -q|-no-init-file) minusq=1
                        PVSMINUSQ="-q"
 		       dotemacs= ;;
      -E) PVSEVALLOAD="$PVSEVALLOAD $2"
@@ -251,6 +252,10 @@ then if [ -n "${emacscmd}" ] # -emacs given
 else if [ -n "${emacscmd}" ]
      then PVSEMACS=${emacscmd}
      else PVSEMACS=${PVSEMACS:-"emacs"}
+     fi
+
+     if [ -n "${minusq}" ]
+     then emacsargs="$emacsargs -q"
      fi
      
      # Exit if PVSEMACS is not executable
