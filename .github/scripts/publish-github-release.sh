@@ -9,6 +9,7 @@ Usage: publish-github-release.sh \
   --title <title> \
   --asset <path> \
   [--asset-name <name>] \
+  [--prune-asset-glob <glob>] \
   [--keep-asset-name <name>] \
   [--notes <text>] \
   [--target <sha>] \
@@ -30,12 +31,15 @@ tag=
 title=
 asset=
 asset_name=
+prune_asset_globs=()
 keep_asset_names=()
 notes=
 target=
 repo=${GITHUB_REPOSITORY:-}
 prerelease=false
 move_tag=false
+upload_asset=
+upload_tmpdir=
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -53,6 +57,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --asset-name)
       asset_name=$2
+      shift 2
+      ;;
+    --prune-asset-glob)
+      prune_asset_globs+=("$2")
       shift 2
       ;;
     --keep-asset-name)
@@ -106,6 +114,16 @@ contains_asset_name() {
   return 1
 }
 
+matches_asset_glob() {
+  local asset=$1
+  shift
+  local glob
+  for glob in "$@"; do
+    [[ $asset == $glob ]] && return 0
+  done
+  return 1
+}
+
 release_asset_names() {
   gh release view "$tag" -R "$repo" --json assets --jq '.assets[].name'
 }
@@ -114,23 +132,27 @@ delete_release_asset() {
   local asset_id=$1
   local asset_name=$2
   local current_assets
+  local attempt
 
-  if gh api --method DELETE "repos/$repo/releases/assets/$asset_id" >/dev/null 2>&1; then
-    return 0
-  fi
+  for attempt in 1 2 3; do
+    if gh api --method DELETE "repos/$repo/releases/assets/$asset_id" >/dev/null 2>&1; then
+      return 0
+    fi
 
-  if ! current_assets=$(release_asset_names); then
-    echo "error: failed to refresh release assets after deletion error for $asset_name" >&2
-    return 1
-  fi
+    if current_assets=$(release_asset_names 2>/dev/null); then
+      if ! printf '%s\n' "$current_assets" | grep -Fx -- "$asset_name" >/dev/null 2>&1; then
+        echo "Skipping already-removed asset $asset_name"
+        return 0
+      fi
+    fi
 
-  if ! printf '%s\n' "$current_assets" | grep -Fx -- "$asset_name" >/dev/null 2>&1; then
-    echo "Skipping already-removed asset $asset_name"
-    return 0
-  fi
+    if [[ $attempt -lt 3 ]]; then
+      sleep 2
+    fi
+  done
 
-  echo "error: failed to delete release asset $asset_name" >&2
-  return 1
+  echo "warning: failed to delete release asset $asset_name; leaving it in the release" >&2
+  return 0
 }
 
 if [[ -z $target ]]; then
@@ -139,6 +161,13 @@ fi
 
 if [[ -z $asset_name ]]; then
   asset_name=$(basename "$asset")
+fi
+
+upload_asset=$asset
+if [[ $(basename "$asset") != "$asset_name" ]]; then
+  upload_tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/pvs-release-asset.XXXXXX")
+  cp -f "$asset" "$upload_tmpdir/$asset_name"
+  upload_asset="$upload_tmpdir/$asset_name"
 fi
 
 if [[ -z $notes ]]; then
@@ -154,6 +183,9 @@ fi
 notes_file=$(mktemp "${TMPDIR:-/tmp}/pvs-release-notes.XXXXXX")
 cleanup() {
   rm -f "$notes_file"
+  if [[ -n $upload_tmpdir ]]; then
+    rm -rf "$upload_tmpdir"
+  fi
 }
 trap cleanup EXIT
 printf '%s\n' "$notes" > "$notes_file"
@@ -178,9 +210,18 @@ else
   fi
 fi
 
-gh release upload "$tag" -R "$repo" "$asset#$asset_name" --clobber
+gh release upload "$tag" -R "$repo" "$upload_asset" --clobber
 
-if [[ ${#keep_asset_names[@]} -gt 0 ]]; then
+if [[ ${#prune_asset_globs[@]} -gt 0 ]]; then
+  while IFS=$'\t' read -r asset_id existing_asset; do
+    [[ -n $asset_id ]] || continue
+    [[ -n $existing_asset ]] || continue
+    [[ $existing_asset == "$asset_name" ]] && continue
+    if matches_asset_glob "$existing_asset" "${prune_asset_globs[@]}"; then
+      delete_release_asset "$asset_id" "$existing_asset"
+    fi
+  done < <(gh release view "$tag" -R "$repo" --json assets --jq '.assets[] | "\(.id)\t\(.name)"')
+elif [[ ${#keep_asset_names[@]} -gt 0 ]]; then
   while IFS=$'\t' read -r asset_id existing_asset; do
     [[ -n $asset_id ]] || continue
     [[ -n $existing_asset ]] || continue

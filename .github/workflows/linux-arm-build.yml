@@ -105,12 +105,8 @@ jobs:
             --title '${{ steps.release_policy.outputs.release_title }}' \
             --asset '${{ steps.artifacts.outputs.tgz }}' \
             --asset-name pvs-linux-aarch64.tgz \
-            --keep-asset-name pvs-macos-arm64.tgz \
-            --keep-asset-name pvs-macos-arm64.pkg \
-            --keep-asset-name pvs-macos-x86_64.tgz \
-            --keep-asset-name pvs-macos-x86_64.pkg \
-            --keep-asset-name pvs-linux-aarch64.tgz \
-            --keep-asset-name pvs-linux-x86_64.tgz \
+            --prune-asset-glob 'pvs*-aarch64-Linux-sbclisp.tgz' \
+            --prune-asset-glob 'pvs-linux-aarch64.tgz' \
             "${release_args[@]}"
 
       - name: Summarize outputs
