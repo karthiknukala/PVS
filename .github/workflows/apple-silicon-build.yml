@@ -39,7 +39,6 @@ jobs:
       PVS_PKG_INSTALL_BASE: /PVS
       PVS_SBCL_BOOTSTRAP_PLATFORM: arm64-darwin
       PVS_SBCL_BOOTSTRAP_VERSION: 2.4.0
-      PVS_SBCL_SOURCE_VERSION: 2.6.3
 
     steps:
       - name: Check out sources
@@ -74,22 +73,13 @@ jobs:
             --prefix "$PVS_BOOTSTRAP_PREFIX" \
             --github-env "$GITHUB_ENV"
 
-      - name: Build relocatable SBCL host runtime
-        run: |
-          PVS_SBCL_PREFIX="$RUNNER_TEMP/pvs-sbcl"
-          SBCL_HOME="$PVS_BOOTSTRAP_SBCL_HOME" bash ./.github/scripts/install-relocatable-sbcl.sh \
-            --version "$PVS_SBCL_SOURCE_VERSION" \
-            --prefix "$PVS_SBCL_PREFIX" \
-            --host-sbcl "$PVS_BOOTSTRAP_SBCL_BIN" \
-            --github-env "$GITHUB_ENV"
-
       - name: Configure source tree
         run: |
-          SBCL_HOME="$SBCL_HOME" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+          SBCL="$PVS_BOOTSTRAP_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
-          SBCL_HOME="$SBCL_HOME" HOME="$CI_HOME" make smoke-sbcl-release
+          HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts

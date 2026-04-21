@@ -94,13 +94,25 @@ fi
 SBCL_HOME="$sbcl_home" "$sbcl_bin" --noinform --non-interactive \
   --eval "(unless (string= (lisp-implementation-version) \"$version\") (error \"Unexpected SBCL version ~A\" (lisp-implementation-version)))"
 
+mkdir -p "$prefix/bin"
+wrapper="$prefix/bin/pvs-bootstrap-sbcl"
+cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export SBCL_HOME="$sbcl_home"
+exec "$sbcl_bin" "\$@"
+EOF
+chmod +x "$wrapper"
+
 if [ -n "$github_env" ]; then
   {
     echo "PVS_BOOTSTRAP_SBCL_BIN=$sbcl_bin"
     echo "PVS_BOOTSTRAP_SBCL_HOME=$sbcl_home"
+    echo "PVS_BOOTSTRAP_SBCL_WRAPPER=$wrapper"
   } >> "$github_env"
 fi
 
 echo "Installed official SBCL bootstrap at $prefix"
 echo "PVS_BOOTSTRAP_SBCL_BIN=$sbcl_bin"
 echo "PVS_BOOTSTRAP_SBCL_HOME=$sbcl_home"
+echo "PVS_BOOTSTRAP_SBCL_WRAPPER=$wrapper"
