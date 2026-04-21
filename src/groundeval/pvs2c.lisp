@@ -969,11 +969,12 @@ successful."
 		 (with-open-file (output mkfile-string :direction :output
 					 :if-exists :supersede :if-does-not-exist :create)
 		   (format output "# Auto-generated fragment for ~a" theory-id)
-		   (format output "~%OBJS_~a := $(SRCDIR)~a.o ~{~a_c.o ~} ~{~a_c.o ~}" theory-id theory-id
+		   (format output "~%OBJS_~a := $(SRCDIR)/~a.o $(SRCDIR)/~a_c.o ~{~a_c.o ~} ~{~a_c.o ~}"
+			   theory-id theory-id theory-id
 			   (loop for thy in *pvs2c-theory-importings*
 				 when (not (from-prelude? thy))
 				 collect (format nil "$(SRCDIR)/~a"  (id thy)))
-			   (loop for thy in  *preceding-mono-theories* collect (format nil "o$(SRCDIR)/~a" (id thy))))
+			   (loop for thy in  *preceding-mono-theories* collect (format nil "$(SRCDIR)/~a" (id thy))))
 		   (format output "~%pvs2c/bin/~a: $(OBJS_~a) | $(BINDIR)~%~c$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)" theory-id theory-id #\Tab)
 		   (format output "~%~%.PHONY: ~a" theory-id)
 		   (format output "~%~a: pvs2c/bin/~a" theory-id theory-id)
