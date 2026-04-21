@@ -145,7 +145,11 @@
   (setq *print-pretty* t)
   #+allegro (setq top-level::*print-length* nil
 		  top-level::*print-level* nil)
-  (let ((exepath (directory-namestring (car (uiop:raw-command-line-arguments)))))
+  (let ((exepath (or (let ((runtime-dir (environment-variable "PVS_RUNTIME_DIR")))
+		       (and runtime-dir
+			    (uiop:directory-exists-p runtime-dir)
+			    (ensure-directory-string runtime-dir)))
+		     (directory-namestring (car (uiop:raw-command-line-arguments))))))
     (pushnew exepath *pvs-directories*)
     ;;(cffi:load-foreign-library (format nil "libssl.~a" #+darwin "dylib" #-darwin "so"))
     ;;(cffi:load-foreign-library (format nil "libcrypto.~a" #+darwin "dylib" #-darwin "so"))
@@ -256,6 +260,10 @@ should be enough."
 		      (t (pvs-warning "The environment variable PVSPATH is set to ~a, ~
                                   which does not exist" evpath)
 			 nil)))))
+	((let ((runtime-dir (environment-variable "PVS_RUNTIME_DIR")))
+	   (and runtime-dir
+		(uiop:directory-exists-p runtime-dir)
+		(find-pvs-path-from (truename runtime-dir)))))
 	((let ((cfile (uiop:truename* (car (uiop:raw-command-line-arguments)))))
 	   ;; We were started as, e.g., bin/ix86_64-Linux/runtime/pvs-allegro
 	   ;; assume the parent of bin is a valid PVS installed directory.

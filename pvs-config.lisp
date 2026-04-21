@@ -493,6 +493,7 @@ targets and copying them to the corresponding bin directory."
 			    :if-does-not-exist :create)
       (format stream "#!/bin/sh~%")
       (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "export PVS_RUNTIME_DIR=\"$script_dir\"~%")
       (format stream "export SBCL_HOME=\"$script_dir/sbcl/lib/sbcl\"~%")
       (format stream "exec \"$script_dir/sbcl/bin/sbcl\" \"$@\"~%"))
     (with-open-file (stream pvs-prog
@@ -501,6 +502,7 @@ targets and copying them to the corresponding bin directory."
 			    :if-does-not-exist :create)
       (format stream "#!/bin/sh~%")
       (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "export PVS_RUNTIME_DIR=\"$script_dir\"~%")
       (format stream "dynamic_space_size=${PVS_SBCL_DYNAMIC_SPACE_SIZE:-~a}~%" dynamic-space-size)
       (format stream "exec \"$script_dir/pvs-sbclisp-bin\" --dynamic-space-size \"$dynamic_space_size\" --core \"$script_dir/pvs-sbclisp.core\" \"$@\"~%"))
     (chmod "a+rx" pvs-prog)
