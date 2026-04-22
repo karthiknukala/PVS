@@ -150,27 +150,33 @@
 			:direction :output :if-exists :supersede :if-does-not-exist :create)
       (case platform
 	(|ix86_64-Linux|
-	 (format mf "CFLAGS := -I ../include -fPIC -Wall -Winline -O -ggdb~%")
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
+	 (format mf "CFLAGS := -I $(PVS2CPATH)/include -fPIC -Wall -Winline -O -ggdb~%")
 	 (format mf "LDFLAGS = -Bsymbolic -shared -L./ -lc -lm -lgmp~%"))
 	(|ix86-MacOSX|
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
 	 (format mf "SDK=$(shell xcrun --show-sdk-path)~%")
-	 (format mf "CFLAGS := -fPIC -Wall -Winline -O2 -dynamic -DNDEBUG -arch x86_64 -I ../include~%")
-	 (format mf "LDFLAGS =  -dylib -flat_namespace -platform_version macos 11.0.0 12.0 -L $(SDK)/usr/lib -L./ -lc -lgmp~%"))
+	 (format mf "CFLAGS := -fPIC -Wall -Winline -O2 -dynamic -DNDEBUG -arch x86_64 -I $(PVS2CPATH)/include~%")
+	 (format mf "LDFLAGS =  -dylib -flat_namespace  -L $(SDK)/usr/lib -L./ -lc -lgmp~%"))
 	(|arm-MacOSX|
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
 	 (format mf "SDK=$(shell xcrun --show-sdk-path)~%")
-	 (format mf "CFLAGS := -g -O2 -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I ../include~%")
-	 (format mf "LDFLAGS = -dylib -flat_namespace -undefined suppress -arch arm64 -platform_version macos 11.0.0 12.0 -L $(SDK)/usr/lib -L./ -L /opt/homebrew/lib -L /usr/local/lib -lc -lm -lgmp~%")))
+	 (format mf "CFLAGS := -g -O2 -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I $(PVS2CPATH)/include~%")
+	 (format mf "LDFLAGS = -dylib -flat_namespace -undefined suppress -arch arm64 -L $(SDK)/usr/lib -L./ -L /opt/homebrew/lib -L /usr/local/lib -lc -lm -lgmp~%")))
       (format mf "~%src := ~{~a~^ ~}~%" c-files)
       (format mf "~%obj := $(src:.c=.o)~%")
       (format mf "~%.c.o : ; $(CC) ${CFLAGS} -c $< -o $@~%")
-      (format mf "~%all : ../lib/libpvs-prelude.~a ../lib/libpvs-prelude.a~%" lib-suffix)
-      (format mf "~%../lib/libpvs-prelude.~a : ${obj}~%" lib-suffix)
+      (format mf "~%all : $(PVS2CPATH)/lib/libpvs-prelude.~a $(PVS2CPATH)/lib/libpvs-prelude.a~%" lib-suffix)
+      (format mf "~%$(PVS2CPATH)/lib/libpvs-prelude.~a : ${obj}~%" lib-suffix)
       (format mf "~a$(LD) $(LDFLAGS) -o $@ ${obj}~%" #\tab)
-      (format mf "~%../lib/libpvs-prelude.a : $(obj)~%")
+      (format mf "~%$(PVS2CPATH)/lib/libpvs-prelude.a : $(obj)~%")
       (format mf "~a$(AR) r $@ ${obj}~%" #\tab)
       (format mf "~%clean :~%")
       (format mf "~a-rm $(obj)~%" #\tab)
-      (format mf "~a-rm ../lib/libpvs-prelude.~a ../lib/libpvs-prelude.a~%"
+      (format mf "~a-rm $(PVS2CPATH)/lib/libpvs-prelude.~a $(PVS2CPATH)/lib/libpvs-prelude.a~%"
 	      #\tab lib-suffix))
     (format t "~%Generated ~a" makefile)))
   
