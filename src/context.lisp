@@ -1146,9 +1146,6 @@ are all the same."
 ;;;         restore-from-context ->
 ;;;           restore-proofs ->
 ;;;             restore-theory-proofs
-;;;             restore-theory-proofs-from-file ->
-;;;               restore-theory-proofs ->
-;;;                 restore-theory-proofs*
 (defun restore-theories (fname)
   (let* ((*theories-restored* nil)
 	 (*adt-type-name-pending* nil)
@@ -1206,6 +1203,8 @@ are all the same."
   ;;(generate-xref theory)
   ;;(reset-restored-types theory)
   (unless (valid-proofs-file (filename theory))
+    ;; If proofs file is valid, wait for typecheck-theories to call this,
+    ;; so TCCs can get their proofs
     (let ((*current-context* (saved-context theory)))
       (assert *current-context*)
       (restore-from-context (filename theory) theory)))
@@ -1334,6 +1333,9 @@ are all the same."
 		(valid-context-entry-file entry file))))))
 
 (defun valid-context-entry-file (entry file)
+  "Checks that the given context-entry and associated file have matching
+dates, then does the same for the dependencies, returning t if everything is
+valid."
   (and file
        (equal (file-write-time file)
 	      (ce-write-date entry))
@@ -1361,7 +1363,7 @@ are all the same."
   (get-context-file-entry (pathname-name filename)))
 
 (defmethod get-context-file-entry ((filename string))
-  (let ((fname (pathname-name filename)))
+  (let ((fname (pathname-name (protect-pvs-filename filename))))
     (car (member fname (pvs-context-entries)
 		 :test #'(lambda (x y) (string= x (ce-file y)))))))
 
@@ -1479,8 +1481,8 @@ are all the same."
 ;;; Called from typecheck-theories, typecheck-top-level-adt, and
 ;;; update-restored-theories (module)
 
-(defun restore-from-context (filename theory &optional proofs)
-  (restore-proofs filename theory proofs))
+(defun restore-from-context (filename theory)
+  (restore-proofs filename theory))
 
 (defun get-declaration-entry-decl (de)
   (get-referenced-declaration*
@@ -1618,11 +1620,14 @@ are all the same."
        (valid-proofs-file (ce-file entry))))
 
 (defmethod valid-proofs-file (filename)
+  "A filename has a valid .prf file if it has a valid context-entry, the
+.prf file exists, and the file write time matches the context-entry.
+Note that this doesn't check if the .pvs file is the matches as well."
   (multiple-value-bind (valid? entry)
       (valid-context-entry filename)
     (and valid?
 	 (let ((prf-file (make-prf-pathname filename)))
-	   (if (probe-file prf-file)
+	   (if (uiop:file-exists-p prf-file)
 	       (eql (file-write-time prf-file)
 		    (ce-proofs-date entry))
 	       (null (ce-proofs-date entry)))))))
@@ -1887,13 +1892,14 @@ are all the same."
 
 ;;; Top level, called from restore-from-context and install-pvs-proof-file
 
-(defun restore-proofs (filename theory &optional proofs)
+(defun restore-proofs (filename theory)
   (let* ((*current-context* (context theory))
 	 (*generate-tccs* 'none)
-	 (aproofs (or proofs (read-pvs-file-proofs filename)))
-	 (tproofs (assq (id theory) aproofs)))
+	 (aproofs (read-pvs-file-proofs filename))
+	 (tproofs (assq (id theory) aproofs))
+	 (valid? (valid-proofs-file filename)))
     (when tproofs
-      (restore-theory-proofs theory tproofs))))
+      (restore-theory-proofs theory tproofs valid?))))
 
 ;;; Proofs currently are of the form
 ;;;  (declid index prfinfo ...)
@@ -1914,7 +1920,7 @@ are all the same."
 
 ;;; We still try to accomodate old .prf files, as seen below
 
-(defun restore-theory-proofs (theory proofs)
+(defun restore-theory-proofs (theory proofs valid?)
   (assert (eq (id theory) (car proofs)))
   (assert (every #'(lambda (prf)
 		     (and (listp prf) (integerp (cadr prf))))
@@ -1927,15 +1933,18 @@ are all the same."
 		      ;; even TCCs are put in the assuming or theory parts
 		      (append (assuming theory) (theory theory))
 		      (cdr proofs)
-		      have-tcc-origins?)))
+		      have-tcc-origins?
+		      valid?)))
     (when (and te (memq 'invalid-proofs (te-status te)))
       (invalidate-proofs theory))
     (copy-proofs-to-orphan-file (filename theory) (id theory) rem-proofs)))
 
-(defun restore-decls-proofs (decls proofs have-tcc-origins?)
+(defun restore-decls-proofs (decls proofs have-tcc-origins? valid?)
   (cond ((null decls)
 	 proofs)
-	((and have-tcc-origins? (tcc? (car decls)))
+	((and (not valid?) ;; Don't try to reassign TCCs
+	      have-tcc-origins?
+	      (tcc? (car decls)))
 	 ;; Note that TCCs generated from the formal parameters will all be
 	 ;; put in either the assuming part, if it exists, or the theory
 	 ;; part It's the only exception to TCCs appearing before the
@@ -1945,15 +1954,14 @@ are all the same."
 	   ;; (mapcar #'(lambda (tcc) (sexp (origin tcc))) tccs)
 	   ;; (mapcar #'(lambda (prf) (nth 6 (caddr prf))) tcc-proofs)
 	   (restore-tcc-proofs tccs tcc-proofs)
-	   (restore-decls-proofs rem-decls rem-proofs have-tcc-origins?)))
+	   (restore-decls-proofs rem-decls rem-proofs have-tcc-origins? valid?)))
 	((formula-decl? (car decls))
 	 (let ((rem-proofs (restore-formula-proofs (car decls) proofs)))
-	   (restore-decls-proofs (cdr decls) rem-proofs have-tcc-origins?)))
-	(t (restore-decls-proofs (cdr decls) proofs have-tcc-origins?))))
+	   (restore-decls-proofs (cdr decls) rem-proofs have-tcc-origins? valid?)))
+	(t (restore-decls-proofs (cdr decls) proofs have-tcc-origins? valid?))))
 
 (defun restore-formula-proofs (decl proofs)
-  ;; decl is a formula-decl, but either not a TCC, or the proofs don't have
-  ;; origins
+  ;; decl is a formula-decl, including TCCs in some cases
   (let ((prf-entry (assq (id decl) proofs))
 	(fe (get-context-formula-entry decl)))
     (cond (prf-entry
@@ -3306,7 +3314,7 @@ each context, the theories are in alphabetic order."
 	(unless (every #'consp proofs)
 	  (error "Proofs file ~a is corrupted" prfpath))
 	(cond (theory
-	       (restore-theory-proofs theory proofs)
+	       (restore-theory-proofs theory proofs t)
 	       (format t "~%Theory ~a proofs restored" theoryid))
 	      (t (format t "~%Theory ~a not found, ignoring" theoryid)))
 	(restore-proofs-from-split-file* input prfpath)))))
