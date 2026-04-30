@@ -792,7 +792,6 @@ use binfiles."
 					 (memq cth (all-importings sess-th))))
 				 new-theories)
 		       (prover-step (id sess) "(lisp (setq *context-modified* t))"))))
-		 
 		 (values new-theories nil t)))))))
 
 (defun parse-all-pvs-files (dir)
@@ -1297,10 +1296,9 @@ escapes here."
 		 "update-parsed-file no old-theories: invalid new-theories: ~a"
 		 new-theories)
 	 new-theories)
-	(t (multiple-value-bind (merged-theories th-diffs)
-	       ;; merged-theories will be a mix of new and old
-	       ;; th-diffs has elts of the form (othy nthy diff)
-	       (update-parsed-theories filename file old-theories new-theories)
+	(t (let ((merged-theories
+		  ;; merged-theories will be a mix of new and old
+		  (update-parsed-theories filename file old-theories new-theories)))
 	     (setf (gethash (pvs-filename filename) (current-pvs-files))
 		   (cons (file-write-date file) merged-theories))
 	     (unless typecheck?
@@ -1370,10 +1368,9 @@ escapes here."
 			      (let* ((prev-kept-decl-entry
 				      (assq (id othy) (last-kept-decls *workspace-session*)))
 				     (prev-kept-decl (cdr prev-kept-decl-entry)))
-				(assert (or (null prev-kept-decl-entry)
-					    (memq prev-kept-decl (all-decls othy))))
 				(unless (eq prev-kept-decl last-kept-decl)
-				  (if prev-kept-decl
+				  (if (and prev-kept-decl
+					   (memq prev-kept-decl (all-decls othy)))
 				      ;; Check if last-kept-decl needs updating for this theory
 				      (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
 					  (setf (cdr prev-kept-decl-entry) last-kept-decl)
@@ -1381,8 +1378,8 @@ escapes here."
 				      (push (cons (id othy) last-kept-decl)
 					    (last-kept-decls *workspace-session*)))))
 			      (copy-lex-upto diff othy nthy)
-			      (unless (memq last-kept-decl (all-decls othy))
-				(break "update-parsed-theories last-kept-decl not in othy"))
+			      (assert (memq last-kept-decl (all-decls othy)) ()
+				"update-parsed-theories last-kept-decl not in othy")
 			      (setf (status othy) '(parsed)) ; all-decls won't use cache
 			      (merge-parsed-theory last-kept-decl (cdr diff) othy nthy)
 			      (assert (memq last-kept-decl (all-decls othy)) ()
@@ -1429,7 +1426,8 @@ escapes here."
 	 ;;(ntail (memq ndecl ndecls))
 	 )
     ;; Can only keep assuming instances for importings before odecl
-    (assert (memq odecl (all-decls othy)) () "merge-parsed-theory - 1")
+    (assert (memq odecl (all-decls othy)) ()
+	    "merge-parsed-theory - decl missing from all-decls")
     (when (and odecl (assuming-instances othy))
       (let ((pdecls (memq odecl (reverse odecls))))
 	(assert pdecls)
@@ -1656,67 +1654,90 @@ Needs to pay attention to sections."
 
 (defun typecheck-file (fileref &optional forced? prove-tccs? importchain?
 				 nomsg? outside-call?)
-  (with-pvs-file (filename) fileref
-    (cond ((string= filename "prelude")
-	   (ldiff *prelude-theories* (member 'stdpvs *prelude-theories* :key #'id)))
-	  ((string= filename "pvsio_prelude")
-	   (member 'stdpvs *prelude-theories* :key #'id))
-	  (t
-	   (let ((*parsing-files* (when (boundp '*parsing-files*) *parsing-files*)))
-	     (multiple-value-bind (theories restored? th-diffs)
-		 (parse-file filename forced? nomsg? t)
-	       (let ((*current-file* filename)
-		     (*typechecking-module* nil))
-		 (unless theories
-		   (let ((err (format nil "~a not found" filename)))
-		     (pvs-error "Typecheck error" err)))
-		 (cond ((and (not forced?)
-			     theories
-			     (every #'(lambda (th)
-					(let ((*current-context* (saved-context th)))
-					  (typechecked? th)))
-				    theories))
-			(unless (or nomsg? restored?)
-			  (pvs-message
-			      "~a ~:[is already typechecked~;is typechecked~]~a"
-			    filename
-			    restored?
-			    (if (and prove-tccs? (not *in-checker*))
-				" - attempting proofs of TCCs" ""))))
-		       (t (pvs-message "Typechecking ~a" filename)
-			  (when forced?
-			    (delete-generated-adt-files theories))
-			  (typecheck-theories filename theories)
-			  #+pvsdebug (assert (every #'typechecked? theories))
-			  (dolist (th theories)
-			    (let ((last-kept-entry
-				   (assq (id th) (last-kept-decls *workspace-session*))))
-			      (assert (or forced?
-					  (null last-kept-entry)
-					  (memq (cdr last-kept-entry) (all-decls th))))
-			      (when last-kept-entry
-				(unless forced?
-				  (dolist (thelt (cdr (memq (cdr last-kept-entry)
-							    (all-decls th))))
-				    (when (formula-decl? thelt)
-				      (setf (proof-status thelt) 'unchecked))))
-				(setf (last-kept-decls *workspace-session*)
-				      (delete last-kept-entry
-					      (last-kept-decls *workspace-session*))))))
-			  ;; .pvscontext
-			  (update-context filename)
-			  ;;(update-info-file filename theories)
-			  ))
-		 (when prove-tccs?
-		   (if *in-checker*
-		       (pvs-message
-			   "Must exit the prover before running typecheck-prove")
-		       (let ((*noninteractive* t))
-			 (prove-tccs* theories importchain?))))
-		 (if outside-call?
-		     ;; Emacs expects t or nil - error will not get here
-		     (and th-diffs t)
-		     (values theories th-diffs)))))))))
+    (or (prelude-file-theories fileref)
+	(with-pvs-file (filename) fileref
+	  (let ((*parsing-files* (when (boundp '*parsing-files*) *parsing-files*)))
+	    (multiple-value-bind (theories restored? th-diffs)
+		(parse-file filename forced? nomsg? t)
+	      (let ((*current-file* filename)
+		    (*typechecking-module* nil))
+		(unless theories
+		  (let ((err (format nil "~a not found" filename)))
+		    (pvs-error "Typecheck error" err)))
+		(cond ((and (not forced?)
+			    theories
+			    (every #'(lambda (th)
+				       (let ((*current-context* (saved-context th)))
+					 (typechecked? th)))
+				   theories))
+		       (unless (or nomsg? restored?)
+			 (pvs-message
+			     "~a ~:[is already typechecked~;is typechecked~]~a"
+			   filename
+			   restored?
+			   (if (and prove-tccs? (not *in-checker*))
+			       " - attempting proofs of TCCs" ""))))
+		      (t (pvs-message "Typechecking ~a" filename)
+			 (when forced?
+			   (delete-generated-adt-files theories))
+			 (typecheck-theories filename theories)
+			 #+pvsdebug (assert (every #'typechecked? theories))
+			 (dolist (th theories)
+			   (let ((last-kept-entry
+				  (assq (id th) (last-kept-decls *workspace-session*))))
+			     (when last-kept-entry
+			       (unless forced?
+				 (let ((rem-decls (or (cdr (memq (cdr last-kept-entry)
+								 (all-decls th)))
+						      (all-decls th))))
+				   (dolist (thelt rem-decls)
+				     (when (formula-decl? thelt)
+				       (setf (proof-status thelt) 'unchecked)))))
+			       (setf (last-kept-decls *workspace-session*)
+				     (delete last-kept-entry
+					     (last-kept-decls *workspace-session*))))))
+			 ;; .pvscontext
+			 (update-context filename)
+			 ;;(update-info-file filename theories)
+			 ))
+		(when prove-tccs?
+		  (if *in-checker*
+		      (pvs-message
+			  "Must exit the prover before running typecheck-prove")
+		      (let ((*noninteractive* t))
+			(prove-tccs* theories importchain?))))
+		(if outside-call?
+		    ;; Emacs expects t or nil - error will not get here
+		    (and th-diffs t)
+		    (values theories th-diffs))))))))
+
+(defun prelude-file-theories (fileref)
+  (with-pvs-file (filename dirname) fileref
+    (let* ((dir (or dirname (current-path)))
+	   (file (pathname-name filename)))
+      (when (file-equal dir (format nil "~a/lib" *pvs-path*))
+	(cond ((string= file "prelude")
+	       (ldiff *prelude-theories* (member '|stdpvs| *prelude-theories* :key #'id)))
+	      ((string= file "pvsio_prelude")
+	       (member '|stdpvs| *prelude-theories* :key #'id))
+	      ((string= file "character_adt")
+	       (list (get-theory "character_adt")
+		     (get-theory "character_adt_reduce")))
+	      ((string= file "lift_adt")
+	       (list (get-theory "lift_adt")
+		     (get-theory "lift_adt_map")
+		     (get-theory "lift_adt_reduce")))
+	      ((string= file "list_adt")
+	       (list (get-theory "list_adt")
+		     (get-theory "list_adt_map")
+		     (get-theory "list_adt_reduce")))
+	      ((string= file "ordstruct_adt")
+	       (list (get-theory "ordstruct_adt")
+		     (get-theory "ordstruct_adt_reduce")))
+	      ((string= file "union_adt")
+	       (list (get-theory "union_adt")
+		     (get-theory "union_adt_map")
+		     (get-theory "union_adt_reduce"))))))))
 
 (defun prove-tccs (fileref &optional importchain?)
   (with-pvs-file (filename) fileref
@@ -1745,7 +1766,169 @@ Needs to pay attention to sections."
 ;;   ;; (let* ((info-file (make-infopath filename)))
 ;;   ;;   (break))
 ;;   )
+
+(defun same-decl-tccs (theory)
+  (let ((decl-tccs nil))
+    (dolist (decl (all-decls theory))
+      (when (tcc? decl)
+	(let ((same-decl-tccs (assoc (generated-by decl) decl-tccs :key #'generated-by)))
+	  (if same-decl-tccs
+	      (nconc same-decl-tccs (list decl))
+	      (push (list decl) decl-tccs)))))
+    (nreverse decl-tccs)))
+
+(defun try-all-tcc-proofs (theory)
+  (dolist (decl-tccs (same-decl-tccs theory))
+    (let* ((prinfos (mapcar #'default-proof decl-tccs))
+	   (unique-prinfos (remove-duplicates prinfos :key #'script :test #'equalp)))
+      (when (cdr unique-prinfos)
+	(try-all-tcc-proofs* decl-tccs unique-prinfos)))))
+
+(defun try-all-tcc-proofs* (decl-tccs unique-proofs)
+  (dolist (tcc decl-tccs)
+    (unless (proved? tcc)
+      (prove-tcc tcc)
+      (unless (proved? tcc)
+	(dolist (prf unique-proofs)
+	  (unless (eq prf (default-proof tcc))
+	    (prove-decl-with-justification tcc (justification prf))))))))
+
+
+;; (defun prove-decls-with-justifications (decls justifications)
+;;   (check-edited-justifications justifications) ;; error if invalid
+;;   (dolist (decl decls)
+;;     (when (and (formula-decl? decl)
+;; 	       (not (proved? decl)))
+;;       (dolist (just justifications)
+;; 	(when (prove-decl-with-justification decl fjust)
+;; 	  (let ((prf (default-proof decl)))
+;; 	    (if prf
+;; 		(setf (script prf) just)
+;; 		(let* ((prfid (makesym "~a-1" (id decl)))
+;; 		       (time (get-universal-time))
+;; 		       (prf-info (if (tcc? decl)
+;; 				     (mk-tcc-proof-info
+;; 				      prfid nil time just nil nil (origin decl))
+;; 				     (mk-proof-info
+;; 				      prfid nil time just nil nil))))
+;; 		  (setf (proofs decl) (list prf-info))
+;; 		  (setf (default-proof decl) prf-info)
+;; 		  (setf (proof-status decl) 'proved))))
+;; 	  (return))))))
+
+(defun prove-formula-thread (decl &key (just (get-proof-script decl nil))
+				    show quit save)
+  (let* ((*done-sessions* nil)
+	 (cur-default (default-proof decl))
+	 (ps-alist (prover-init
+		    decl
+		    :input-hook (let ((pending nil))
+				  (lambda ()
+				    (handler-case
+					(multiple-value-bind (cmd njust npending)
+					    (progn (format t "~%just = ~a, pending = ~a~%"
+						     just pending)
+						   (justification-step just pending))
+					  (setq just njust
+						pending npending)
+					  cmd)
+				      (proof-mismatch-error (err)
+					(format t "~%~a~%" err)
+					(pop *prover-input-hooks*)
+					(setf (continuation (current-session))
+					      (list just pending))
+					(if quit
+					    '(quit)
+					    '(query))))))))
+	 (id (cdr (assoc "id" ps-alist :test #'string=)))
+	 (ps (cdr (assoc "proofstate" ps-alist :test #'string=)))
+	 (stat (cdr (assoc "status" ps-alist :test #'string=))))
+    (format t "~%Started proof ~a" id)
+    (when show (format t "~%~a~%" ps-alist))
+    (values (string= stat "proved")
+	    (current-subgoal* ps))))
+
+(define-condition no-change-error (simple-condition) ()
+  (:report (lambda (cnd stream)
+	     (declare (ignore cnd))
+	     (format stream "No change"))))
+(define-condition proof-mismatch-error (simple-condition)
+  ((num-subgoals :accessor num-subgoals :initarg :num-subgoals)
+   (num-subproofs :accessor num-subproofs :initarg :num-subproofs))
+  (:report (lambda (cnd stream)
+	     (with-slots (num-subgoals num-subproofs) cnd
+		 (format stream "Generated ~d subgoals, expected ~d"
+		   (num-subgoals cnd) (num-subproofs cnd))))))
+
+(defun justification-step (just pending)
+  (assert (listp just))
+  (when *ps* (check-justification-step just))
+  ;; (format t "~%justification-step:~%~a~%~a~%" *ps* just)
+  (cond ((null just)
+	 (when pending
+	   (justification-step (car pending) (cdr pending))))
+	((stringp (car just))
+	 (justification-step (cdr just) pending))
+	((listp (car just))
+	 (cond ((symbolp (caar just))
+		(values (car just) (cdr just) pending))
+	       ;; ((stringp (caar just))
+	       ;; 	(justification-step (cdr just) pending))
+	       ((listp (caar just))
+		(assert (null (cdr just)))
+		(justification-step (caar just) (append (cdar just) pending)))
+	       (t (error "justification-step: ~s not expected" (caar just)))))
+	(t (error "justification-step: ~s not expected" (car just)))))
+
+(defun check-justification-step (just)
+  (if (eq (get (id (current-session)) :previous-proofstate) *ps*)
+      (error 'no-change-error)
+      (let* ((pps (parent-proofstate *ps*))
+	     (num-subgoals (if pps (1+ (length (pending-subgoals pps))) 1))
+	     ;; Should remaining-subgoals or done-subgoals be included?
+	     (num-subproofs (if (and (null (cdr just))
+				     (every #'(lambda (j) (and (consp j) (stringp (car j))))
+					    (car just)))
+				(length (car just))
+				1)))
+	;; (format t "~%num-subgoals = ~a, num-subproofs = ~a" num-subgoals num-subproofs)
+	(unless (= num-subgoals num-subproofs)
+	  (error 'proof-mismatch-error
+		 :num-subgoals num-subgoals
+		 :num-subproofs num-subproofs)))))
+
+(defun prove-decl-with-inputs (decl inputs &key show)
+  (let* ((*done-sessions* nil)
+	 (ps-alist (prover-init
+		    decl
+		    :input-hook (let ((pr-input inputs))
+				  (lambda ()
+				    (if pr-input
+					(let ((inp (pop pr-input)))
+					  (commentary "input: ~a" inp)
+					  (format t "~a" (current-subgoal* *ps*))
+					  inp)
+					'(quit))))))
+	 (ps (cdr (assoc "proofstate" ps-alist :test #'string=)))
+	 (stat (cdr (assoc "status" ps-alist :test #'string=))))
+    (when show (format t "~%~a~%" ps-alist))
+    (string= stat "proved")
+    (current-subgoal* ps)))
     
+(defun current-subgoal* (ps)
+  (let ((cursg (current-subgoal ps)))
+    (if (null cursg)
+	ps
+	(current-subgoal* cursg))))
+
+(defun check-edited-justifications (justifications)
+  (dolist (just justifications)
+    (multiple-value-bind (msg subjust)
+	(check-edited-justification just)
+      (when subjust
+	(justification-error subjust just msg)))))
+
+;; ETB support
 
 (defvar *etb-typechecked-theories*)
 
@@ -1786,7 +1969,6 @@ Needs to pay attention to sections."
 (defun typecheck-theories (pathname theories)
   (let* ((specpath (make-specpath pathname))
 	 (filename (pvs-filename specpath))
-	 (all-proofs (read-pvs-file-proofs filename))
 	 (sorted-theories (sort-theories theories)))
     ;;(check-import-circularities sorted-theories)
     (dolist (theory sorted-theories)
@@ -1800,7 +1982,7 @@ Needs to pay attention to sections."
 	  (assert (saved-context theory))
 	  ;; (assert (typechecked? theory) nil
 	  ;; 	  "Theory ~a not typechecked?" (id theory))
-	  (restore-from-context filename theory all-proofs)
+	  (restore-from-context filename theory)
 	  (set-default-proofs theory)
 	  ;;	(when (and *prove-tccs* (module? theory))
 	  ;;	  (prove-unproved-tccs (list theory))
@@ -1967,7 +2149,7 @@ Needs to pay attention to sections."
 	       (when fe (setf (fe-status fe) "unfinished"))
 	       nil)))))
 
-(defun tcc-prove (decl context)
+(defun tcc-prove (decl)
   (let ((*suppress-printing* t)
 	(*printproofstate* nil)
 	(*proving-tcc* 'TCC));;'TCC to save the proof.
@@ -4508,8 +4690,8 @@ nil is returned in that case."
     
 (defmethod show-strategy* ((strat rule-entry) out)
   (format out "~(~a~) is a primitive rule" (name strat))
-  #+allegro
-  (let ((source (cdr (assq :strategy (excl:source-file (name strat) t)))))
+  (let ((source #+allegro (cdr (assq :strategy (excl:source-file (name strat) t)))
+		#-allegro (get (name strat) :strategy-source-file)))
     (when source
       (format out " (defined in ~a)" source)))
   (format out ":~2%Arguments: ~(~a~)"
@@ -4528,8 +4710,8 @@ nil is returned in that case."
 (defmethod show-strategy* ((strat defrule-entry) out)
   (format out "~(~a~) is a ~:[strategy~;defined rule~]"
     (name strat) (gethash (name strat) *rules*))
-  #+allegro
-  (let ((source (cdr (assq :strategy (excl:source-file (name strat) t)))))
+  (let ((source #+allegro (cdr (assq :strategy (excl:source-file (name strat) t)))
+		#-allegro (get (name strat) :strategy-source-file)))
     (when source
       (format out " (defined in ~a)" source)))
   (format out ":~2%Arguments: ~(~a~)" (formals strat))
@@ -4548,8 +4730,8 @@ nil is returned in that case."
 (defmethod show-strategy* ((strat defstep-entry) out)
   (format out "~(~a~) is a ~:[strategy~;defined rule~]"
     (name strat) (gethash (name strat) *rules*))
-  #+allegro
-  (let ((source (cdr (assq :strategy (excl:source-file (name strat) t)))))
+  (let ((source #+allegro (cdr (assq :strategy (excl:source-file (name strat) t)))
+		#-allegro (get (name strat) :strategy-source-file)))
     (when source
       (format out " (defined in ~a)" source)))
   (format out ":~2%Arguments: ~(~a~)" (formals strat))
@@ -4778,6 +4960,8 @@ lower-case versions for these, complaining if it could result in duplicates."
 	  (push (cons lname (cdr keywords)) *prover-keywords*))))))
 
 (defun collect-proof-commands ()
+  "Collects proof commands, returns two values: commands and helpers.
+See collect-strategy-names if only names are wanted."
   (let ((cmds nil)
 	(helpers nil))
     (flet ((prf-push (id step)
@@ -4787,7 +4971,8 @@ lower-case versions for these, complaining if it could result in duplicates."
 		 (push step cmds))))
       (maphash #'prf-push *rulebase*)
       (maphash #'prf-push *rules*))
-    (values (sort cmds #'string< :key #'id) (sort helpers #'string< :key #'id))))
+    (values (sort cmds #'string< :key #'name)
+	    (sort helpers #'string< :key #'name))))
 
 ;; (defun collect-proof-arguments ()
 ;;   (let ((*print-pretty* nil))
@@ -4834,11 +5019,20 @@ lower-case versions for these, complaining if it could result in duplicates."
 	(setf (cdr cur-topic) contents))))
 
 ;;; Allows help to be used outside the prover.
-(defun help (&optional name)
+(defmacro help (&optional name)
+  `(help-fun ',name))
+
+(defun help-fun (name)
   (if (null name)
-      (format t "Type (help \"command\") or (help \"topic\"), where topic is one of:~%~{  ~a~^~%~}"
-	(mapcar #'car *help-topics*))
-      (help-rule name)))
+      (format t "Type (help name), where name is a proof command or one of:~%~{  ~a~^~%~}"
+	*help-topics*)
+      (let ((topic (assoc name *help-topics* :test #'string-equal)))
+	(if topic
+	    (format t "~a: ~a" (car topic) (cdr topic))
+	    (progn (funcall (help-rule-fun name) nil)
+		   ;; Return nil rather than what the proof-rule returns,
+		   ;; e.g., (values 'X nil nil)
+		   nil)))))
 
 (defun used-prelude-theory-names (theory &optional prelude-theory-names)
   (let ((th (get-theory theory)))
