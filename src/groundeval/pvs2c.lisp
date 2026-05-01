@@ -164,7 +164,7 @@
 	 (format mf "PVSPATH := ~a~%" *pvs-path*)
 	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
 	 (format mf "SDK=$(shell xcrun --show-sdk-path)~%")
-	 (format mf "CFLAGS := -g -O2 -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I $(PVS2CPATH)/include~%")
+	 (format mf "CFLAGS := -g  -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I $(PVS2CPATH)/include~%")
 	 (format mf "LDFLAGS = -dylib -flat_namespace -undefined suppress -arch arm64 -L $(SDK)/usr/lib -L./ -L /opt/homebrew/lib -L /usr/local/lib -lc -lm -lgmp~%")))
       (format mf "~%src := ~{~a~^ ~}~%" c-files)
       (format mf "~%obj := $(src:.c=.o)~%")
