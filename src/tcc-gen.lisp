@@ -2223,9 +2223,15 @@ the same id for the substitution."
 		      tform))
 		  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
 
-(defun balanced-conjunction-node-list (exprs)
-  (when exprs
-    (let ((vec (coerce exprs 'vector)))
+(defun make-disjoint-cond-property (conditions values)
+  (let ((pairs (make-disjoint-cond-pairs conditions
+					 (pseudo-normalize values))))
+    (make-disjoint-cond-property* pairs)))
+
+
+(defun make-disjoint-cond-property* (pairs)
+  (when pairs
+    (let ((vec (coerce pairs 'vector)))
       (labels ((mk-and (l r)
 		 (cond ((null l) r)
 		       ((null r) l)
@@ -2239,11 +2245,6 @@ the same id for the substitution."
 		       (t (let ((mid (+ lo (floor (- hi lo) 2))))
 			    (mk-and (rec lo mid) (rec mid hi)))))))
 	(rec 0 (length vec))))))
-
-(defun make-disjoint-cond-property (conditions values)
-  (let ((pairs (make-disjoint-cond-pairs conditions
-					 (pseudo-normalize values))))
-    (balanced-conjunction-node-list pairs)))
 
 (defun make-disjoint-cond-pairs (conditions values &optional result)
   (declare (ignore result))
