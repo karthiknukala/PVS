@@ -2216,12 +2216,12 @@ the same id for the substitution."
 	     (id (make-tcc-name)))
 	(assert (tc-eq (find-supertype (type uform)) *boolean*))
 	(unless (tc-eq conc *true*)
-		  (when (and *false-tcc-error-flag*
-			     (tc-eq uform *false*))
-		    (type-error expr
-		      "Disjointness TCC for this expression simplifies to false:~2%  ~a"
-		      tform))
-		  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
+	  (when (and *false-tcc-error-flag*
+		     (tc-eq uform *false*))
+	    (type-error expr
+			"Disjointness TCC for this expression simplifies to false:~2%  ~a"
+			tform))
+	  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
 
 (defun make-disjoint-cond-property (conditions values)
   (let ((pairs (make-disjoint-cond-pairs conditions
