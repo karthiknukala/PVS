@@ -2246,8 +2246,7 @@ the same id for the substitution."
 			    (mk-and (rec lo mid) (rec mid hi)))))))
 	(rec 0 (length vec))))))
 
-(defun make-disjoint-cond-pairs (conditions values &optional result)
-  (declare (ignore result))
+(defun make-disjoint-cond-pairs (conditions values)
   (let ((res nil))
     (loop while (cdr conditions)
 	  do (let ((c1 (car conditions))
