@@ -499,7 +499,8 @@ if imported."
 			  :library (get-library-id (context-path itheory)))
 			ename)))
 	(assert itheory)
-	(assert (or (not (lib-datatype-or-theory? itheory))
+	(assert (or skip-add-to-using?
+		    (not (lib-datatype-or-theory? itheory))
 		    (library iname)
 		    (from-prelude-library? itheory)
 		    (file-equal (context-path itheory) *default-pathname-defaults*))
