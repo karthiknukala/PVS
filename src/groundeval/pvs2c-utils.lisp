@@ -365,7 +365,7 @@
   (if *Csimple-names* (format nil "~a~:[~;_d~]" id destr)
     (gentemp (format nil "pvs_~a~:[~;_d~]" id destr))))
 
-(defun debug (str) (when *Cdebug*) (format t "~%Debug: ~a" str))
+;; (defun debug (str) (when *Cdebug*) (format t "~%Debug: ~a" str))
 
 
 

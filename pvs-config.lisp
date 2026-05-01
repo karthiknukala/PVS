@@ -235,7 +235,7 @@ targets and copying them to the corresponding bin directory."
       ;; 	    (delete-file exe-file))
       ;; 	  (uiop:copy-file (format nil "~a/~a" make-dir exe) exe-file)))
       #+allegro (format t "~% make-in-platform loading ~a" lib-file)
-      #+allegro (cffi:load-foreign-library lib-file)
+      (cffi:load-foreign-library lib-file)
       )))
 
 (defun finally-do ()
