@@ -977,7 +977,7 @@ successful."
 		   (format output "# Auto-generated fragment for ~a" theory-id)
 		   (format output "~%OBJS_~a := $(SRCDIR)/~a.o $(SRCDIR)/~a_c.o ~{~a_c.o ~} ~{~a_c.o ~}"
 			   theory-id theory-id theory-id
-			   (loop for thy in *pvs2c-theory-importings*
+			   (loop for thy in (all-importings theory)
 				 when (not (from-prelude? thy))
 				 collect (format nil "$(SRCDIR)/~a"  (id thy)))
 			   (loop for thy in  *preceding-mono-theories* collect (format nil "$(SRCDIR)/~a" (id thy))))
