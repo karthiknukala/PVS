@@ -7266,12 +7266,13 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 
 (defun make-closure-copy-htbl-copy (ir-domaintype
 				    ir-rangetype)
-  (let ((domain-assignments (make-nested-assignment "new_data[j].key"  ir-domaintype
+  (let ((keyhash-assignments (make-c-assignment "new_data[j].keyhash" '|uint32| "x->htbl->data[j].keyhash" '|uint32|))
+	(domain-assignments (make-nested-assignment "new_data[j].key"  ir-domaintype
 						   "x->htbl->data[j].key"  ir-domaintype))
 	(elem-assignments (make-nested-assignment "new_data[j].value" ir-rangetype
 						 "x->htbl->data[j].value" ir-rangetype)))
     (mk-for-instr "uint32_t j = 0; j < new_htbl->size; j++"
-		  (nconc domain-assignments elem-assignments))))
+		  (cons keyhash-assignments (nconc domain-assignments elem-assignments)))))
 
  
 
@@ -7289,7 +7290,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 ~12Tnew_htbl->num_entries = x->htbl->num_entries;
 ~12T~a_hashentry_t * new_data = (~a_hashentry_t *) safe_malloc(new_htbl->size * sizeof(struct ~a_hashentry_s));
 ~12T~a
-~12Tnew_htbl->data = new_data;~a;
+~12Tnew_htbl->data = new_data;
 ~12Ty->htbl = new_htbl;
 ~8T} else
 ~12T{y->htbl = NULL;};
@@ -7309,10 +7310,11 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 			   c-funtype c-funtype c-funtype
 			   (let ((*c-scope-string* (format nil "~a~a" "~12T" *c-scope-string*)))
 			     (print2c (list (make-closure-copy-htbl-copy (ir2c-type ir-domaintype)  (ir2c-type ir-rangetype)))))
-			   (if (ir-reference-type? ir-rangetype)
-			       (format nil "~%~12Tfor (uint32_t j = 0; j < new_htbl->size; j++){~
-~%~24Tif ((new_htbl->data[j].key != 0) || new_htbl->data[j].keyhash != 0) new_htbl->data[j].value->count++;}")
-			     (format nil ""))			   
+			   ;; (if (ir-reference-type? ir-rangetype)
+;; 			       (format nil "~%~12Tfor (uint32_t j = 0; j < new_htbl->size; j++){~
+;; ~%~24Tif ((new_htbl->data[j].key != 0) || new_htbl->data[j].keyhash != 0) new_htbl->data[j].value->count++;}")
+;; 			     (format nil ""))
+			   
 			   )))
 	 (mk-c-noextern-defn-info new-name new-header new-defn (list type-name-root) type-name-root )))
 
