@@ -1,0 +1,177 @@
+(in-package :pvs)
+
+(defun pvs-libdir-contents ()
+  (let* ((libs (acons (format nil "~alib" *pvs-path*) "prelude"
+		      (mapcar #'(lambda (ld) (cons (namestring (cdr ld)) (string (car ld))))
+			(pvs-library-alist))))
+	 (dirs (remove-if #'null
+		 (mapcar #'(lambda (ws)
+			     (unless (assoc (path ws) libs :test #'file-equal)
+			       (list (namestring (path ws)))))
+		   *all-workspace-sessions*))))
+    (sort (append dirs libs) #'libdir-lt)))
+
+(defun libdir-lt (ld1 ld2)
+  (if (null (cdr ld1))
+      (or (cdr ld2)
+	  (string-lessp (car ld1) (car ld2)))
+      (and (cdr ld2)
+	   (string-lessp (cdr ld1) (cdr ld2)))))
+
+(defun pvs-file-contents (file)
+  (handler-case 
+      (let ((theories (typecheck-file file nil nil nil t)))
+	(mapcar #'pvs-theory-contents theories))
+    (pvs-error (err) `(("error" . ,(format nil "~a" err))))))
+
+(defmethod pvs-theory-contents ((theory module))
+  (with-slots (id formals assuming theory exporting context-path filename place) theory
+    `(("theory-id" . ,(string id))
+      ("path" . ,(format nil "~a~a.pvs#~a" context-path filename id))
+      ,@(when formals `(("formals" . ,(pvs-decls-contents formals))))
+      ,@(when assuming `(("assuming" . ,(pvs-decls-contents assuming))))
+      ,@(when theory `(("theory" . ,(pvs-decls-contents theory))))
+      ,@(unless (eq (kind exporting) 'default)
+	  `(("exporting" . ,(pvs-decl-contents exporting))))
+      ("place" . ,(place-list place)))))
+
+(defmethod pvs-theory-contents ((adt recursive-type))
+  (with-slots (id formals assuming constructors context-path place) adt
+    `(("adt-id" . ,(string id))
+      ("path" . ,(namestring context-path))
+      ,@(when formals `(("formals" . ,(pvs-decls-contents formals))))
+      ,@(when assuming `(("assuming" . ,(pvs-decls-contents assuming))))
+      ("constructors" . ,(pvs-decls-contents constructors))
+      ("place" . ,(place-list place)))))
+
+(defun pvs-decls-contents (decls &optional decls-contents)
+  (if (null decls)
+      (nreverse decls-contents)
+      (let* ((rem-decls (cdr decls))
+	     (decl-contents (unless (and (generated-by (car decls))
+					 (not (generated-by (module (car decls)))))
+			      (if (var-decl? (car decls))
+				  (multiple-value-bind (var-contents rdecls)
+				      (pvs-var-decls-contents decls)
+				    (setq rem-decls rdecls)
+				    var-contents)
+				  (pvs-decl-contents (car decls))))))
+	(pvs-decls-contents rem-decls
+			    (if decl-contents
+				(cons decl-contents decls-contents)
+				decls-contents)))))
+
+(defun pvs-var-decls-contents (decls &optional vdecls)
+  (if (var-decl? (car decls))
+      (let ((nvdecls (cons (car decls) vdecls)))
+	(if (chain? (car decls))
+	    (pvs-var-decls-contents (cdr decls) nvdecls)
+	    (values (pvs-var-decls-contents* (nreverse nvdecls)) (cdr decls))))
+      (values (pvs-var-decls-contents* (nreverse vdecls)) decls)))
+
+(defun pvs-var-decls-contents* (vdecls)
+  (let ((vdecls-str (format nil "~{~a~^, ~}" (mapcar #'id vdecls))))
+    `(("decl-id" . ,vdecls-str)
+      ("kind" . "variable")
+      ("decl-str" . ,(strim (unparse vdecls :string t)))
+      ("place" . ,(place-list (place (car vdecls)))))))
+
+(defmethod pvs-decl-contents ((exp exporting))
+  (with-slots (names but-names modules place) exp
+    `(("decl-id" . "exporting")
+      ("kind" . "exporting")
+      ("decl-str" . ,(strim (unparse exp :string t)))
+      ("place" . ,(place-list (place exp))))))
+
+(defmethod pvs-decl-contents ((imp importing))
+  (with-slots (theory-name generated place) imp
+    (let ((tccs (remove-if-not #'tcc? generated)))
+      `(("decl-id" . ,(format nil "~a" (id theory-name)))
+	("kind" . "importing")
+	("decl-str" . ,(unparse-decl imp))
+	,@(when tccs `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse tccs)))))
+	,@(when place `(("place" . ,(place-list place))))))))
+
+(defmethod pvs-decl-contents ((decl declaration))
+  (with-slots (id generated place) decl
+    (unless id (break "No id?"))
+    (let ((tccs (remove-if-not #'tcc? generated))
+	  (kind (typecase decl
+		  (type-decl "type")
+		  (const-decl "const")
+		  (formula-decl "formula")
+		  (judgement "judgement")
+		  (formal-const-decl "const")
+		  (conversion-decl "conversion")
+		  (adtdecl "const")
+		  (t (break "pvs-decl-contents no kind for ~a" decl)))))
+      `(("decl-id" . ,(string id))
+	("kind" . ,kind)
+	("decl-str" . ,(unparse-decl decl))
+	,@(when tccs `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse tccs)))))
+	,@(when place `(("place" . ,(place-list place))))))))
+
+(defmethod pvs-decl-contents ((decl formula-decl))
+  (with-slots (id generated proofs place) decl
+    (let ((tccs (remove-if-not #'tcc? generated)))
+      `(("decl-id" . ,(string id))
+	("kind" . ,(if (tcc? decl) "tcc" "formula"))
+	("decl-str" . ,(unparse-decl decl))
+	("proved" . ,(proved? decl))
+	,@(when tccs `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse tccs)))))
+	("proofs" . ,(pvs-proof-contents decl))
+	,@(when place `(("place" . ,(place-list place))))))))
+
+(defun pvs-proof-contents (decl)
+  (mapcar #'(lambda (prf)
+	      `(("prf-id" . ,(string (id prf)))
+		("script" . ,(format nil "~s" (editable-justification (script prf))))
+		("proved" . ,(eq (status prf) 'proved))
+		("default" . ,(eq prf (default-proof decl)))))
+    (proofs decl)))
+
+(defmethod pvs-decl-contents ((decl judgement))
+  (with-slots (id generated place) decl
+    (let ((tccs (remove-if-not #'tcc? generated))
+	  (jid (or (and id (string id))
+		   (typecase decl
+		     ((or name-judgement application-judgement) (string (id (name decl))))
+		     (number-judgement (str (number-expr decl)))
+		     (subtype-judgement (str (declared-subtype decl)))
+		     (expr-judgement (str (expr decl)))))))
+      `(("decl-id" . ,(string jid))
+	("kind" . "judgement")
+	("decl-str" . ,(unparse-decl decl))
+	,@(when tccs `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse tccs)))))
+	,@(when place `(("place" . ,(place-list place))))))))
+
+(defmethod pvs-decl-contents ((decl inline-recursive-type))
+  (with-slots (id formals assuming constructors place) decl
+    `(("id" . ,(format nil "R ~a" id))
+      ("kind" . ,(if (datatype? decl) "datatype" "codatatype"))
+      ("constructors" . ,(pvs-decls-contents constructors))
+      ("place" . ,(place-list place)))))
+
+(defmethod pvs-decl-contents ((decl auto-rewrite-decl))
+  (with-slots (id rewrite-names generated place) decl
+    (let ((tccs (remove-if-not #'tcc? generated))
+	  (jid (or (and id (string id))
+		   (string (id (car rewrite-names))))))
+      `(("decl-id" . ,jid)
+	("kind" . "auto-rewrite")
+	("decl-str" . ,(unparse-decl decl))
+	,@(when tccs `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse tccs)))))
+	,@(when place `(("place" . ,(place-list place))))))))
+
+(defmethod pvs-decl-contents ((c simple-constructor))
+  (with-slots (id arguments recognizer generated place) c
+    ;;(let ((tccs (remove-if-not #'tcc? generated)))
+    `(("id" . ,(string id))
+      ("kind" . "constructor")
+      ("decl-str" . ,(unparse-decl c))
+      ,@(when arguments `(("accessors" . ,(mapcar #'pvs-decl-contents arguments))))
+      ("recognizer" . ,(string recognizer))
+      ;; ,@(when generated `(("tccs" . ,(mapcar #'pvs-decl-contents (reverse generated)))))
+      ,@(when place `(("place" . ,(place-list place)))))
+    ;;)
+    ))

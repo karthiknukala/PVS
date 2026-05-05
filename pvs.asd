@@ -283,6 +283,7 @@
 		  (:file "allegro")
 		  #+cmu
 		  (:file "cmulisp")
+		  (:file "pvs-speedbar")
 		  ))
    (:module typechecker
      :pathname "src/"
