@@ -374,8 +374,9 @@
       (cond (*pvs2c-theory-decls*
 	     (print-header-file *theory-id* theory)
 	     (print-body-file *theory-id* theory))
-	    (t (format t "~%No C code generated for theory ~a, since no declarations were translatable"
-		 (id theory)))))))
+	    (t (setf (no-pvs2c-generated theory) t)
+	       (format t "~%No C code generated for theory ~a, since no declarations were translatable"
+		       (id theory)))))))
 
 (defun pvs2c-decls (decls indecl force?)
   (when decls
@@ -710,11 +711,11 @@
 	 ;; (preceding-prelude-theories (pvs2c-preceding-prelude-theories theory))
 	 ;; (theory-instances (when (ht-instance-clone theory)
 	 ;; 		     (maphash #'(lambda (x y) x) (ht-instance-clone theory))))
-	 (dependency-file-string
-	  (cond (*pvs2c-library-path*
-		 (format nil "~a/include/~a.pvs2c" *pvs2c-library-path* theory-id))
-		(t (ensure-directories-exist "pvs2c/src/test")
-		   (format nil "pvs2c/src/~a.deps" theory-id))))
+	 ;; (dependency-file-string
+	 ;;  (cond (*pvs2c-library-path*
+	 ;; 	 (format nil "~a/include/~a.pvs2c" *pvs2c-library-path* theory-id))
+	 ;; 	(t (ensure-directories-exist "pvs2c/src/test")
+	 ;; 	   (format nil "pvs2c/src/~a.deps" theory-id))))
 	 )
     (unless *pvs2c-library-path*
       (ensure-directories-exist "pvs2c/include/test"))
@@ -722,25 +723,25 @@
       (uiop::copy-file (format nil "~a/src/groundeval/pvs2c-Makefile" *pvs-path*)
 		       "Makefile")
       (replace-in-file "<pvspath>" (format nil "~a" *pvs-path*) "Makefile"))
-    (with-open-file (output dependency-file-string :direction :output
-			    :if-exists :supersede :if-does-not-exist :create)
-      (let ((importings-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *pvs2c-theory-importings*
-			   unless (from-prelude? x)
-			   collect (id x))))
-	    (prelude-importings-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *pvs2c-theory-importings*
-			   when (from-prelude? x)
-			   collect (id x))))
-	    (mono-theories-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *preceding-mono-theories*
-			   collect (id x)))))
-      (format output "{\"theory\" : \"~a\", ~% \"importings\" : [~a], ~% \"prelude-importings\"
- : [~a], ~% \"monoTheories\" : [~a]~%}"
-	      theory-id importings-string prelude-importings-string mono-theories-string)))
+    ;; (with-open-file (output dependency-file-string :direction :output
+ ;; 			    :if-exists :supersede :if-does-not-exist :create)
+ ;;      (let ((importings-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *pvs2c-theory-importings*
+ ;; 			   unless (from-prelude? x)
+ ;; 			   collect (id x))))
+ ;; 	    (prelude-importings-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *pvs2c-theory-importings*
+ ;; 			   when (from-prelude? x)
+ ;; 			   collect (id x))))
+ ;; 	    (mono-theories-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *preceding-mono-theories*
+ ;; 			   collect (id x)))))
+ ;;      (format output "{\"theory\" : \"~a\", ~% \"importings\" : [~a], ~% \"prelude-importings\"
+ ;; : [~a], ~% \"monoTheories\" : [~a]~%}"
+ ;; 	      theory-id importings-string prelude-importings-string mono-theories-string)))
     (with-open-file (output file-string :direction :output
 			    :if-exists :supersede :if-does-not-exist :create)
       (format output "//Code generated using pvs2ir")
@@ -978,7 +979,7 @@ successful."
 		   (format output "~%OBJS_~a := $(SRCDIR)/~a.o $(SRCDIR)/~a_c.o ~{~a_c.o ~} ~{~a_c.o ~}"
 			   theory-id theory-id theory-id
 			   (loop for thy in (all-importings theory)
-				 when (not (from-prelude? thy))
+				 when (and (not (from-prelude? thy))(not (no-pvs2c-generated thy)))
 				 collect (format nil "$(SRCDIR)/~a"  (id thy)))
 			   (loop for thy in  *preceding-mono-theories* collect (format nil "$(SRCDIR)/~a" (id thy))))
 		   (format output "~%pvs2c/bin/~a: $(OBJS_~a) | $(BINDIR)~%~c$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)" theory-id theory-id #\Tab)

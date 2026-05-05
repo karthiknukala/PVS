@@ -199,6 +199,9 @@
   (pvs2c-warnings :documentation
 		  "A list of warnings generated during PVS2C translation"
 		  :restore-as nil)
+  (no-pvs2c-generated :documentation
+		  "A flag indicating no PVS2C code was generated"
+		  :restore-as nil)
   (all-declarations :fetch-as nil)
   (all-imported-theories :fetch-as 'unbound :initform 'unbound)
   (all-imported-names :fetch-as 'unbound :initform 'unbound)
