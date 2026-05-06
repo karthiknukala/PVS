@@ -1,14 +1,17 @@
 (in-package :pvs)
 
 (defun pvs-libdir-contents ()
-  (let* ((libs (acons (format nil "~alib" *pvs-path*) "prelude"
-		      (mapcar #'(lambda (ld) (cons (namestring (cdr ld)) (string (car ld))))
-			(pvs-library-alist))))
-	 (dirs (remove-if #'null
-		 (mapcar #'(lambda (ws)
-			     (unless (assoc (path ws) libs :test #'file-equal)
-			       (list (namestring (path ws)))))
-		   *all-workspace-sessions*))))
+  (let* ((libs (acons (format nil "~aExamples" *pvs-path*) "PVS Examples"
+		      (acons (format nil "~alib" *pvs-path*) "PVS Prelude"
+			     (mapcar #'(lambda (ld) (cons (namestring (cdr ld))
+							  (string (car ld))))
+			       (pvs-library-alist)))))
+	 (dirs (cons (list (format nil "~a" (user-homedir-pathname)))
+		     (remove-if #'null
+		       (mapcar #'(lambda (ws)
+				   (unless (assoc (path ws) libs :test #'file-equal)
+				     (list (namestring (path ws)))))
+			 *all-workspace-sessions*)))))
     (sort (append dirs libs) #'libdir-lt)))
 
 (defun libdir-lt (ld1 ld2)
@@ -27,7 +30,7 @@
 (defmethod pvs-theory-contents ((theory module))
   (with-slots (id formals assuming theory exporting context-path filename place) theory
     `(("theory-id" . ,(string id))
-      ("path" . ,(format nil "~a~a.pvs#~a" context-path filename id))
+      ("path" . ,(format nil "~a~a.pvs" context-path filename))
       ,@(when formals `(("formals" . ,(pvs-decls-contents formals))))
       ,@(when assuming `(("assuming" . ,(pvs-decls-contents assuming))))
       ,@(when theory `(("theory" . ,(pvs-decls-contents theory))))
@@ -36,9 +39,9 @@
       ("place" . ,(place-list place)))))
 
 (defmethod pvs-theory-contents ((adt recursive-type))
-  (with-slots (id formals assuming constructors context-path place) adt
+  (with-slots (id formals assuming constructors context-path filename place) adt
     `(("adt-id" . ,(string id))
-      ("path" . ,(namestring context-path))
+      ("path" . ,(format nil "~a~a.pvs" context-path filename))
       ,@(when formals `(("formals" . ,(pvs-decls-contents formals))))
       ,@(when assuming `(("assuming" . ,(pvs-decls-contents assuming))))
       ("constructors" . ,(pvs-decls-contents constructors))
