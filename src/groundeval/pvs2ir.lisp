@@ -30,11 +30,15 @@
 (defvar *update-lhs-bindings* nil)
 (defvar *new-offset-bindings* nil)
 
-(define-condition pvs2c-error (simple-error) (error-string))
+; (define-condition pvs2c-error (simple-error) (error-string))
+(define-condition pvs2c-warning (simple-warning) (warning-string))
 
-;; Just a convenience macro for invoking pvs2c-error
-(defmacro pvs2c-err (ctl &rest args)
-  `(error 'pvs2c-error :format-control ,ctl :format-arguments (list ,@args)))
+;; ;; Just a convenience macro for invoking pvs2c-error
+;; (defmacro pvs2c-err (ctl &rest args)
+;;   `(error 'pvs2c-error :format-control ,ctl :format-arguments (list ,@args)))
+
+(defmacro pvs2c-warn (ctl &rest args)
+  `(warn 'pvs2c-warning :format-control ,ctl :format-arguments (list ,@args)))
 
 (defmethod decl-eval-info-instance ((decl formal-const-decl))
   'formal-const-eval-info)
@@ -1408,7 +1412,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 					     (ir-body (pvs2ir expression in-bindings context expected-range)))
 					(mk-ir-lambda ir-binds ir-rangetype ir-body)))
 				    (pvs2ir defn *ir-theory-tbindings* context type))
-				(pvs2c-err "Missing definition for ~a" (id decl))))
+				(pvs2c-warn "Missing definition for ~a" (id decl))))
 		   (ir-defn-with-tformals
 		    (if *ir-theory-formals*
 			(cond ((ir-lambda? ir-defn)
@@ -1499,7 +1503,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 );(break "pvs2ir-constant-ir")	       
     (if (and (null (cdefn (eval-info decl))) ;;NSH(2/6/25): Added check for call to non-executable operation
 	     (not (eq decl *pvs2c-current-decl*)))
-	(pvs2c-err "Found non-executable operation ~a while code generating for ~a" (id decl)(id *pvs2c-current-decl*))
+	(pvs2c-warn "Found non-executable operation ~a while code generating for ~a" (id decl)(id *pvs2c-current-decl*))
       	(cond ((and nonref-actuals (not (eq theory *current-pvs2c-theory*))) ;; was (eq intern-theory-id *theory-id*)))
 	       (let* ((*theory-id* intern-theory-id)
 		      (monoclones (ht-instance-clone theory))
@@ -2545,7 +2549,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	   (cond ((and (ir-subrange? bnd1type)
 		       (check-quantifier-subrange (ir-low bnd1type)(ir-high bnd1type)))
 		  (mk-ir-forall bnd1 (pvs2ir-forall-expr rest expr)))
-		 (t (pvs2c-err "Non-subrange quantifiers are not handled")
+		 (t (pvs2c-warn "Non-subrange quantifiers are not handled")
 		    ;;(mk-ir-function 'u_undef_quant_expr)
 		    ))))
 	(t expr)))
@@ -2558,14 +2562,14 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	   (cond ((and (ir-subrange? bnd1type)
 		       (check-quantifier-subrange (ir-low bnd1type)(ir-high bnd1type)))
 		  (mk-ir-exists bnd1 (pvs2ir-exists-expr rest expr)))
-		 (t (pvs2c-err "Non-subrange quantifiers are not handled")
+		 (t (pvs2c-warn "Non-subrange quantifiers are not handled")
 		    ;; (mk-ir-function 'u_undef_quant_expr)
 		    ))))
 	(t expr)))
 
 (defmethod pvs2ir* ((expr quant-expr) bindings expected)
   (declare (ignore bindings expected))
-  (pvs2c-err "Quantifiers not allowed:~%  ~a" expr)
+  (pvs2c-warn "Quantifiers not allowed:~%  ~a" expr)
   (mk-ir-function 'u_undef_quant_expr));;using a dummy name
 
 ;;gets the type of component of nested arrays/records being updated.
@@ -4459,7 +4463,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	     c-rhs
 	     c-type))
 	  (progn (break "actual")
-		 (pvs2c-err "actual type must be a reference" ir-actual-type))))))
+		 (pvs2c-warning "actual type must be a reference" ir-actual-type))))))
 
 (defmethod ir2c* ((ir-expr ir-const-actual) return-var return-type)
   (with-slots (ir-actual-expr) ir-expr

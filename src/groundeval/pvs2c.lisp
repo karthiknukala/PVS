@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; -*- Mode: Lisp -*- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; pvs2c.lisp -- 
-;; Author          : Shankar, Gaspard Ferey, and Sam Owre
+;; Author          : Shankar and Sam Owre
 ;; Status          : Stable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -395,7 +395,7 @@
 					    	  (not (member mod-id
 							       *pvs2c-prelude-theories*)))))
 				 (pushnew (module ref) *pvs2c-theory-importings*))))
-	  (pvs2c-error (c)
+	  (pvs2c-warning (c)
 	    (let ((warning (format nil "~%No C code generated for ~a~%  ~a" (id decl) c)))
 	      (push (cons decl warning) (pvs2c-warnings (module decl)))
 	      (warn warning))))))

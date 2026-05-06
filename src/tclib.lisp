@@ -154,8 +154,20 @@
       (format t "~%Done typechecking the core prelude")
       (restore-prelude-proofs)
       ;;(initialize-prelude-attachments)
-      (pvs2c-prelude)
-      (ignore-errors (uiop:run-program (format nil "~a/lib/pvs2c/src/make" *pvs-path*)))
+
+      (handler-case (progn
+		      (format t "~%[PVS2C] Generating prelude...~%")
+		      (pvs2c-prelude)
+		      (format t "~%[PVS2C] Generated prelude. Making...~%")
+		      (uiop:run-program (format nil "cd ~a/lib/pvs2c/src/ && make" *pvs-path*))
+		      (format t "~%[PVS2C] Done with Make, removing .o files...~%")
+		      (uiop:run-program (format nil "rm ~a/lib/pvs2c/src/*.o" *pvs-path*))
+		      (format t "~%[PVS2C] Done with PVS2C."))
+	(pvs2c-warning (w)
+	  (format t "~%[PVS2C] Warning: ~a~%" w))
+	(error (e)
+	  (format t "~%[PVS2C] Error: ~a~%" e)))
+      
       (register-manip-type *number_field* 'pvs-type-real))))
 
 (defun load-pvsio-prelude ()
