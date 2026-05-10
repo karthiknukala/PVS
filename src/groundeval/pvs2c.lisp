@@ -966,7 +966,7 @@ successful."
 		 (dolist (tform test-formulas)
 		   (format main "~2%~Tprintf(\"~a.~a ==> %s\\n\", ~a() ? \"true\" : \"false\");"
 			   (id (module tform)) (id tform) (op-name (cdefn (eval-info tform)))))
-		 (format main "~%}~%")
+		 (format main "~% return 0;~%}~%")
 		 (format t "~%Wrote ~a" filename))
 	       (let* ((theory-id (id theory))
 		      (mkfile-string (cond (*pvs2c-library-path*
