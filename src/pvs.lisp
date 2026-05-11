@@ -2877,11 +2877,13 @@ Note that even proved ones get overwritten"
 (defmethod parsed?* ((x null))
   nil)
 
-(defun typechecked-file? (filename)
-  (and (parsed-file? filename)
-       (every #'(lambda (m)
-		  (member 'typechecked (status m)))
-	      (get-theories filename))))
+(defun typechecked-file? (fileref)
+  (or (and (prelude-file-theories fileref) t)
+      (with-pvs-file (filename) fileref
+	(and (parsed-file? filename)
+	     (every #'(lambda (m)
+			(member 'typechecked (status m)))
+		    (get-theories filename))))))
 
 
 ;;; Must be a method, since the slot exists for declarations.
