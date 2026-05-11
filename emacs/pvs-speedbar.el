@@ -56,6 +56,7 @@
       (define-key pvs-speedbar-key-map "\C-m" 'speedbar-edit-line)
       (define-key pvs-speedbar-key-map "+" 'speedbar-expand-line)
       (define-key pvs-speedbar-key-map "-" 'speedbar-contract-line)
+      (define-key pvs-speedbar-key-map "?" 'pvs-speedbar-help)
       )
   (setq speedbar-initial-expansion-list-name "PVS Files")
   ;; sets speedbar-initial-expansion-mode-alist
@@ -70,10 +71,45 @@
   (cl-pushnew '("<V>" . pvs-speedbar-check-mark)
 	   speedbar-expand-image-button-alist :test 'equal)
   (cl-pushnew '("<X>" . pvs-speedbar-cross)
-	   speedbar-expand-image-button-alist :test 'equal))
+	   speedbar-expand-image-button-alist :test 'equal)
+  (define-key speedbar-mode-map "p"
+      (lambda () (interactive)
+        (speedbar-change-initial-expansion-list "PVS Files")))
+  (define-key speedbar-mode-map "i"
+      (lambda () (interactive)
+        (speedbar-change-initial-expansion-list "Info"))))
 
 (with-eval-after-load 'speedbar
   (pvs-install-speedbar-variables))
+
+(defun pvs-speedbar-help ()
+  (interactive)
+  (let ((help-file (format "%s/lib/pvs-speedbar.org" pvs-path)))
+    ;; (display-buffer-pop-up-frame
+    ;;  help-buf
+    ;;  `((dedicated . t) (unsplittable . t) (modeline . t) (use-frame-synchronization)
+    ;;    (tool-bar-lines . 0) (tab-bar-lines . 0) (menu-bar-lines . 0)
+    ;;    (bottom-divider-width . 0) (right-divider-width . 0) (internal-border-width . 0)
+    ;;    (undecorated) (border-width . 0)
+    ;;    (name . "Speedbar Help") (minibuffer . nil)))
+    (speedbar-find-file-in-frame help-file)
+    ))
+
+(defvar pvs-speedbar-kind-char
+  '(("importing" . "I")
+    ("type" . "T")
+    ("variable" . "V")
+    ("const" . "C")
+    ("formula" . "F")
+    ("tcc" . "O") ; for Obligation
+    ("proof" . "P")
+    ("judgement" . "J")
+    ("conversion" . ">")
+    ("datatype" . "d")
+    ("codatatype" . "c")
+    ("constructor" . "+")
+    ("auto-rewrite" . "A")
+    ("exporting" . "")))
 
 (defun pvs-speedbar-item-info ()
   (save-excursion
@@ -178,7 +214,12 @@ directory with these items.  This function is replaceable in
 				'pvs-speedbar-goto-pvs-file
 				(list pvs-file) ;; No place
 				'speedbar-file-face indent)
-	(put-text-property start (point) 'path pvs-file)))
+	(put-text-property start (point) 'path pvs-file)
+	(when (pvs-send-and-wait (format "(typechecked-file\? \"%s\")" pvs-file))
+	  (forward-line -1)
+	  ;;(beginning-of-line)
+	  (speedbar-add-indicator "<V>")
+	  (forward-line 1))))
     (unless (or subdirs pvs-files)
       (message "%s has no pvs-files or subdirectories" (car libdir)))))
 
@@ -255,21 +296,6 @@ INDENT is the current indentation depth."
 	(t (error "Ooops... not sure what to do")))
   (speedbar-center-buffer-smartly))
 
-(defvar pvs-speedbar-kind-char
-  '(("variable" . "V")
-    ("const" . "C")
-    ("type" . "T")
-    ("importing" . "I")
-    ("formula" . "F")
-    ("tcc" . "")
-    ("judgement" . "J")
-    ("conversion" . ">")
-    ("datatype" . "d")
-    ("codatatype" . "c")
-    ("constructor" . "+")
-    ("auto-rewrite" . "A")
-    ("exporting" . "")))
-
 (defun pvs-speedbar-list-decls (theory-spec indent)
   (let* ((path (cdr (assoc 'path theory-spec)))
 	 (decl-specs (append (cdr (assq 'formals theory-spec))
@@ -304,7 +330,8 @@ INDENT is the current indentation depth."
 	    (pvs-speedbar-remove-indicators)
 	    (if (cdr proved)
 		(speedbar-add-indicator "<V>")
-		(speedbar-add-indicator "<X>"))))
+		;;(speedbar-add-indicator "<X>")
+		)))
 	(put-text-property start (point) 'path dbody)
 	(save-excursion
 	  (end-of-line)
@@ -341,7 +368,7 @@ INDENT is the current indentation depth."
 	     (script (cdr (assq 'script dprf)))
 	     (start (point)))
 	(speedbar-make-tag-line 'bracket ch exp
-				(list path decl-spec mproofs) pid
+				(list path theory-spec decl-spec mproofs) pid
 				'pvs-speedbar-goto-proof
 				(list path theory-spec decl-spec dprf)
 				'purple indent)
@@ -370,6 +397,56 @@ INDENT is the current indentation depth."
 	    (overlay-put (make-overlay start (+ start 1))
 			 'face 'org-warning)))))))
 
+(defun pvs-speedbar-expand-tcc (text path-decl-spec indent)
+  (let ((path (car path-decl-spec))
+	(theory-spec (cadr path-decl-spec))
+	(decl-spec (caddr path-decl-spec))
+	(tcc-spec (cadddr path-decl-spec)))
+    (cond ((string-search "+" text)	;we have to expand this tcc
+	   (speedbar-change-expand-button-char ?-)
+	   (speedbar-with-writable
+	     (save-excursion
+	       (end-of-line) (forward-char 1)
+	       (pvs-speedbar-list-tcc-contents path theory-spec decl-spec tcc-spec (1+ indent)))))
+	  ((string-search "-" text)	;we have to contract this node
+	   (speedbar-change-expand-button-char ?+)
+	   (speedbar-delete-subblock indent))
+	  (t (error "Ooops... not sure what to do")))))
+
+(defun pvs-speedbar-list-tcc-contents (path theory-spec decl-spec tcc-spec indent)
+  (let ((prf-specs (cdr (assq 'proofs tcc-spec))))
+    (when prf-specs
+      (let* ((dprf (cl-find-if #'(lambda (prf) (cdr (assoc 'default prf))) prf-specs))
+	     (mproofs (when (cdr prf-specs) (remove dprf prf-specs)))
+	     (ch (if mproofs ?+ ? ))
+	     (exp (when mproofs 'pvs-speedbar-expand-mult-proofs))
+	     (id (cdr (assq 'prf-id dprf)))
+	     (pid (format "P %s" id))
+	     (script (cdr (assq 'script dprf)))
+	     (start (point)))
+	(speedbar-make-tag-line 'bracket ch exp
+				(list path theory-spec tcc-spec mproofs) pid
+				'pvs-speedbar-goto-proof
+				(list path theory-spec tcc-spec dprf)
+				'purple indent)
+	(put-text-property start (point) 'path script)
+	(save-excursion
+	  (end-of-line)
+	  (let ((start (search-backward pid)))
+	    (overlay-put (make-overlay start (+ start 1))
+			 'face 'org-warning)))))))
+
+(defun pvs-speedbar-goto-tcc (_text path-spec _indent)
+  (let* ((path (car path-spec))
+	 (theory-spec (cadr path-spec))
+	 ;; (decl-spec (caddr path-spec))
+	 (tcc-spec (cadddr path-spec))
+	 (thpath (format "%s#%s" path (cdr (assq 'theory-id theory-spec)))))
+    (show-tccs thpath)
+    (goto-char (point-min))
+    (re-search-forward (cdr (assq 'decl-id tcc-spec)))
+    (beginning-of-line)))
+
 (defun pvs-speedbar-expand-mult-proofs (text mprfs-spec indent)
   (let ((path (car mprfs-spec))
 	(theory-spec (cadr mprfs-spec))
@@ -389,55 +466,16 @@ INDENT is the current indentation depth."
 
 (defun pvs-speedbar-list-mult-proofs (mproofs path theory-spec decl-spec indent)
   (dolist (prf-spec mproofs)
-    (let ((id (cdr (assq 'prf-id prf-spec)))
-	  (script (cdr (assq 'script prf-spec)))
-	  (start (point)))
+    (let* ((id (cdr (assq 'prf-id prf-spec)))
+	   (pid (format "P %s" id))
+	   (script (cdr (assq 'script prf-spec)))
+	   (start (point)))
       (speedbar-make-tag-line 'bracket ?  nil ; 'pvs-speedbar-expand-proof
-			      prf-spec id
+			      prf-spec pid
 			      'pvs-speedbar-goto-proof
 			      (list path theory-spec decl-spec prf-spec)
 			      'blue indent)
       (put-text-property start (point) 'path script))))
-
-(defun pvs-speedbar-goto-tcc (_text path-spec _indent)
-  (let* ((path (car path-spec))
-	 (theory-spec (cadr path-spec))
-	 ;; (decl-spec (caddr path-spec))
-	 (tcc-spec (cadddr path-spec))
-	 (thpath (format "%s#%s" path (cdr (assq 'theory-id theory-spec)))))
-    (show-tccs thpath)
-    (goto-char (point-min))
-    (re-search-forward (cdr (assq 'decl-id tcc-spec)))
-    (beginning-of-line)))
-
-(defun pvs-speedbar-expand-tcc (text path-spec indent)
-  (cond ((string-search "+" text)	;we have to expand this tcc
-	 (speedbar-change-expand-button-char ?-)
-	 (speedbar-with-writable
-	   (save-excursion
-	     (end-of-line) (forward-char 1)
-	     (pvs-speedbar-list-tcc-contents path-spec (1+ indent)))))
-	((string-search "-" text)	;we have to contract this node
-	 (speedbar-change-expand-button-char ?+)
-	 (speedbar-delete-subblock indent))
-	(t (error "Ooops... not sure what to do"))))
-
-(defun pvs-speedbar-list-tcc-contents (path-spec indent)
-  (let ((path (car path-spec))
-	(theory-spec (cadr path-spec))
-	;; (decl-spec (caddr path-spec))
-	(tcc-spec (cadddr path-spec)))
-    (dolist (prf-spec (cdr (assq 'proofs tcc-spec)))
-      (let ((id (cdr (assq 'prf-id prf-spec)))
-	    (script (cdr (assq 'script prf-spec)))
-	    (prf-path-spec (list path theory-spec tcc-spec prf-spec))
-	    (start (point)))
-	(speedbar-make-tag-line 'bracket ?  nil
-				prf-path-spec id
-				'pvs-speedbar-goto-proof
-				prf-path-spec
-				'purple indent)
-	(put-text-property start (point) 'path script)))))
 
 ;; (defun pvs-speedbar-expand-proof (text tcc-spec indent)
 ;;   nil)
