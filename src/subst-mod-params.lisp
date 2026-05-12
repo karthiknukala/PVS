@@ -475,7 +475,9 @@
 					    (freevars obj)))
 	   (formals (unless (or (not (datatype-or-module? *subst-mod-params-theory*))
 				(eq (current-theory) *subst-mod-params-theory*))
-		      (formals-sans-usings *subst-mod-params-theory*)))
+		      (or (and (datatype? obj)
+			       (formals-sans-usings obj))
+			  (formals-sans-usings *subst-mod-params-theory*))))
 	   (dformals (when decl (all-decl-formals decl))) ; includes mapping lhs
 	   ;;(decl-formals decl)))
 	   (*subst-mod-free-params* nil)
