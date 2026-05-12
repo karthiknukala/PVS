@@ -6735,7 +6735,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 					      (list offset-instr))))))
 		 (for-instr (mk-for-instr (format nil "uint32_t ~a = 0; ~a < ~a; ~a++"
 						for-index for-index size for-index)
-					c-body-with-index)))
+					c-body-with-index)));(break "ir2c*(lambda)")
 	    (append mp-prelude
 		    size-instrs
 		    (cons (format nil "~a = new_~a(~a)" return-var c-arraytype size)
@@ -9037,12 +9037,13 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 				   (list (format nil "~a->elems[~a] = (~a_ptr_t)safe_malloc(sizeof(~a_t))" lhs index et1-ctype et1-ctype) ;; et1-ctype
 					 (format nil "~a_init(~a->elems[~a])" et1-ctype lhs index))))
 	     (for-body-instrs  (if mpz-dom2?
-				   (cons
-				    (format nil "mpz_set_ui(~a, ~a)" mpindex index)
-				    (append lhs-mp-init-instrs
-					    (copy-type* et1 et2
-							 (format nil "~a->elems[~a]" lhs index)
-							 (format nil "~a->ftbl->fptr(~a, ~a)" rhs rhs mpindex))))
+				   (append mp-prelude;;moved mp-prelude inside the for loop
+					   (cons
+					    (format nil "mpz_set_ui(~a, ~a)" mpindex index)
+					    (append lhs-mp-init-instrs
+						    (copy-type* et1 et2
+								(format nil "~a->elems[~a]" lhs index)
+								(format nil "~a->ftbl->fptr(~a, ~a)" rhs rhs mpindex)))))
 				 (append lhs-mp-init-instrs
 					 (copy-type* et1 et2
 						     (format nil "~a->elems[~a]" lhs index)
@@ -9055,9 +9056,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 		(cons (format nil "~a = new_~a(~a)" lhs
 			      (add-c-type-definition (ir2c-type texpr1))
 			      tmp)
-		      (append mp-prelude
-			      (cons for-instr
-				    (when mpz-dom2? (list (format nil "mpz_clear(~a)" mpindex)))))))))))
+		      (list for-instr)))))))
 
 (defmethod copy-type* ((texpr1 ir-arraytype)(texpr2 ir-arraytype) lhs rhs)
   ;;NSH(9/9/19): need to generalize from uint32 below. 
