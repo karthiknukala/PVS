@@ -706,7 +706,7 @@
 
 (defun find-verb-char (str)
   (dotimes (i 127)
-    (let ((ch (character i)))
+    (let ((ch (code-char i)))
       (when (and (graphic-char-p ch)
 		 (not (alphanumericp ch))
 		 (not (char= ch #\space))
