@@ -637,7 +637,7 @@ $(sbcl-rt) : $(PVSPATH)pvs.asd $(image-deps)
 	$(SBCL) --dynamic-space-size $(SBCL_SPACE_SIZE) \
 	        --control-stack-size $(SBCL_STACK_SIZE) \
 		--eval "(require :asdf)" \
-		--eval "(ql:quickload (list :babel :clack :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
+		--eval "(ql:quickload (list :babel :clack :clack-handler-hunchentoot :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
 		--eval "(push *default-pathname-defaults* asdf:*central-registry*)" \
 	        --eval "(asdf:operate :program-op :pvs)" \
 	        --quit
