@@ -425,7 +425,8 @@
     (when  (and (ir-typename? typename)
 		(ir-type-value decl));some type definitions translate to no-ops
       ;(break "pvs2c-decl*:type-eq-decl")
-      (add-c-type-definition typename))))
+      (let ((ir-type-id (add-c-type-definition typename)))
+	(setf (ir-type-id typename) ir-type-id)))))
 
 
 (defmethod pvs2c-decl* ((decl type-decl)) ;;has to be an adt-type-decl

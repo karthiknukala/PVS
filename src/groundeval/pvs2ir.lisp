@@ -2367,7 +2367,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 (ir-recordtype ;(or ir-expected)
 	  (mk-ir-tupletype (loop for type in ir-field-types
 				 as field in ir-fields
-				 collect (mk-ir-fieldtype (ir-fieldname field) type (ir-fieldname) (ir-fieldname field))))))
+				 collect (mk-ir-fieldtype (ir-fieldname field) type (ir-fieldname field))))))
   (mk-ir-let* ir-field-var-types ir-assignments
 	      (mk-ir-record ir-fields ir-recordtype))))
 
@@ -3151,8 +3151,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	    ;;remove?     (if (tc-eq type *numfield* ))
 	    (if (formal-type-decl? (declaration type))
 		(mk-ir-formal-typename (pvs2ir-unique-decl-id (declaration type)) (declaration type))
-		(let ((tbind (assoc (declaration type) tbindings))
-		      (decl (declaration type)))
+		(let* ((decl (declaration type))
+		       (tbind (assoc decl tbindings)))
 		  (unless tbind (pvs2ir-decl decl))
 		  (if tbind (cdr tbind) (ir-type-name (ir-type-value decl)))))))))
 ;;(pvs2ir-decl (declaration type)))));;returns the type name
