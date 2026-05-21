@@ -559,11 +559,12 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 
 
 
-(defun mk-ir-fieldtype (id type);doubles as a variable
+(defun mk-ir-fieldtype (id type pvs-id);doubles as a variable
   (make-instance 'ir-fieldtype
 		 :ir-id id ; ir-id is the field name
 		 :ir-name (gentemp (string id))  ;;use ir-name for unique name for the declaration
-		 :ir-vtype type))
+		 :ir-vtype type
+		 :ir-pvsid pvs-id))
 
 (defun mk-ir-funtype (domain range)
 ;  (when (ir-variable? domain)(break "mk-ir-funtype"))
@@ -1537,7 +1538,11 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 (nonref-actuals (loop for actlabel in type-actuals
 			       when (not (eq actlabel 'ref))
 			       collect actlabel))
-	 (root-theory-id (or (generated-by theory)(id theory)))
+	 (root-theory-id (let ((genby (generated-by theory)))
+				    (or (and genby
+					     (module? genby)
+					     (id genby))
+					(id theory))))
 	 (theory-root-suffix (subseq (string (id theory)) (length (string root-theory-id))))
 	 (new-theory-id (format nil "~a_~{~a~^_~}" (simple-id root-theory-id)
 				type-actuals))
@@ -1553,7 +1558,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 		   (or thclone
 		       (mk-theory-clone theory thinst intern-theory-id)))
 		  (dummy2 (when thclone (format t "~%Found thclone")))
-		  (instdecl (loop for dc1 in (theory theory)
+		  (instdecl (loop for dc1 in (theory theory);;check if generated-by(dc2)=dc1?
 				  as dc2 in (theory theory-instance)
 				  when (eq dc1 decl)
 				  return dc2))
@@ -1573,7 +1578,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (unless (and (ir-type-value adt-decl)(ir-type-name (ir-type-value adt-decl)))
 	(pvs2ir-adt-decl adt-decl))))
 
-(defun pvs2ir-adt-decl (adt-decl);;only called with ir-type-value is empty
+(defun pvs2ir-adt-decl (adt-decl);;only called with ir-type-value empty
   (let* ((adt-type (type-value adt-decl))
 	 (adt-type-id (pvs2ir-unique-decl-id adt-decl))
 	 (adt-adt-id (format nil "~a_adt" adt-type-id))
@@ -1590,7 +1595,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	    (if (enumtype? adt)
 		index-type
 		(mk-ir-adt-recordtype (list (mk-ir-fieldtype index-id
-							     index-type))
+							     index-type;NSH(5/18/26): _index as PVS-ID
+							     '|_index|))
 				      nil))));;set constructors following pvs2ir-adt-constructor
       (setf (ir-type-defn (ir-type-name (ir-type-value adt-decl)))
 	    adt-enum-or-record-type)
@@ -1605,7 +1611,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 		     collect (cons (ir-constructor-type (ir (eval-info (con-decl con)))) ;;this might be the adt-typename
 				   (loop for acc in (acc-decls con) ;;when there are no accessors
 					 collect (mk-ir-fieldtype (pvs2ir-unique-decl-id acc)
-								  (pvs2ir-type (range (type acc)))))))))
+								  (pvs2ir-type (range (type acc)))
+								  (id acc)))))))
 	  (setf (ir-constructors adt-enum-or-record-type)
 		ir-constructors)))
       (unless (enumtype? adt)
@@ -1671,7 +1678,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	     (accessor-types (loop for arg in args
 					      as carg in cargs 
 					      collect (mk-ir-fieldtype (id arg)
-								       (ir-vtype carg))))
+								       (ir-vtype carg)
+								       (id arg))))
 	     (cbody-field-types (append (ir-field-types adt-recordtype);;add the index field
 					accessor-types))
 	     (cbody-recordtype (if args
@@ -1908,14 +1916,17 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	       cbranch)))
 	  (t (format t "Shouldn't reach here."))))
 
+;;not called from anywhere
 (defmethod pvs2ir-constructor-recordtype ((constructor ir-adt-constructor))
   (let* ((index (intern "_index"))
 	 (index-fieldtype (mk-ir-fieldtype index
 					   (mk-ir-subrange (ir-adt-constructor-index constructor)
-							   (ir-adt-constructor-index constructor))))
+							   (ir-adt-constructor-index constructor))
+					   index))
 	 (rest-fieldtypes (loop for accessor in (ir-adt-accessors constructor)
 				collect (mk-ir-fieldtype (ir-adt-accessor-id accessor)
-							 (ir-adt-accessor-type accessor)))))
+							 (ir-adt-accessor-type accessor)
+							 (ir-adt-accessor-id accessor)))))
     (mk-ir-recordtype (cons index-fieldtype rest-fieldtypes) (gensym (string (id constructor))))));NSH(4-3-22): label added
 
 (defmethod ir-formal-id ((ir-formal ir-formal-typename))
@@ -2356,7 +2367,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 (ir-recordtype ;(or ir-expected)
 	  (mk-ir-tupletype (loop for type in ir-field-types
 				 as field in ir-fields
-				 collect (mk-ir-fieldtype (ir-fieldname field) type)))))
+				 collect (mk-ir-fieldtype (ir-fieldname field) type (ir-fieldname field))))))
   (mk-ir-let* ir-field-var-types ir-assignments
 	      (mk-ir-record ir-fields ir-recordtype))))
 
@@ -2404,8 +2415,10 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
   (with-slots (exprs) expr
 	      (mk-ir-tupletype (loop for ir-type in (pvs2ir-expr-type exprs bindings)
 				      as i from 1
-				      collect (mk-ir-fieldtype (intern (format nil "project_~a" i))
-							       ir-type)))))
+				      collect (let ((proj-fieldname (intern (format nil "project_~a" i))))
+						(mk-ir-fieldtype proj-fieldname
+							       ir-type
+							       proj-fieldname))))))
 
 (defmethod pvs2ir-expr-type ((expr  list) &optional bindings)
   (cond ((consp expr) (cons (pvs2ir-expr-type (car expr) bindings)
@@ -2415,7 +2428,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 (defmethod pvs2ir-expr-type ((expr uni-assignment) &optional bindings)
   (with-slots (arguments expression) expr
 	      (mk-ir-fieldtype (id (caar arguments))
-				(pvs2ir-expr-type expression bindings))))
+				(pvs2ir-expr-type expression bindings)
+				(id (caar arguments)))))
 
 ;; (defmethod pvs2ir-expr-type ((expr array-expr) &optional bindings)
 ;;   (with-slots (type) expr
@@ -2451,7 +2465,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 				 ir-expr-type))
 		(ir-field-vartype (mk-ir-variable ir-fieldvar ir-field-type))
 		(ir-field (mk-ir-field (id (caar (arguments assgn1))) ir-field-vartype))
-		(ir-record-fieldtype (mk-ir-fieldtype (ir-fieldname ir-field) ir-field-type))
+		(ir-record-fieldtype (mk-ir-fieldtype (ir-fieldname ir-field) ir-field-type (ir-fieldname ir-field)))
 		(new-bindings (if expected (acons expec1 ir-field-vartype bindings)
 				bindings)))
 	   (pvs2ir-field-assignments (cdr assignments) new-bindings (cdr expected) 
@@ -2961,13 +2975,46 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	  ((subtype-of? type *character*) (mk-ir-chartype))
 	  ((type-name? type-name)
 	   (let* ((type-decl (declaration type-name))
-		  (decl-theory (module type-decl))) 
-	      (if (and (not (eq (id decl-theory) *theory-id*))
-	      	       (formals-sans-usings (module type-decl)));if the theory has formals, use expanded defn
+		  (theory (module type-decl))
+		  (thinst (module-instance type-name))
+		  (actuals (actuals thinst))
+		  (type-actuals (loop for act in actuals
+				      when (type-value act)
+				      collect (check-actual-type (type-value act) tbinding)))
+		  (nonref-actuals (loop for actlabel in type-actuals
+					when (not (eq actlabel 'ref))
+					collect actlabel))
+		  (root-theory-id (let ((genby (generated-by theory)))
+				    (or (and genby
+					     (module? genby)
+					     (id genby))
+					(id theory))))
+		  (theory-root-suffix (subseq (string (id theory)) (length (string root-theory-id))))
+		  (new-theory-id (format nil "~a_~{~a~^_~}" (simple-id root-theory-id)
+					 type-actuals))
+		  (instance-theory-id (intern (format nil "~a~a" new-theory-id theory-root-suffix) :pvs))
+		  (intern-theory-id (intern new-theory-id :pvs))
+		  );(break "p2i-ty(around)")
+	      (if (eq (id theory) *theory-id*)
 		  (call-next-method)
-	     (if (ir-type-value type-decl)
-		 (ir-type-name (ir-type-value type-decl))
-		 (call-next-method)))))
+		  (if nonref-actuals
+		      (let* ((*theory-id* intern-theory-id)
+			     (monoclones (ht-instance-clone theory))
+			     (dummy (when (null monoclones)(format t "~% No monoclones")))
+			     (thclone (and monoclones (gethash  instance-theory-id monoclones)))
+			     (theory-instance
+			      (or thclone
+				  (mk-theory-clone theory thinst intern-theory-id)))
+			     (dummy2 (when thclone (format t "~%Found thclone")))
+			     (inst-decl (loop for dc1 in (theory theory)
+					     as dc2 in (theory theory-instance)
+					     when (eq dc1 type-decl)
+					     return dc2))
+			     )
+			(if (ir-type-value inst-decl)
+			    (ir-type-name (ir-type-value inst-decl))
+			    (call-next-method)))
+		      (call-next-method)))))
 	   (t (call-next-method)))))
 
 	    ;; (let* ((ir-type (call-next-method))
@@ -3036,7 +3083,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 							  ir-dom)
 				   tbinding)
 			   tbinding))
-	   (new-ir-dom (if (binding? domain) (mk-ir-fieldtype new-irvar ir-dom) ir-dom)))
+	   (new-ir-dom (if (binding? domain) (mk-ir-fieldtype new-irvar ir-dom '|_domain|) ir-dom)))
       (mk-ir-funtype new-ir-dom
 		     (pvs2ir-type* range new-tbinding)))))
 
@@ -3069,7 +3116,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	(mk-ir-recordtype (pvs2ir-recordfields sfields tbinding label) label))))
 
 (defmethod pvs2ir-type* ((type field-decl) tbinding)
-  (mk-ir-fieldtype (id type)(pvs2ir-type* (type type) tbinding)))
+  (mk-ir-fieldtype (id type)(pvs2ir-type* (type type) tbinding)(id type)))
 
 (defmethod pvs2ir-type* ((type dep-binding) tbinding)
   (pvs2ir-type* (type type) tbinding))
@@ -3078,7 +3125,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
   (cond ((consp types)
 	 (let* ((field-id (intern (format nil "project_~a" index)))
 		(car-irtype (pvs2ir-type* (car types) tbinding))
-		(car-ir-fieldtype (mk-ir-fieldtype field-id car-irtype))
+		(car-ir-fieldtype (mk-ir-fieldtype field-id car-irtype field-id))
 		;; (varname (intern (format nil "~a_~a" tuple-label field-id)))
 		;; (type-variable (mk-ir-variable varname car-irtype))
 		(new-tbinding (if (binding? (car types))
@@ -3104,8 +3151,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	    ;;remove?     (if (tc-eq type *numfield* ))
 	    (if (formal-type-decl? (declaration type))
 		(mk-ir-formal-typename (pvs2ir-unique-decl-id (declaration type)) (declaration type))
-		(let ((tbind (assoc (declaration type) tbindings))
-		      (decl (declaration type)))
+		(let* ((decl (declaration type))
+		       (tbind (assoc decl tbindings)))
 		  (unless tbind (pvs2ir-decl decl))
 		  (if tbind (cdr tbind) (ir-type-name (ir-type-value decl)))))))))
 ;;(pvs2ir-decl (declaration type)))));;returns the type name
@@ -7030,7 +7077,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 				 (let ((ir-field-type (mapcar #'ir-vtype ir-boundvars)))
 				   (mk-ir-tupletype (loop for type in ir-field-type
 							   as i from 1
-							   collect (mk-ir-fieldtype (intern (format nil "project_~a" i)) type))))))
+							   collect (let ((projection-id (intern (format nil "project_~a" i))))
+								     (mk-ir-fieldtype projection-id type projection-id)))))))
 	       (ir2c-rangetype (ir2c-type ir-rangetype))
 	       (c-rangetype (mppointer-type (add-c-type-definition ir2c-rangetype)))
 	       (c-domaintype (add-c-type-definition (ir2c-type ir-domaintype)))
@@ -8942,7 +8990,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 (let* ((ft1 (car ift1))
 		(id-ft1 (ir-id ft1))
 		(rft1  (ir-vtype ft1))
-		(ft2 (find id-ft1 ift2 :test #'eq :key #'ir-id))
+		(ft2 (find (ir-pvsid ft1) ift2 :test #'eq :key #'ir-pvsid));;NSH(5/18/26): could also use generated-by?
 		;;(id-ft2 (ir-id ft2))
 		(rft2 (ir-vtype ft2))
 		(lhs-field (format nil "~a->~a" lhs id-ft1))

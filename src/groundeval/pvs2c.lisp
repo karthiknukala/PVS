@@ -46,7 +46,8 @@
 ;;during partial monomorphization.
 (defparameter *primitive-prelude-theories*
   '(|booleans| |equalities| |notequal| |if_def| |boolean_props| ;; |xor_def|
-    |quantifier_props| |defined_types| |exists1| |equality_props| |if_props| |functions|
+    |quantifier_props|;; |defined_types|
+    |exists1| |equality_props| |if_props| |functions|
     |functions_alt| ;; |transpose| |restrict|
     |restrict_props| |extend| ;; |extend_bool|
     |extend_props| |extend_func_props| ;; |K_conversion| |K_props| ;; |identity|
@@ -57,7 +58,7 @@
     |relation_props| |relation_props2| |relation_converse_props| |indexed_sets|
     |operator_defs| |numbers| |number_fields| |reals| |real_axioms| |bounded_real_defs|
     |bounded_real_defs_alt| |real_types| |rationals| |integers| |naturalnumbers|
-    ;; |min_nat| |real_defs|
+    |min_nat| ;;|real_defs|
     |real_props| |extra_real_props| |extra_tegies| |rational_props| |integer_props|
     |floor_ceil| |exponentiation| ;; |euclidean_division|
     |divides| ;; |modulo_arithmetic|
@@ -98,9 +99,9 @@
     |lift| |lift_adt| |lift_adt_map|
     |file|
     |list| |list_adt| |list_adt_map| |list_props|
-    |min_nat| |modulo_arithmetic| |finite_sequences| |more_finseq| |array_sequences|
+    |modulo_arithmetic| |finite_sequences| |more_finseq| |array_sequences|
     |ordinals| |ordstruct| |real_defs| |sequences| |sets| |strings|
-    |transpose| |xor_def|))
+    |transpose| |defined_types| |xor_def|))
 
 (defun ensure-c-directories-exist ()
   (when *pvs2c-library-path*
@@ -424,7 +425,8 @@
     (when  (and (ir-typename? typename)
 		(ir-type-value decl));some type definitions translate to no-ops
       ;(break "pvs2c-decl*:type-eq-decl")
-      (add-c-type-definition typename))))
+      (let ((ir-type-id (add-c-type-definition typename)))
+	(setf (ir-type-id typename) ir-type-id)))))
 
 
 (defmethod pvs2c-decl* ((decl type-decl)) ;;has to be an adt-type-decl

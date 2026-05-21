@@ -588,11 +588,11 @@ yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-pc-l
 else
 ifeq ($(PLATFORM),ix86-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
 else
 ifeq ($(PLATFORM),arm-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
 endif
 endif
 endif
