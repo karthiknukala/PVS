@@ -8990,7 +8990,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	 (let* ((ft1 (car ift1))
 		(id-ft1 (ir-id ft1))
 		(rft1  (ir-vtype ft1))
-		(ft2 (find (ir-pvsid ft1) ift2 :test #'eq :key #'ir-pvsid));;NSH(5/18/26): 
+		(ft2 (find (ir-pvsid ft1) ift2 :test #'eq :key #'ir-pvsid));;NSH(5/18/26): could also use generated-by?
 		;;(id-ft2 (ir-id ft2))
 		(rft2 (ir-vtype ft2))
 		(lhs-field (format nil "~a->~a" lhs id-ft1))
