@@ -149,7 +149,7 @@ endif
 
 # Below this is only for dist; i.e., generating tar files
 
-SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
+SYSTEM_FILES = README.md INSTALL LICENSE NOTICES install-sh \
 	pvs.asd pvs pvsio proveit provethem emacs/pvs.xpm emacs/pvslogo.gif \
 	pvs-tex.sub pvs.sty bin/pvs-platform \
 	bin/tar-b64-mail Examples \
