@@ -1937,7 +1937,8 @@ Note that this doesn't check if the .pvs file is the matches as well."
 		      valid?)))
     (when (and te (memq 'invalid-proofs (te-status te)))
       (invalidate-proofs theory))
-    (copy-proofs-to-orphan-file (filename theory) (id theory) rem-proofs)))
+    (when rem-proofs
+      (copy-proofs-to-orphan-file (filename theory) (id theory) (list (cons (id theory) rem-proofs))))))
 
 (defun restore-decls-proofs (decls proofs have-tcc-origins? valid?)
   (cond ((null decls)
@@ -2193,52 +2194,87 @@ Note that the lists might not be the same length."
       (list id class type theory-id))))
 
 
-(defun copy-proofs-to-orphan-file (filename &optional theoryid (proofs nil pfs?))
+(defun copy-proofs-to-orphan-file (filename &optional theoryid proofs)
   "Typechecking tries to assign proofs in each .prf file to the
 corresponding formula declarations, but sometimes proofs are left over (decl
 renaming, etc.) which are then added to the orphaned-proofs.prf file"
-  (unless (or proofs pfs?) ;; nil intensional
+  (when proofs (assert (eq (caar proofs) theoryid)))
+  (unless proofs ;; nil intensional
     (let* ((file-proofs (read-pvs-file-proofs filename))
-	   (th-proofs (unless (not file-proofs)
-			(if theoryid
+	   (th-proofs (if theoryid
 			  (let ((th-elt (assq theoryid file-proofs)))
 			    (if th-elt
 				(list th-elt)
-				(pvs-error "Theory ~a not found in ~a.prf"
-					     theoryid filename)))
-			  file-proofs))))
+				(pvs-message "Theory ~a not found in ~a.prf" theoryid filename)))
+			  file-proofs)))
       (setq proofs th-proofs)))
   ;; Now proofs is a list of the form ((thid ...) (thid ...) ...)
   (when (and proofs
 	     (or *loading-prelude*
 		 (write-permission?)))
-    (let ((oproofs (read-orphaned-proofs))
+    (let ((oproofs (get-orphaned-proofs))
 	  (count 0))
       ;; Now we copy new proofs into oproofs entries
-      (dolist (th-prf proofs)
-	(dolist (decl-proof (cdr th-prf))
-	  (let ((oprf `(,filename ,(car proofs) ,@decl-proof)))
-	    ;;(break "copy-proofs-to-orphan-file")
-	    (unless (member oprf oproofs :test #'equalp)
-	      (incf count)
-	      (push oprf oproofs)))))
+      (handler-case 
+	  (dolist (th-prf proofs)
+	    (let ((th-id (car th-prf)))
+	      (dolist (decl-proofs (cdr th-prf))
+		(let ((decl-id (car decl-proofs))
+		      (dproofs (cddr decl-proofs)))
+		  (dolist (dprf dproofs)
+		    (unless (member dprf oproofs
+				    :test #'(lambda (dpr opr)
+					      (same-orphaned-proofs filename th-id decl-id dpr opr)))
+		      (incf count)
+		      (let ((oprf (cons filename (cons th-id (cons decl-id (fourth dprf))))))
+			(push oprf oproofs))))))))
+	;; If there's an error, it's probably an old orphaned-proof.prf file
+	;; Copy orphaned-proof.prf to a bak file, and set oproofs to just the proofs
+	(error ()
+	  (pvs-message "Error in file ~a:~%  probably old, copied to .bak just in case"
+	    (truename "orphaned-proofs.prf"))
+	  (uiop:copy-file "orphaned-proofs.prf" "orphaned-proofs.bak")
+	  (setq oproofs nil)
+	  (setq count 0)
+	  (dolist (th-prf proofs)
+	    (let ((th-id (car th-prf)))
+	      (dolist (decl-proofs (cdr th-prf))
+		(let ((decl-id (car decl-proofs))
+		      (dproofs (cddr decl-proofs)))
+		  (dolist (dprf dproofs)
+		    (incf count)
+		    (let ((oprf (cons filename (cons th-id (cons decl-id (fourth dprf))))))
+		      (push oprf oproofs)))))))))
       (if *proof-file-debug*
-	  (with-open-file (orph "orphaned-proofs.prf"
-				:direction :output
-				:if-exists :append
-				:if-does-not-exist :create)
-	    (write oproofs :stream orph))
+	  (write-to-orphan-file oproofs)
 	  (handler-case
-	      (with-open-file (orph "orphaned-proofs.prf"
-				    :direction :output
-				    :if-exists :append
-				    :if-does-not-exist :create)
-		(write oproofs :stream orph))
+	      (write-to-orphan-file oproofs)
 	    (file-error (err) (pvs-error "~a" err))))
       (unless (zerop count)
 	(pvs-message
 	    "Added ~d proof~:p from file ~a.prf~:[~;~:*, theory ~a~] to orphaned-proofs.prf"
 	  count filename theoryid)))))
+
+(defun same-orphaned-proofs (filename th-id decl-id dprf oprf)
+  ;; orphaned proofs include the filename, th-id, and decl-id, whereas proofs
+  ;; in the .prf files implicitely have the filename (e.g., come from filename.prf),
+  ;; and inside have a theory-id consed onto the list of decl proofs
+  (and (string= filename (car oprf))
+       (eq th-id (cadr oprf))
+       (eq decl-id (caddr oprf))
+       (let* ((dscript (fourth dprf))
+	      (oscript (cdddr oprf)))
+	 (equalp dscript oscript))))
+
+(defun write-to-orphan-file (oproofs)
+  (with-open-file (orph "orphaned-proofs.prf"
+			:direction :output
+			:if-exists :supersede
+			:if-does-not-exist :create)
+    (dolist (oprf oproofs)
+      (write oprf :stream orph
+	     :length nil :level nil :escape t :pretty nil))))
+
 
 (defun proofs-equal (proof1 proof2)
   (and (eq (car proof1) (car proof2)) ; formula id
@@ -2664,7 +2700,7 @@ renaming, etc.) which are then added to the orphaned-proofs.prf file"
 		(setf (default-proof fdecl) (nth (fourth prf) prfs)))
 	      (format t "~%Couldn't find proof for ~a" (id fdecl))))))))
 
-(defun read-orphaned-proofs (&optional (dir (current-context-path)))
+(defun get-orphaned-proof-file (&optional (dir (current-context-path)))
   (let ((file (cond ((uiop:directory-exists-p dir)
 		     (merge-pathnames "orphaned-proofs.prf"
 				      (ensure-trailing-slash dir)))
@@ -2675,16 +2711,40 @@ renaming, etc.) which are then added to the orphaned-proofs.prf file"
 		    (t (error "Invalid argument to read-orphaned-proofs: ~s"
 			      dir)))))
     (when (uiop:file-exists-p file)
-      ;; (pvs-message "Reading ~a" file)
-      (handler-case
+      file)))
+
+(defun get-orphaned-proofs (&optional (dir (current-context-path)))
+  (let ((file (get-orphaned-proof-file dir)))
+    (when file
+      (with-open-file (orph-strm file :direction :input)
+	(let ((oproofs nil)
+	      (oprf (read orph-strm nil :eof)))
+	  (loop while (not (eq oprf :eof))
+		do (progn (push oprf oproofs)
+			  (setq oprf (read orph-strm nil :eof))))
+	  oproofs)))))
+
+(defun read-orphaned-proofs (&optional (dir (current-context-path)))
+  (let ((file (get-orphaned-proof-file dir)))
+    (when file
+      (if *proof-file-debug*
 	  (with-open-file (orph-strm file :direction :input)
 	    (multiple-value-bind (oproofs total dropped)
 		(read-orphaned-file-entries orph-strm)
-	      (pvs-message "Orphan file ~a returned ~d proofs, found ~d bad ones"
-		file total dropped)
+	      (unless (zerop dropped)
+		(pvs-message "Orphan file ~a returned ~d proofs, found ~d bad ones"
+		  file total dropped))
 	      oproofs))
-	(file-error (err)
-	  (pvs-message "~a" err))))))
+	  (handler-case
+	      (with-open-file (orph-strm file :direction :input)
+		(multiple-value-bind (oproofs total dropped)
+		    (read-orphaned-file-entries orph-strm)
+		  (unless (zerop dropped)
+		    (pvs-message "Orphan file ~a returned ~d proofs, found ~d bad ones"
+		      file total dropped))
+		  oproofs))
+	    (file-error (err)
+	      (pvs-message "~a" err)))))))
 
 (defun read-orphaned-file-entries (orph-strm &optional proofs (total 0) (dropped 0))
   (ignore-errors
