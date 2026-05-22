@@ -149,10 +149,9 @@ endif
 
 # Below this is only for dist; i.e., generating tar files
 
-SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
+SYSTEM_FILES = README.md INSTALL LICENSE NOTICES install-sh \
 	pvs.asd pvs pvsio proveit provethem emacs/pvs.xpm emacs/pvslogo.gif \
-	pvs-tex.sub pvs.sty bin/pvs-platform \
-	bin/tar-b64-mail Examples \
+	pvs-tex.sub pvs.sty Examples \
 	$(wildcard lib/*.pvs lib/*.prf lib/*.help) \
 	lib/pvs.grammar lib/pvs.bnf lib/pvs-style.css \
 	wish/pvs-support.tcl \
@@ -173,7 +172,7 @@ SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
 	$(wildcard lib/bitvectors/*.pvs lib/bitvectors/*.prf) \
 	$(wildcard lib/bitvectors/.pvscontext lib/bitvectors/pvsbin) \
 	$(wildcard yices/$(PLATFORM) $(bindir)/yices1 $(bindir)/yices2) \
-	emacs/configured-for-x Vagrantfile vagrant.README \
+	emacs/configured-for-x \
 	$(wildcard pvs-version.lisp git-commit)
 
 ALLEGRO_FILES = $(bindir)/runtime/file_utils.$(LOAD-FOREIGN-EXTENSION) \
