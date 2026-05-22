@@ -36,8 +36,17 @@ PVS 8.1 can be downloaded directly from releases, or built from
 sources. Note that Allegro Common Lisp is no longer supported, though the
 earlier releases are still available.
 
-@subsection Releases
-Needs detailw
+@subsection GitHub Releases/Prebuilt Packages
+
+PVS (as of version 8.1) is continuously built in GitHub runners for the following architectures:
+ - MacOS Apple Silicon (aarch64/arm64)
+ - MacOS x86/64
+ - Linux (Ubuntu) (aarch64/arm64)
+ - Linux (Ubuntu) (x86/64)
+
+Please see https://github.com/SRI-CSL/PVS/releases for the appropriate version.
+
+VSCode extensions will automatically pull the right version from here, and a similar Emacs integration is on the way.
 
 @subsection Sources
 
@@ -93,7 +102,6 @@ If you have problems, or suggestions for improvement, let us know at
 
 @menu
 * SBCL::
-* VSCode-PVS Integration::
 * Prover Threads::
 * User-defined PVS Images::
 * PVS2C::
@@ -121,9 +129,6 @@ symbol. If case doesn't matter, then use
 specific to PVS.} For example, @code{(string= 'a "a")} returns @code{NIL},
 since @code{'a} is the same as @code{'A}, but this is true for
 @code{(string-equal 'a "a")}.
-
-@node       VSCode-PVS Integration
-@subsection VSCode-PVS Integration
 
 @node       Prover Threads
 @subsection Prover Threads
