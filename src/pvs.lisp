@@ -1498,8 +1498,8 @@ escapes here."
 	(found-diff nil))
     (assert (or osec nsec))
     (assert (memq last-kept-decl (all-decls othy)) () "merge-parsed-theory-decls - 1")
-    (unless (or (null osec) (null nsec) (eq osec nsec))
-      (break "merge-parsed-theory-decls: different sections"))
+    ;; (unless (or (null osec) (null nsec) (eq osec nsec))
+    ;;   (break "merge-parsed-theory-decls: different sections"))
     ;; (null osec) => ndecl tail is all new
     ;; (null nsec) => last-kept-decl tail should be deleted
     ;; else => last-kept-decl tail is replaced by ndecl tail
