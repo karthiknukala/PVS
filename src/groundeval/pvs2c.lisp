@@ -24,6 +24,7 @@
 (defvar *pvs2c-library-path* nil)
 (defvar *pvs2c-theory-importings* nil)
 (defvar *pvs2c-theory-decls* nil)
+(defvar *pvs2c-top-c-file* nil)
 
 ;;; SO The following are from the pvs-strings branch of my clib/src,
 ;;; but I'm not certain of the source.
@@ -273,9 +274,10 @@
 (defun pvs2c-theories (theories force?)
   (mapcar #'(lambda (th) (pvs2c-theory* th force?)) theories));NSH(4-25-25) was (reverse theories)
 
-(defun pvs2c-theory (theoryref &optional force?)
+(defun pvs2c-theory (theoryref &optional (force? t))
   (let* ((theory (get-typechecked-theory theoryref nil t))
-	 (all-imported-theories (when theory (all-imported-theories theory))))
+	 (all-imported-theories (when theory (all-imported-theories theory)))
+	 (*suppress-output* t))
     (pvs2c-theories all-imported-theories force?);;NSH(4-25-25)
     (pvs2c-theory* theory force?)))
 
@@ -366,8 +368,11 @@
 	  )
       (cond (*pvs2c-theory-decls*
 	     (print-header-file *theory-id* theory)
-	     (print-body-file *theory-id* theory))
+	     (let ((cfilename (print-body-file *theory-id* theory)))
+	       (setq *pvs2c-top-c-file* (list cfilename));;for communicating with M-x pvs-c-theory/files Emacs commands
+	       cfilename))
 	    (t (setf (no-pvs2c-generated theory) t)
+	       (setq *pvs2c-top-c-file* nil)
 	       (format t "~%No C code generated for theory ~a, since no declarations were translatable"
 		       (id theory)))))))
 

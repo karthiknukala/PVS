@@ -1558,12 +1558,12 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (cond ((and nonref-actuals (not (eq theory *current-pvs2c-theory*))) ;; was (eq intern-theory-id *theory-id*)
 	   (let* ((*theory-id* intern-theory-id)
 		  (monoclones (ht-instance-clone theory))
-		  (dummy (when (null monoclones)(format t "~% No monoclones")))
+		  ;(dummy (when (null monoclones)(format t "~% No monoclones")))
 		  (thclone (and monoclones (gethash  instance-theory-id monoclones)))
 		  (theory-instance
 		   (or thclone
 		       (mk-theory-clone theory thinst intern-theory-id)))
-		  (dummy2 (when thclone (format t "~%Found thclone")))
+		  ;(dummy2 (when thclone (format t "~%Found thclone")))
 		  (instdecl (loop for dc1 in (theory theory);;check if generated-by(dc2)=dc1?
 				  as dc2 in (theory theory-instance)
 				  when (eq dc1 decl)
