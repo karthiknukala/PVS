@@ -1,6 +1,6 @@
 ;;
 ;; extrategies.lisp
-;; Release: Extrategies-8.0 (09/30/25)
+;; Release: Extrategies-8.1 (09/30/25)
 ;;
 ;; Contact: Cesar Munoz (cesar.a.munoz@nasa.gov)
 ;; NASA Langley Research Center
@@ -39,7 +39,7 @@
 %  Strategy debugging (experts only): skip-steps, show-debug-mode,
 %    enable-debug-mode, disable-debug-mode, set-debug-mode, load-files")
 
-(defparameter *extrategies-version* "Extrategies-8.0 (09/30/2025)")
+(defparameter *extrategies-version* "Extrategies-8.1 (05/23/2026)")
 
 (defstruct (TrustedOracle (:conc-name get-))
   (name nil :read-only t)      ; Oracle name

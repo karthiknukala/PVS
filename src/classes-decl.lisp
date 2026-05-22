@@ -124,23 +124,6 @@
 
 (in-package :pvs)
 
-(export '(actual actuals adt-or-theory adtdecl application argument arguments 
-	  assignment assuming bind-decl binding-expr bindings branch chain?
-	  const-decl const-decl? constructors context conversion-decl
-	  conversionplus-decl? conversions datatype-or-module declaration
-	  declarations-hash declared-type default-proof definition domain enumtype enumtype
-	  expr expression exprs field-application field-decl fields filename 
-	  formal-const-decl formal-type-decl formals formals-sans-usings
-	  formula-decl funtype generated-by id importing infix-application
-	  info inline-datatype judgement? justification lambda-expr let-expr
-	  modname module name name-expr nonempty-types nonempty? number
-	  number-expr operator parens predicate print-type
-	  projection-application quant-expr range recognizer record-expr
-	  recordtype resolutions saved-context script simple-constructor status
-	  subtype supertype theory theory-name tuple-expr tupletype type
-	  type-decl type-def-decl type-expr type-name type-name? type-value
-	  typed-declaration types update-expr using-hash var-decl visible?
-	  recursive-type inline-recursive-type adt-constructor))
 #+cmu
 (ext:without-package-locks
  (defgeneric class (x))

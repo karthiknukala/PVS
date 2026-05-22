@@ -269,6 +269,18 @@
     (typecheck* nfml nil nil nil)
     nfml))
 
+(defmethod new-decl-formal ((fml decl-formal-const-decl) &optional id)
+  (let ((nfml (copy fml
+		'id (or id (id fml))
+		'module (current-theory)
+		'typechecked? nil
+		'type nil
+		;; 'declared-type nil
+		'associated-decl nil)))
+    ;; (typecheck-decl nfml)
+    (typecheck* nfml nil nil nil)
+    nfml))
+
 ;;; If just an id, create a formal-type-decl - no need for subtype at the
 ;;; moment (this is just for reduce with "range" parameter)
 (defmethod new-decl-formal ((fml symbol) &optional id)
@@ -306,7 +318,7 @@
 (defmethod typecheck* ((decl formal-subtype-decl) expected kind arguments)
   (declare (ignore expected kind arguments))
   (check-duplication decl)
-  (let* ((tn (mk-print-type-name (id decl)))
+  (let* ((tn (mk-print-type-name (id decl) decl))
 	 (res (mk-resolution decl (current-theory-name) nil)))
     (setf (resolutions tn) (list res))
     (type-def-decl-value decl tn))
@@ -932,8 +944,8 @@ bindings."
 
 (defmethod typecheck* ((decl type-decl) expected kind arguments)
   (declare (ignore expected kind arguments))
-  ;; (when (formals decl)
-  ;;   (type-error decl "Uninterpreted types may not have parameters"))
+  (when (formals decl)
+    (type-error decl "Uninterpreted types may not have parameters"))
   (check-duplication decl)
   (let* ((dacts (mk-dactuals (decl-formals decl)))
 	 (tn (if *generating-adt*
@@ -1438,6 +1450,9 @@ bindings."
 		 (null (decl-formals decl))))
 	postypes
 	(typecase ndecl
+	  (formal-const-decl
+	   (assert (eq (module ndecl) (current-theory)))
+	   postypes)
 	  (const-decl
 	   (let ((cpostypes (mapcar #'(lambda (pt)
 					(cond ((type-name? pt) (declaration pt))
@@ -1453,9 +1468,6 @@ bindings."
 					   ndecl
 					   cpostypes
 					   postypes)))
-	  (formal-const-decl
-	   (assert (eq (module ndecl) (current-theory)))
-	   postypes)
 	  (field-decl postypes)
 	  (bind-decl
 	   (assert (memq ndecl bindings))
@@ -3264,16 +3276,25 @@ The dependent types are created only when needed."
 	   (ftype (with-current-decl pdecl
 		    (typecheck* (mk-funtype (list ptype) *boolean*)
 				nil nil nil)))
-	   (pexpr (mk-name-expr pname))
+	   (pres (mk-resolution pdecl (current-theory-name) ftype))
+	   (pexpr (mk-name-expr pname nil nil pres))
 	   (cdecl (current-declaration)))
-      (setf (declared-type pdecl) ftype)
-      (typecheck* pdecl nil nil nil) ;; This will set current-declaration
+      (setf (module pdecl) (module decl)
+	    (declared-type pdecl) ftype)
+      (typecheck* pdecl nil nil nil) ;; This will set (current-declaration) to pdecl
+      (typecheck* pexpr ftype nil nil)
+      (when (decl-formal-subtype? decl)
+	(setf (generated-by pdecl) decl
+	      (generated decl) (cons pdecl (generated decl))))
       (setf (current-declaration) cdecl)
       (setf (predicate decl) pdecl)
-      (add-decl pdecl (not (formal-subtype-decl? decl)))
       (setf (dactuals pexpr) dacts)
-      (typecheck* pexpr ftype nil nil)
-      (mk-subtype stype pexpr))))
+      (if (decl-formal-subtype? decl)
+	  (setf (generated decl) (list pdecl))
+	  (add-decl pdecl (not (formal-subtype-decl? decl))))
+      (let ((subty (mk-subtype stype pexpr)))
+	(assert (fully-instantiated? subty))
+	subty))))
 
 (defun formal-subtype? (type)
   (and (subtype? type)
@@ -4496,26 +4517,31 @@ in a way, a HAS_TYPE b is boolean, but it's not a valid expr."
 (defun duplicate-decls (x y)
   (when (eq (kind-of x) (kind-of y))
     (if (eq (kind-of x) 'expr)
-	(let ((tyx (type x))
-	      (tyy (type y)))
-	  (cond ((strict-compatible? tyx tyy)
-		 (type-error x
-		   "~a has previously been declared~a with type ~a, which is ambiguous"
-		   (id x)
-		   (if (place y)
-		       (format nil " (at line ~d, column ~d)"
-			 (starting-row (place y)) (starting-col (place y)))
-		       "")
-		   (unparse tyx :string t)))
-		((tc-unifiable? x y)
-		 (type-error x
-		   "~a has previously been declared~a with type ~a, which may be ambiguous"
-		   (id x)
-		   (if (place y)
-		       (format nil " (at line ~d, column ~d)"
-			 (starting-row (place y)) (starting-col (place y)))
-		       "")
-		   (unparse (type y) :string t)))))
+	(unless (and (typep y 'decl-formal-const-decl)
+		     (typep x 'decl-formal-const-decl)
+		     (or (null (associated-decl x))
+			 (null (associated-decl y))
+			 (not (eq (associated-decl x) (associated-decl y)))))
+	  (let ((tyx (type x))
+		(tyy (type y)))
+	    (cond ((strict-compatible? tyx tyy)
+		   (type-error x
+		     "~a has previously been declared~a with type ~a, which is ambiguous"
+		     (id x)
+		     (if (place y)
+			 (format nil " (at line ~d, column ~d)"
+			   (starting-row (place y)) (starting-col (place y)))
+			 "")
+		     (unparse tyx :string t)))
+		  ((tc-unifiable? x y)
+		   (type-error x
+		     "~a has previously been declared~a with type ~a, which may be ambiguous"
+		     (id x)
+		     (if (place y)
+			 (format nil " (at line ~d, column ~d)"
+			   (starting-row (place y)) (starting-col (place y)))
+			 "")
+		     (unparse (type y) :string t))))))
 	(unless (or (and (typep y 'type-def-decl)
 			 (typep (type-expr y) 'recursive-type))
 		    (and (typep y 'type-decl)

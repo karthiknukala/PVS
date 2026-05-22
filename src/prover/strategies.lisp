@@ -267,16 +267,19 @@
 (defun defgen* (name formals definition docstring format-string
 		entry-type rules-or-steps &optional step?)
   #+allegro (excl:record-source-file name :type :strategy)
+  #-allegro (setf (get name :strategy-source-file) cl:*load-pathname*)
   (let ((primitive (gethash name *rulebase*))
 	(rule (gethash name *rules*))
 	(strat (gethash name *steps*)))
     (cond (primitive
 	   (format-if "~%~a exists as a primitive rule.  It cannot be redefined." name))
 	  (rule
-	   (let ((source #+allegro (cdr (assq :strategy (excl:source-file name t)))))
+	   (let ((source #+allegro (cdr (assq :strategy (excl:source-file name t)))
+			 #-allegro (get name :strategy-source-file)))
 	     (format-if "~%~a exists as a defined rule from ~a." name source)))
 	  (strat
-	   (let ((source #+allegro (cdr (assq :strategy (excl:source-file name t)))))
+	   (let ((source #+allegro (cdr (assq :strategy (excl:source-file name t)))
+			 #-allegro (get name :strategy-source-file)))
 	     (format-if "~%~a exists as a strategy from ~a." name source))))
     (cond (primitive (format t "~%No change. "))
 	  (t (if (or rule strat)

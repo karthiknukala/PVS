@@ -62,12 +62,12 @@ in util.lisp")
   (let ((end (position #\space excl::cl-release-date :from-end t)))
     (subseq excl::cl-release-date 0 end)))
 
-(defvar *pvs-version* "8.0")
+(defvar *pvs-version* "8.1")
 
 (eval-when (:execute :compile-toplevel :load-toplevel)
   ;; Not used in PVS sources, but may be useful for patches, strategies, etc.
   ;;(pushnew (intern (format nil "pvs~a" *pvs-version*) :keyword) *features*)
-  (pushnew :pvs8.0 *features*)
+  (pushnew :pvs8.1 *features*)
   (pushnew :pvs8 *features*)
   (pushnew :pvs *features*)
   )
@@ -490,6 +490,7 @@ that gensubst does not try to pseudo-normalize inappropriately.")
 
 ;;; Prover-related variables
 
+(defvar *dont-save-proof* nil)
 (defvar *use-default-dp?* nil)
 (defvar *prover-print-lines* nil)
 

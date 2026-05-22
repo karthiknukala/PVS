@@ -1946,14 +1946,6 @@ char-exprs"
 ;; 	 (nplace (vector srow (1+ scol) srow ecol)))
 ;;     (values cplace nplace)))
 
-(defun mk-list-expr (elt list-expr place)
-  (make-instance 'list-expr
-    :operator (add-place (mk-name-expr '|cons|) place)
-    :argument (make-instance 'arg-tuple-expr
-		:exprs (list elt list-expr)
-		:place place)
-    :place place))
-
 (defun mk-char-expr (code place)
   (let ((ex (add-place
 	     (mk-application (add-place (mk-name-expr '|char|) place)

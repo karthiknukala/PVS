@@ -816,9 +816,7 @@
   (assert (typep list-ex '(or null-expr list-expr)))
   (let ((list-place (or lplace
 			(concat-places (place elt) (place list-ex))))
-	(cons-op (make-instance 'name-expr
-		   :id '|cons|
-		   :place (place elt))))
+	(cons-op (add-place (mk-name-expr '|cons|) (place elt))))
     (make-instance 'list-expr
       :operator cons-op
       :argument (make-instance 'arg-tuple-expr

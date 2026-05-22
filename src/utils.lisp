@@ -3989,6 +3989,16 @@ space")
 (defun direct-superclasses (class)
   (sb-mop:class-direct-superclasses class))
 
+;; (defmethod superclasses ((class standard-object) &optional classes)
+;;   (if (or (memq class classes)
+;; 	  (eq class (find-class 'standard-object)))
+;;       classes
+;;       (let ((sclasses (direct-superclasses class)))
+;; 	(dolist (sclass sclasses)
+;; 	  (setq classes (cons sclass (superclasses sclass classes))))
+;; 	classes)))
+  
+
 (defun types-of (obj)
   (let ((types nil))
     (labels ((tof (type)
@@ -4004,7 +4014,6 @@ space")
 			  (direct-superclasses class)))))))
       (tof (type-of obj)))
     (nreverse types)))
-
 
 (defun fully-typed? (obj)
   (let ((untyped? nil)
@@ -5221,6 +5230,17 @@ we can get this method using
 		    specs))
 	 (method (find-method gf quals classes)))
     method))
+
+(defun all-classes ()
+  (let ((pvs-pkg (find-package :pvs))
+	(classes nil))
+    (do-all-symbols (sym)
+      (when (and (eq (symbol-package sym) pvs-pkg)
+		 (find-class sym nil))
+	(push sym classes)))
+    classes))
+
+
 
 ;;; equals is like equalp, but is case-sensitive
 (defun equals (x y)

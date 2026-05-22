@@ -33,14 +33,14 @@
      ,@(when doc (list doc))))
 (export 'defconstant-if-unbound)
 
-(in-package :cl-user)
+(in-package :pvs)
 
 (eval-when (:execute :load-toplevel)
   ;; This sets *pvs-path* and *pvs-fasl-type*
-  (load "pvs-config.lisp"))
+  (load (format nil "~apvs-config.lisp" *pvs-path*)))
 
 (load (format nil "~a/ess/dist-ess.lisp" *pvs-path*))
-(generate-ess ergolisp sb)
+;;(generate-ess ergolisp sb)
 
 #+allegro
 (compile-file-if-needed (format nil "~a/src/ergo-gen-fixes" *pvs-path*))
@@ -52,4 +52,4 @@
 	   :language "pvs"
 	   :working-dir (format nil "~a/src/" (or *pvs-path* "."))
 	   :unparser? nil))
-(bye)
+;; (bye)

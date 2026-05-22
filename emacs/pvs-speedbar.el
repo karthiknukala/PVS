@@ -272,7 +272,7 @@ directory with these items.  This function is replaceable in
       (let ((id (cdr (or (assq 'theory-id theory-spec)
 			 (assq 'adt-id theory-spec))))
 	    (start (point)))
-	(speedbar-make-tag-line 'bracket ?+ 'pvs-speedbar-expand-theory
+	(speedbar-make-tag-line 'curly ?+ 'pvs-speedbar-expand-theory
 				theory-spec id
 				'pvs-speedbar-goto-pvs-file
 				(cons pvs-file (cdr (assq 'place theory-spec)))

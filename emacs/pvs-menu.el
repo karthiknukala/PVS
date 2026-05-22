@@ -320,133 +320,121 @@
      ["pvs-release-notes" pvs-release-notes t])
     ))
 
-(unless (featurep 'xemacs)
+(defvar easy-menu-fast-menus nil)
 
-  (defvar easy-menu-fast-menus nil)
-
-  (let ((easy-menu-fast-menus t))
-    (easy-menu-define pvs-menus global-map "PVS menus" pvs-mode-menus)
-    ;; (easy-menu-add pvs-menus global-map)
-    )
+(let ((easy-menu-fast-menus t))
+  (easy-menu-define pvs-menus global-map "PVS menus" pvs-mode-menus)
+  ;; (easy-menu-add pvs-menus global-map)
   )
-
-(when (featurep 'xemacs)
-  (add-submenu nil pvs-mode-menus "")
-  (add-hook 'pvs-mode-hook
-    '(lambda ()
-      (add-submenu nil pvs-mode-menus ""))))
 
 (defvar-local pvs-tooltip-time :unbound)
-
-(unless (featurep 'xemacs)
   
-  (or (let ((load-path pvs-original-load-path))
-	(require 'json nil :noerror))
-      (require 'json))
-  (require 'button)
-  (require 'ring)
+(or (let ((load-path pvs-original-load-path))
+      (require 'json nil :noerror))
+    (require 'json))
+(require 'button)
+(require 'ring)
 
-  (define-button-type 'pvs-decl
-      'action 'pvs-decl-button-action
-      'face 'default)
+(define-button-type 'pvs-decl
+    'action 'pvs-decl-button-action
+    'face 'default)
 
-  (defun pvs-decl-button-action (button)
-    (pvs-goto-file-location
-     (button-get button 'decl-file)
-     (button-get button 'decl-place)))
+(defun pvs-decl-button-action (button)
+  (pvs-goto-file-location
+   (button-get button 'decl-file)
+   (button-get button 'decl-place)))
 
-  (defvar pvs-place-ring (make-ring 200))
+(defvar pvs-place-ring (make-ring 200))
 
-  (defun pvs-goto-file-location (file place)
-    (let ((elt (cons (buffer-file-name) (point))))
-      (unless (and (not (ring-empty-p pvs-place-ring))
-		   (equal elt (ring-ref pvs-place-ring 0)))
-	(ring-insert pvs-place-ring elt))
-      (if (file-exists-p file)
-	  (find-file file)
-	  (error "File %s not found" file))
-      (let ((row (elt place 0))
-	    (col (elt place 1)))
-	(goto-char (point-min))
-	(forward-line (1- row))
-	(forward-char col))))
-
-  (defun pvs-backto-last-location ()
-    (interactive)
-    (let* ((elt (ring-remove pvs-place-ring))
-	   (file (car elt))
-	   (point (cdr elt)))
-      (find-file file)
-      (goto-char point)))
-
-  (global-set-key (kbd "<M-left>") 'pvs-backto-last-location)
-
-  (defun pvs-add-tooltips (fname)
-    (interactive (list (current-pvs-file)))
-    (let* ((dlist-json
-	    (pvs-file-send-and-wait (format "(names-info \"%s\")" fname)
-				    nil 'get-decls '(or string null)))
-	   (dlist (when dlist-json (json-read-from-string dlist-json))))
-      (if dlist
-	  (with-silent-modifications
-	    (dotimes (i (length dlist))
-	      (let* ((delt (elt dlist i))
-		     (region (place-to-region (cdr (assq 'place delt))))
-		     (msg (cdr (assq 'decl delt)))
-		     (decl-file (cdr (assq 'decl-file delt)))
-		     (decl-place (cdr (assq 'decl-place delt))))
-		(add-text-properties
-		 (car region) (cdr region)
-		 `(mouse-face highlight help-echo ,msg))
-		(make-text-button
-		 (car region) (cdr region)
-		 'type 'pvs-decl 'decl-file decl-file 'decl-place decl-place)
-		(setq pvs-tooltip-time (visited-file-modtime))))
-	    (message "Tooltips set for %s" fname)
-	    )
-	  (message "Tooltips not set - is file typechecked?"))))
-  
-  (defun pvs-check-for-tooltips ()
-    (dolist (buf (buffer-list))
-      (with-current-buffer buf
-	(let ((fname (current-pvs-file t)))
-	  (when (and fname
-		     (equal pvs-tooltip-time (visited-file-modtime))
-		     (typechecked-file-p fname))
-	    (pvs-add-tooltips fname))))))
-
-  (defun place-to-region (place &optional relrow relcol)
-    (let* ((rr (or relrow 0))
-	   (prow (elt place 0))
-	   (rc (if (and (= prow 1) relcol) relcol 0))
-	   (srow (+ prow rr))
-	   (scol (+ (elt place 1) rc))
-	   (erow (+ (elt place 2) rr))
-	   (ecol (+ (elt place 3) rc)))
-      (cons (row-col-to-point srow scol)
-	    (row-col-to-point erow ecol))))
-
-  (defun row-col-to-point (row col)
-    (save-excursion
+(defun pvs-goto-file-location (file place)
+  (let ((elt (cons (buffer-file-name) (point))))
+    (unless (and (not (ring-empty-p pvs-place-ring))
+		 (equal elt (ring-ref pvs-place-ring 0)))
+      (ring-insert pvs-place-ring elt))
+    (if (file-exists-p file)
+	(find-file file)
+	(error "File %s not found" file))
+    (let ((row (elt place 0))
+	  (col (elt place 1)))
       (goto-char (point-min))
       (forward-line (1- row))
-      (forward-char col)
-      (point)))
+      (forward-char col))))
 
-  (defpvs select-pvs-subterm browse (fname row col)
-	  "Select a subterm containing point"
-	  (interactive (list (current-pvs-file)
-			     (current-line-number)
-			     (current-column)))
-	  (let* ((slist-json
-		  (pvs-file-send-and-wait (format "(get-subterms-at-place \"%s\" %d %d t)"
-					      fname row col)
-					  nil 'subterms '(or string null)))
-		 (slist (when slist-json (json-read-from-string slist-json))))
-	    (if slist
-		(x-popup-menu
-		 t (list "Subterms"
-			 (cons "Subterms"
-			       (cl-mapcar (lambda (x) (cons x x))
-				 slist)))))))
-  )
+(defun pvs-backto-last-location ()
+  (interactive)
+  (let* ((elt (ring-remove pvs-place-ring))
+	 (file (car elt))
+	 (point (cdr elt)))
+    (find-file file)
+    (goto-char point)))
+
+(global-set-key (kbd "<M-left>") 'pvs-backto-last-location)
+
+(defun pvs-add-tooltips (fname)
+  (interactive (list (current-pvs-file)))
+  (let* ((dlist-json
+	  (pvs-file-send-and-wait (format "(names-info \"%s\")" fname)
+				  nil 'get-decls '(or string null)))
+	 (dlist (when dlist-json (json-read-from-string dlist-json))))
+    (if dlist
+	(with-silent-modifications
+	  (dotimes (i (length dlist))
+	    (let* ((delt (elt dlist i))
+		   (region (place-to-region (cdr (assq 'place delt))))
+		   (msg (cdr (assq 'decl delt)))
+		   (decl-file (cdr (assq 'decl-file delt)))
+		   (decl-place (cdr (assq 'decl-place delt))))
+	      (add-text-properties
+	       (car region) (cdr region)
+	       `(mouse-face highlight help-echo ,msg))
+	      (make-text-button
+	       (car region) (cdr region)
+	       'type 'pvs-decl 'decl-file decl-file 'decl-place decl-place)
+	      (setq pvs-tooltip-time (visited-file-modtime))))
+	  (message "Tooltips set for %s" fname)
+	  )
+	(message "Tooltips not set - is file typechecked?"))))
+  
+(defun pvs-check-for-tooltips ()
+  (dolist (buf (buffer-list))
+    (with-current-buffer buf
+      (let ((fname (current-pvs-file t)))
+	(when (and fname
+		   (equal pvs-tooltip-time (visited-file-modtime))
+		   (typechecked-file-p fname))
+	  (pvs-add-tooltips fname))))))
+
+(defun place-to-region (place &optional relrow relcol)
+  (let* ((rr (or relrow 0))
+	 (prow (elt place 0))
+	 (rc (if (and (= prow 1) relcol) relcol 0))
+	 (srow (+ prow rr))
+	 (scol (+ (elt place 1) rc))
+	 (erow (+ (elt place 2) rr))
+	 (ecol (+ (elt place 3) rc)))
+    (cons (row-col-to-point srow scol)
+	  (row-col-to-point erow ecol))))
+
+(defun row-col-to-point (row col)
+  (save-excursion
+    (goto-char (point-min))
+    (forward-line (1- row))
+    (forward-char col)
+    (point)))
+
+(defpvs select-pvs-subterm browse (fname row col)
+  "Select a subterm containing point"
+  (interactive (list (current-pvs-file)
+		     (current-line-number)
+		     (current-column)))
+  (let* ((slist-json
+	  (pvs-file-send-and-wait (format "(get-subterms-at-place \"%s\" %d %d t)"
+				      fname row col)
+				  nil 'subterms '(or string null)))
+	 (slist (when slist-json (json-read-from-string slist-json))))
+    (if slist
+	(x-popup-menu
+	 t (list "Subterms"
+		 (cons "Subterms"
+		       (cl-mapcar (lambda (x) (cons x x))
+			 slist)))))))

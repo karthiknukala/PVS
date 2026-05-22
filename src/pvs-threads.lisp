@@ -76,7 +76,8 @@
   input-queue
   output-queue
   outputs
-  logs)
+  logs
+  continuation)
 
 ;; Need to be able to return the following, note that only the commentary is
 ;; not derivable from the ps.
@@ -381,7 +382,7 @@ Returns a list of the form ((id . status) (id . status) ...)"
 ;;;       :waiting - prover is waiting for input
 ;;;      Note that if it's not waiting, then the session is gone
 
-(defun prover-init (formref &key rerun? input-hook)
+(defun prover-init (formref &key rerun? input-hook dont-save?)
   "Creates a proof-session, and returns (values proofstate log id status)."
   (let* ((fdecl (get-formula-decl formref))
 	 (id (get-new-session-id (id fdecl)))
@@ -437,7 +438,12 @@ Returns a list of the form ((id . status) (id . status) ...)"
 				;; (format t ~%Found quit on non-top-proofstate)
 				'quit)
 			       (t 'waiting)))
+		 (id-sym (intern id :pvs))
+		 (changed (eq (get id-sym :previous-proofstate) ps))
 		 (err (find-if #'(lambda (c) (typep c 'error)) commentary)))
+	    ;; Use symbol-plist for tracking previous proofstate, simpler
+	    ;; than using an alist indexed by proof ids.
+	    (setf (get id-sym :previous-proofstate) ps)
 	    (when err (setq commentary (remove err commentary)))
 	    (unless (eq status 'waiting)
 	      (loop while (session-alive-p sess)
@@ -449,6 +455,7 @@ Returns a list of the form ((id . status) (id . status) ...)"
 				 ("command" . ,cmd)
 				 ("proofstate" . ,ps)
 				 ("status" . ,(string-downcase status))
+				 ("changed" . ,changed)
 				 ("commentary" . ,commentary)
 				 ,@(when err
 				     `(("error" . ,(format nil "~a" err))))

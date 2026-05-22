@@ -44,9 +44,11 @@
 (defvar *restoring-declaration*)
 
 (defun save-theory (theory)
-  (pvs-log "~%Saving ~a" (binpath-id theory))
-  (store-object-to-file (cons *binfile-version* theory)
-			(make-binpath (binpath-id theory))))
+  (cond ((< (expr-size theory) 50000)
+	 (pvs-log "~%Saving ~a" (binpath-id theory))
+	 (store-object-to-file (cons *binfile-version* theory)
+			       (make-binpath (binpath-id theory))))
+	(t (pvs-message "Theory ~a is too big, not saving" (id theory)))))
 
 (defmethod get-theories-to-save (file)
   (mapcan #'get-theories-to-save (sort-theories (get-theories file))))
