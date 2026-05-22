@@ -1357,6 +1357,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (setf (ir-function-name (ir einfo)) (mk-ir-function (pvs2ir-unique-decl-id decl) decl));;not needed
     (setf (ir-defn (ir einfo)) (mk-ir-const-formal (pvs2ir-unique-decl-id decl)
 						   (pvs2ir-type (type decl))))
+    (break "pvs2ir-decl*")
     (id decl)))
 
 (defun pvs2ir-formals (irvars pvars bindings);irvars and pvars (pvsvars) are same length
@@ -1439,6 +1440,8 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	      (setf (ir-args (ir einfo)) args
 		    (ir-return-type (ir einfo)) returntype
 		    (ir-defn (ir einfo)) lifted-actuals-body)
+	      ;; (format t "~%pvs2ir-decl*(const-decl): ~a" (id decl))
+	      ;; (when (eq (id decl) '|size|) (break "size"))
 	      (ir-function-name (ir einfo))))))))
 
 (defmethod pvs2ir-decl* ((decl test-formula))
@@ -1498,6 +1501,9 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (format t "~%Pushing ~a" (id instance))
     (pushnew instance *preceding-mono-theories*)
     (pushnew instance *all-mono-theories*)
+    (loop for decl in (theory instance);;NSH(5-20-2026): eval-info gets shared with parent
+	  when (slot-exists-p decl 'eval-info);;temp fix until subst-mod-params
+	  do (setf (eval-info decl) nil))
     (setf (gethash (id instance) (ht-instance-clone parent)) instance)
     (let ((*theory-id* (id instance)))
       (pvs2c-theory-body-step instance t nil)))
