@@ -12,6 +12,13 @@ After typechecking, a PVS file expands to a list of theories. Each theory
 expands to display its declarations, importings, etc.
 Declarations include a single letter indicating it's kind:
 
+| <+><-> | library/directory |
+| [+][-] | PVS file          |
+|       | theory            |
+|       | declaration       |
+|       | tcc               |
+|       | proof             |
+
 | I | importing    |
 | T | type         |
 | V | variable     |

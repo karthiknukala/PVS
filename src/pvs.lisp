@@ -13,21 +13,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -1659,6 +1651,7 @@ Needs to pay attention to sections."
 	  (let ((*parsing-files* (when (boundp '*parsing-files*) *parsing-files*)))
 	    (multiple-value-bind (theories restored? th-diffs)
 		(parse-file filename forced? nomsg? t)
+	      (declare (ignore restored?))
 	      (let ((*current-file* filename)
 		    (*typechecking-module* nil))
 		(unless theories
@@ -1670,11 +1663,11 @@ Needs to pay attention to sections."
 				       (let ((*current-context* (saved-context th)))
 					 (typechecked? th)))
 				   theories))
-		       (unless (or nomsg? restored?)
+		       (unless nomsg?
 			 (pvs-message
 			     "~a ~:[is already typechecked~;is typechecked~]~a"
 			   filename
-			   restored?
+			   th-diffs
 			   (if (and prove-tccs? (not *in-checker*))
 			       " - attempting proofs of TCCs" ""))))
 		      (t (pvs-message "Typechecking ~a" filename)
@@ -1778,21 +1771,36 @@ Needs to pay attention to sections."
     (nreverse decl-tccs)))
 
 (defun try-all-tcc-proofs (theory)
-  (dolist (decl-tccs (same-decl-tccs theory))
-    (let* ((prinfos (mapcar #'default-proof decl-tccs))
-	   (unique-prinfos (remove-duplicates prinfos :key #'script :test #'equalp)))
-      (when (cdr unique-prinfos)
-	(try-all-tcc-proofs* decl-tccs unique-prinfos)))))
+  (let* ((tccs (remove-if-not #'tcc? (all-decls theory))) ;;(same-decl-tccs theory)
+	 (prinfos (mapcar #'default-proof tccs))
+	 (unique-prinfos (remove-duplicates prinfos :key #'script :test #'equalp)))
+    (when (cdr unique-prinfos)
+      (try-all-tcc-proofs* tccs unique-prinfos))))
 
-(defun try-all-tcc-proofs* (decl-tccs unique-proofs)
-  (dolist (tcc decl-tccs)
-    (unless (proved? tcc)
-      (prove-tcc tcc)
+(defun try-all-tcc-proofs* (tccs unique-proofs)
+  (let ((*tcp-timeout* 30))
+    (dolist (tcc tccs)
       (unless (proved? tcc)
-	(dolist (prf unique-proofs)
-	  (unless (eq prf (default-proof tcc))
-	    (prove-decl-with-justification tcc (justification prf))))))))
+	(prove-tcc tcc)
+	(unless (proved? tcc)
+	  (dolist (prf unique-proofs)
+	    (unless (equalp (script prf) (script (default-proof tcc)))
+	      ;; (prove-decl-with-justification tcc (justification prf))
+	      (try-proof-and-save-if-works tcc prf))))))))
 
+(defun try-proof-and-save-if-works (tcc prf-info)
+  (let ((dprf (default-proof tcc)))
+    (unwind-protect
+	 (progn (setf (default-proof tcc) prf-info)
+		(format t "~%Trying proof of ~a with ~a" (id tcc) (id prf-info))
+		(prove-tcc tcc t))
+      (cond ((proved? tcc)
+	     (format t "~%~a proved, setting as default" (id tcc))
+	     ;; No need to change default, but have to add to proofs
+	     (push prf-info (proofs tcc)))
+	    (t (format t "~%~a unproved, resetting original default" (id tcc));; Restore default
+	       (setf (default-proof tcc) dprf))))))
+		    
 
 ;; (defun prove-decls-with-justifications (decls justifications)
 ;;   (check-edited-justifications justifications) ;; error if invalid
@@ -1817,9 +1825,9 @@ Needs to pay attention to sections."
 ;; 	  (return))))))
 
 (defun prove-formula-thread (decl &key (just (get-proof-script decl nil))
-				    show quit save)
+				    show quit)
   (let* ((*done-sessions* nil)
-	 (cur-default (default-proof decl))
+	 ;; (cur-default (default-proof decl))
 	 (ps-alist (prover-init
 		    decl
 		    :input-hook (let ((pending nil))
@@ -2132,16 +2140,18 @@ Needs to pay attention to sections."
     (let* ((*proving-tcc* 'TCC)
 	   (proof (if (integerp *tcp-timeout*)
 		      (with-timeout (*tcp-timeout*
-				     (pvs-message "TCC ~a timed out after ~a sec"))
+				     (pvs-message "TCC ~a timed out after ~a sec"
+				       (id decl) *tcp-timeout*))
 			(rerun-prove decl))
 		      (rerun-prove decl)))
 	   (fe (get-context-formula-entry decl)))
       (pvs-message
 	  "~:[Unable to prove~;Proved~] ~:[~;TCC ~]~a.~a in ~,2,-3f seconds"
-	(eq (status-flag proof) '!) (tcc? decl) (id (module decl)) (id decl)
+	(and proof (eq (status-flag proof) '!))
+	(tcc? decl) (id (module decl)) (id decl)
 	(real-proof-time decl))
       ;; Must return non-NIL if proved, NIL otherwise.
-      (cond ((eq (status-flag proof) '!)
+      (cond ((and proof (eq (status-flag proof) '!))
 	     (setf (proof-status decl) 'proved)
 	     (when fe (setf (fe-status fe) "proved"))
 	     t)
@@ -2371,7 +2381,8 @@ Needs to pay attention to sections."
 	      (orig-proof-refers-to (proof-refers-to fmla))
 	      (orig-real-time (real-time fmla))
 	      (orig-run-time (run-time fmla))
-	      (decl-proofs (collect-decl-proofs fmla)))
+	      ;;(decl-proofs (collect-decl-proofs fmla))
+	      )
 	  (pvs-message "Proving formula ~a" (id fmla))
 	  (incf tried-proofs)
 	  (setf (justification fmla) just)
@@ -2382,9 +2393,9 @@ Needs to pay attention to sections."
 		   (id fmla) just)
 		 (setq save-proofs t)
 		 (incf proved-proofs)
-		 (copy-proofs-to-orphan-file
-		  (filename theory) (id theory)
-		  (list (cons (id theory) decl-proofs))))
+		 ;; (copy-proofs-to-orphan-file
+		 ;;  (filename theory) (id theory) (list (cons (id theory) decl-proofs)))
+		 )
 		(orig-just
 		 (pvs-message "~a unproved - keeping original strategy"
 		   (id fmla))
