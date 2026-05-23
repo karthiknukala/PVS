@@ -102,8 +102,20 @@
 
 (defun pvs-init (&optional dont-load-patches dont-load-user-lisp path)
   (proclaim '(optimize (speed 3) (safety 3) (cl:debug 1)))
+  ;; Reinitialize ASDF path/cache state at runtime so dumped images don't
+  ;; retain source-registry or output-translation paths from the build host.
+  (ignore-errors (uiop:clear-configuration))
+  (ignore-errors (asdf/source-registry:clear-source-registry))
+  (ignore-errors (asdf/output-translations:clear-output-translations))
+  ;; UIOP caches the resolved user cache directory in the dumped image.
+  ;; Recompute it on the target machine before rebuilding output translations.
+  (ignore-errors
+    (setf uiop/configuration:*user-cache*
+          (uiop/configuration::compute-user-cache)))
   (asdf/source-registry:initialize-source-registry)
+  (asdf/output-translations:initialize-output-translations)
   (setq *pvs-path* (initial-pvs-path path))
+  (reset-pvs-log-directory)
   (setq *pvs-log-stream* nil)
   (start-load-watching)
   #+allegro (setq excl:*enclose-printer-errors* nil)
@@ -125,7 +137,11 @@
   (setq *print-pretty* t)
   #+allegro (setq top-level::*print-length* nil
 		  top-level::*print-level* nil)
-  (let ((exepath (directory-namestring (car (uiop:raw-command-line-arguments)))))
+  (let ((exepath (or (let ((runtime-dir (environment-variable "PVS_RUNTIME_DIR")))
+		       (and runtime-dir
+			    (uiop:directory-exists-p runtime-dir)
+			    (ensure-directory-string runtime-dir)))
+		     (directory-namestring (car (uiop:raw-command-line-arguments))))))
     (pushnew exepath *pvs-directories*)
     ;;(cffi:load-foreign-library (format nil "libssl.~a" #+darwin "dylib" #-darwin "so"))
     ;;(cffi:load-foreign-library (format nil "libcrypto.~a" #+darwin "dylib" #-darwin "so"))
@@ -236,11 +252,15 @@ should be enough."
 		      (t (pvs-warning "The environment variable PVSPATH is set to ~a, ~
                                   which does not exist" evpath)
 			 nil)))))
+	((let ((runtime-dir (environment-variable "PVS_RUNTIME_DIR")))
+	   (and runtime-dir
+		(uiop:directory-exists-p runtime-dir)
+		(find-pvs-path-from (truename runtime-dir)))))
 	((let ((cfile (uiop:truename* (car (uiop:raw-command-line-arguments)))))
 	   ;; We were started as, e.g., bin/ix86_64-Linux/runtime/pvs-allegro
 	   ;; assume the parent of bin is a valid PVS installed directory.
 	   (and cfile (find-pvs-path-from cfile))))
-	((let* ((pvs-sys (asdf:find-system :pvs))
+	((let* ((pvs-sys (ignore-errors (asdf:find-system :pvs nil)))
 		(path (when pvs-sys (slot-value pvs-sys 'asdf/component:absolute-pathname))))
 	   path))
 	(t (pvs-error "Init error"
@@ -265,6 +285,21 @@ should be enough."
 (defun collect-pvs-env-variables ()
   (mapcar #'(lambda (env) (cons env (environment-variable env)))
     *pvs-env-variables*))
+
+(defun ensure-directory-string (dir)
+  (when (and dir (> (length dir) 0))
+    (if (char= (char dir (1- (length dir))) #\/)
+	dir
+	(format nil "~a/" dir))))
+
+(defun pvs-runtime-log-directory ()
+  (or (ensure-directory-string
+       (or (environment-variable "PVS_LOG_DIR")
+	   (environment-variable "PVSLOGDIR")))
+      "~/.pvslog/"))
+
+(defun reset-pvs-log-directory ()
+  (setq *pvs-log-directory* (pvs-runtime-log-directory)))
 
 (defun pvs-init-globals ()
   (reset-typecheck-caches)
@@ -522,7 +557,7 @@ nil."
   (let ((*loading-files* :patches))
     (dolist (pfile (append (collect-pvs-patch-files)
 			   (collect-pvs-lisp-files)))
-      (let* ((bfile (make-fasl-file-name pfile))
+      (let* ((bfile (make-fasl-file-name pfile :ensure-dir? nil))
 	     (compile? (and (uiop:file-exists-p pfile)
 			    (or (not (uiop:file-exists-p bfile))
 				(compiled-file-older-than-source?
@@ -544,17 +579,19 @@ nil."
 		  (t (pushnew pfile *pvs-patches-loaded*
 			      :test #'equalp)
 		     (setq bfile-loaded? t)))))
-	(when compile?
-	  ;; Needs compilation - haven't tried loading yet, or the load failed.
-	  (pvs-message "Attempting to compile patch file ~a"
-	    (pathname-name pfile))
-	  (multiple-value-bind (ignore condition)
-	      (ignore-file-errors
-	       (values (compile-file pfile :output-file bfile)))
-	    (declare (ignore ignore))
-	    (cond (condition
-		   ;; Could be many reasons - permissions, source errors
-		   (pvs-message "Compilation error - ~a" condition)
+		(when compile?
+		  ;; Needs compilation - haven't tried loading yet, or the load failed.
+		  (pvs-message "Attempting to compile patch file ~a"
+		    (pathname-name pfile))
+		  (multiple-value-bind (ignore condition)
+		      (ignore-file-errors
+		       (let ((output-file (make-fasl-file-name pfile)))
+			 (setq bfile output-file)
+			 (values (compile-file pfile :output-file output-file))))
+		    (declare (ignore ignore))
+		    (cond (condition
+			   ;; Could be many reasons - permissions, source errors
+			   (pvs-message "Compilation error - ~a" condition)
 		   (setq compilation-error? t)
 		   ;; Note that this may fail as well
 		   (ignore-errors (delete-file bfile)))
@@ -637,14 +674,14 @@ nil."
 
 (defun user-pvs-lisp-file ()
   (unless *started-with-minus-q*
-    (let* ((homedir (truename (user-homedir-pathname)))
-	   (home-lisp-file (make-pathname :defaults homedir
-					  :name ".pvs" :type "lisp"))
-	   (home-fasl-file (when (uiop:file-exists-p home-lisp-file)
-			     (make-fasl-file-name home-lisp-file))))
-      (when (or (uiop:file-exists-p home-lisp-file)
-		(uiop:file-exists-p home-fasl-file))
-	home-lisp-file))))
+	    (let* ((homedir (truename (user-homedir-pathname)))
+		   (home-lisp-file (make-pathname :defaults homedir
+						  :name ".pvs" :type "lisp"))
+		   (home-fasl-file (when (uiop:file-exists-p home-lisp-file)
+				     (make-fasl-file-name home-lisp-file :ensure-dir? nil))))
+	      (when (or (uiop:file-exists-p home-lisp-file)
+			(uiop:file-exists-p home-fasl-file))
+		home-lisp-file))))
 
 (defun pvs-patch-files-for (ext)
   (let* ((defaults (pathname (format nil "~a/"

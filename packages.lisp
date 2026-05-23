@@ -23,6 +23,10 @@
     (ql:quickload :fast-websocket))
   (unless (find-package :clack)
     (ql:quickload :clack))
+  ;; Newer Clack releases split web server handlers into separate systems.
+  ;; Loading the handler system ensures :HUNCHENTOOT resolves at runtime.
+  (unless (find-package :clack.handler.hunchentoot)
+    (ql:quickload :clack-handler-hunchentoot))
   (unless (find-package :hunchentoot)
     (ql:quickload :hunchentoot))
   (unless (find-package :websocket-driver)
@@ -1418,4 +1422,3 @@
    #:xmlrpc-output-proofstate
    ;;sb-runtime:*abs-syn-package*
    ))
-

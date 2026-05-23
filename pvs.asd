@@ -58,7 +58,7 @@
   :license "BSD-3-Clause"
   :entry-point "pvs::startup-pvs"
   ;;:defsystem-depends-on (#:asdf-shared-library)
-  :depends-on (#:babel #:clack #:websocket-driver
+  :depends-on (#:babel #:clack #:clack-handler-hunchentoot #:websocket-driver
 		       #:hunchentoot #:anaphora #:lparallel #:cl-json #:cffi)
   :serial t
   :perform (asdf:load-op :after (op cmp)

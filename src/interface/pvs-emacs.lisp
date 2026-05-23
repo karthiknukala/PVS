@@ -365,9 +365,10 @@
       (decode-universal-time (get-universal-time))
     ;; First time will set the log file and open it for writing
     (unless *pvs-log-stream*
-      (let ((fname (format nil "~apvs-~4,'0d-~2,'0d-~2,'0d.log"
-		     *pvs-log-directory* year month date)))
-	(ensure-directories-exist *pvs-log-directory*)
+      (let* ((log-dir (reset-pvs-log-directory))
+	     (fname (format nil "~apvs-~4,'0d-~2,'0d-~2,'0d.log"
+			    log-dir year month date)))
+	(ensure-directories-exist log-dir)
 	(setq *pvs-log-stream*
 	      (open (uiop:native-namestring fname) :direction :output
 		    :if-exists :append :if-does-not-exist :create))))

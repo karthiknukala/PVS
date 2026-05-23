@@ -123,7 +123,12 @@
     ))
 ;;(mk:operate-on-system :pvs :compile)
 (require :asdf)
-(load "~/quicklisp/setup.lisp")
+(let* ((quicklisp-setup
+	(or (sys:getenv "QUICKLISP_SETUP")
+	    (format nil "~aquicklisp/setup.lisp" (user-homedir-pathname)))))
+  (unless (probe-file quicklisp-setup)
+    (error "Quicklisp setup file not found: ~a" quicklisp-setup))
+  (load quicklisp-setup))
 (push *default-pathname-defaults* asdf:*central-registry*)
 (asdf:load-system :pvs)
 (when (sys:getenv "PVSMAKELOADAFTER")

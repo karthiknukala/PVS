@@ -442,12 +442,13 @@ is replaced with replacement."
 	     (error "File ~a.~a cannot be found in *pvs-directories*"
 		    name type)))))
 
-(defun make-fasl-file-name (file)
+(defun make-fasl-file-name (file &key (ensure-dir? t))
   (unless (uiop:file-exists-p file)
     (error "Source file not found: ~a" file))
   (let* ((path (make-pathname :defaults file :type *pvs-fasl-type*))
 	 (fpath (asdf:apply-output-translations path)))
-    (ensure-directories-exist fpath)
+    (when ensure-dir?
+      (ensure-directories-exist fpath))
     fpath))
 
 (defun compiled-file-older-than-source? (sourcefile binfile)
