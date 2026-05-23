@@ -149,6 +149,8 @@ endif
 
 # Below this is only for dist; i.e., generating tar files
 
+RELEASE_NOTES_TEXI = doc/release-notes/pvs$(VERSION)-release-notes.texi
+
 SYSTEM_FILES = README.md INSTALL LICENSE NOTICES install-sh \
 	pvs.asd pvs pvsio proveit provethem emacs/pvs.xpm emacs/pvslogo.gif \
 	pvs-tex.sub pvs.sty Examples \
@@ -156,6 +158,7 @@ SYSTEM_FILES = README.md INSTALL LICENSE NOTICES install-sh \
 	lib/pvs.grammar lib/pvs.bnf lib/pvs-style.css \
 	wish/pvs-support.tcl \
 	python $(wildcard doc/release-notes/pvs-release-notes.info) \
+	$(RELEASE_NOTES_TEXI) \
 	$(wildcard doc/release-notes/pvs-release-notes*.html \
 		   doc/release-notes/pvs-release-notes.ps \
 		   doc/release-notes/pvs-release-notes.pdf \
