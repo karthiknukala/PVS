@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -1945,14 +1937,6 @@ char-exprs"
 ;; 	 (cplace (vector srow scol srow (1+ scol)))
 ;; 	 (nplace (vector srow (1+ scol) srow ecol)))
 ;;     (values cplace nplace)))
-
-(defun mk-list-expr (elt list-expr place)
-  (make-instance 'list-expr
-    :operator (add-place (mk-name-expr '|cons|) place)
-    :argument (make-instance 'arg-tuple-expr
-		:exprs (list elt list-expr)
-		:place place)
-    :place place))
 
 (defun mk-char-expr (code place)
   (let ((ex (add-place

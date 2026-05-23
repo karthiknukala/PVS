@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -181,14 +173,13 @@ generated")
     (setf (adt-reduce-theory adt) reduce-theory))
   (when *save-adt-files*
     (save-adt-file adt)
-    (let* ((adt-file (concatenate 'string (string (id adt))
-				  (if (datatype? adt) "_adt" "_codt")))
-	   (proofs (read-pvs-file-proofs adt-file)))
-      (restore-from-context adt-file (adt-theory adt) proofs)
+    (let ((adt-file (concatenate 'string (string (id adt))
+				 (if (datatype? adt) "_adt" "_codt"))))
+      (restore-from-context adt-file (adt-theory adt))
       (when (adt-map-theory adt)
-	(restore-from-context adt-file (adt-map-theory adt) proofs))
+	(restore-from-context adt-file (adt-map-theory adt)))
       (when (adt-reduce-theory adt)
-	(restore-from-context adt-file (adt-reduce-theory adt) proofs))))
+	(restore-from-context adt-file (adt-reduce-theory adt)))))
   adt)
 
 
@@ -978,7 +969,10 @@ generated")
   (mk-actual (type-value dfml)))
 
 (defmethod mk-actual ((dfml formal-const-decl))
-  (mk-actual (type dfml)))
+  (let* ((thinst (mk-modname (id (module dfml))))
+	 (res (mk-resolution dfml thinst (type dfml)))
+	 (nexpr (make!-name-expr (id dfml) nil nil res)))
+    (mk-actual nexpr)))
 
 (defun generate-adt-constructor-type (constr dacts thinst)
   (if (arguments constr)

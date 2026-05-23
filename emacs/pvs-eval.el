@@ -3,21 +3,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (defvar pvs-in-checker)
@@ -47,9 +39,9 @@
   (interactive (complete-theory-name "Generate C code for theory: "))
   (pvs-bury-output)
   (pvs-message "Generating C code for theory %s..." theoryref)
-  (let ((c-files (pvs-send-and-wait (format "(pvs2c-theory \"%s\")" theoryref)
-				    nil nil 'list)))
-    (if (and c-files (listp c-files))
+  (pvs-send (format "(pvs2c-theory \"%s \")" theoryref))
+  (let ((c-files (pvs-send-and-wait (format "*pvs2c-top-c-file*") nil nil 'list)))
+    (if c-files 
 	(let ((buf (find-file-noselect (car c-files) t)))
 	  (when buf
 	    (with-current-buffer buf
@@ -57,29 +49,26 @@
 	      (c-mode))
 	    (pvs-message "Generated C-file %s" (car c-files))
 	    (pop-to-buffer buf)))
-	(pvs-message "Generated C files"))))
+	(pvs-message "Generated no C files"))))
 
 (defpvs pvs-c-file find-file (filename)
   "Generates the C code for a given file"
   (interactive (pvs-complete-file-name "Generate C for file: " (current-pvs-file)))
   (pvs-bury-output)
   (pvs-message (format "Generating C for PVS file %s ..." filename))
-  (let* ((pvs-error nil)
-	 (c-files (pvs-send-and-wait (format "(pvs2c-pvs-file \"%s\")" filename)
-				     nil nil 'list)))
-    (ignore c-files)
-    (pvs-message "")
-    (unless pvs-error
-      ;; Ignoring c-files for now, as debugging code gets in the way
-      ;; (dolist (c-file (reverse c-files))
-      ;; 	(cl-assert (file-exists-p c-file))
-      ;; 	(let ((buf (find-file-noselect c-file t)))
-      ;; 	  (with-current-buffer buf
-      ;; 	    (set (make-local-variable 'pvs-context-sensitive) t)
-      ;; 	    (c-mode))))
-      ;; (pvs-message "Generated C files %s" c-files)
-      (pvs-message "Generated C files")
-      )))
+  (let* ((pvs-error nil))
+      (pvs-send (format "(pvs2c-pvs-file \"%s\")" filename))
+      (let ((c-files (pvs-send-and-wait (format "*pvs2c-top-c-file*") nil nil 'list)))
+	(if c-files 
+	    (let ((buf (find-file-noselect (car c-files) t)))
+	      (when buf
+		(with-current-buffer buf
+		  (set (make-local-variable 'pvs-context-sensitive) t)
+		  (c-mode))
+		(pvs-message "Generated C-file %s" (car c-files))
+		(pop-to-buffer buf)))
+	  (pvs-message "Generated no C files"))
+	  )))
 
 (defun pvs-find-C-file (filename)
   (let ((buf (get-buffer (format "%s.c" filename))))

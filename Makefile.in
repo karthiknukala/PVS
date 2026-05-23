@@ -584,11 +584,11 @@ yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-pc-l
 else
 ifeq ($(PLATFORM),ix86-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
 else
 ifeq ($(PLATFORM),arm-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
 endif
 endif
 endif
@@ -640,8 +640,7 @@ $(sbcl-rt) : $(QUICKLISP_SETUP) $(PVSPATH)pvs.asd $(image-deps)
 	$(SBCL) --dynamic-space-size $(strip $(SBCL_SPACE_SIZE)) \
 	        --control-stack-size $(SBCL_STACK_SIZE) \
 		--eval "(require :asdf)" \
-		--load "$(QUICKLISP_SETUP)" \
-		--eval "(ql:quickload (list :babel :clack :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
+		--eval "(ql:quickload (list :babel :clack :clack-handler-hunchentoot :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
 		--eval "(push *default-pathname-defaults* asdf:*central-registry*)" \
 	        --eval "(asdf:operate :program-op :pvs)" \
 	        --quit

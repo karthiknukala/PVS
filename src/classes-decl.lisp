@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 ;;; This file defines most of the classes used in PVS.  Below is a
@@ -124,23 +116,6 @@
 
 (in-package :pvs)
 
-(export '(actual actuals adt-or-theory adtdecl application argument arguments 
-	  assignment assuming bind-decl binding-expr bindings branch chain?
-	  const-decl const-decl? constructors context conversion-decl
-	  conversionplus-decl? conversions datatype-or-module declaration
-	  declarations-hash declared-type default-proof definition domain enumtype enumtype
-	  expr expression exprs field-application field-decl fields filename 
-	  formal-const-decl formal-type-decl formals formals-sans-usings
-	  formula-decl funtype generated-by id importing infix-application
-	  info inline-datatype judgement? justification lambda-expr let-expr
-	  modname module name name-expr nonempty-types nonempty? number
-	  number-expr operator parens predicate print-type
-	  projection-application quant-expr range recognizer record-expr
-	  recordtype resolutions saved-context script simple-constructor status
-	  subtype supertype theory theory-name tuple-expr tupletype type
-	  type-decl type-def-decl type-expr type-name type-name? type-value
-	  typed-declaration types update-expr using-hash var-decl visible?
-	  recursive-type inline-recursive-type adt-constructor))
 #+cmu
 (ext:without-package-locks
  (defgeneric class (x))
@@ -198,6 +173,9 @@
 		       :restore-as nil)
   (pvs2c-warnings :documentation
 		  "A list of warnings generated during PVS2C translation"
+		  :restore-as nil)
+  (no-pvs2c-generated :documentation
+		  "A flag indicating no PVS2C code was generated"
 		  :restore-as nil)
   (all-declarations :fetch-as nil)
   (all-imported-theories :fetch-as 'unbound :initform 'unbound)

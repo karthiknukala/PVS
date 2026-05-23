@@ -912,7 +912,7 @@
   (:use :cl-user :cl :ergolisp :oper :occ :term :sort
 	:sb-runtime :lang :newattr :file-utils :anaphora
 	#+:sbcl :sb-pcl)
-  (:shadow :class :condition :debug :declaration :keyword :name :number
+  (:shadow :class :condition :declaration :keyword :name :number
 	   :parse-error :type :type-error :memq :var)
   (:import-from :file-utils)
   (:import-from :pvs-ws)
