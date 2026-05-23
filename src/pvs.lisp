@@ -1351,8 +1351,14 @@ escapes here."
 		     (let* ((odecl (or (car (last (generated (car diff))))
 				       (car diff)))
 			    (otail (memq odecl (all-decls othy)))
-			    (last-kept-decl (unless (formal-decl? odecl)
-					      (car (last (ldiff (all-decls othy) otail))))))
+			    (last-kept-decl (unless (or (formal-decl? odecl)
+							(generated-by odecl))
+					      (car (last (ldiff
+							  (remove-if #'(lambda (d)
+									 (or (formal-decl? d)
+									     (generated-by d)))
+							    (all-decls othy))
+							  otail))))))
 		       (cond (last-kept-decl
 			      ;; Copies lexical info from new to old, up to diff.
 			      ;; This is info that can't change the semantcs, like
@@ -1498,8 +1504,8 @@ escapes here."
 	(found-diff nil))
     (assert (or osec nsec))
     (assert (memq last-kept-decl (all-decls othy)) () "merge-parsed-theory-decls - 1")
-    ;; (unless (or (null osec) (null nsec) (eq osec nsec))
-    ;;   (break "merge-parsed-theory-decls: different sections"))
+    (unless (or (null osec) (null nsec) (eq osec nsec))
+      (break "merge-parsed-theory-decls: different sections"))
     ;; (null osec) => ndecl tail is all new
     ;; (null nsec) => last-kept-decl tail should be deleted
     ;; else => last-kept-decl tail is replaced by ndecl tail
@@ -1526,7 +1532,8 @@ escapes here."
 	      ;; No need for else - othy is fine to keep
 	      )))
     (assert (memq last-kept-decl (all-decls othy)) () "merge-parsed-theory-decls - 3")
-    (assert (null (compare othy nthy)))))
+    (assert (null (compare othy nthy)))
+    ))
 
 (defun append-parsed-theory (ndecl othy nthy)
   "Typically simply copies ndecl and after in nthy to othy
