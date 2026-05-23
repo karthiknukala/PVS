@@ -66,23 +66,24 @@ jobs:
           brew list sbcl >/dev/null 2>&1 || brew install sbcl
           echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
 
-      - name: Prepare isolated build home
+      - name: Prepare neutral release build tree
         run: |
-          CI_HOME="$RUNNER_TEMP/pvs-home"
-          mkdir -p "$CI_HOME"
-          echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
+          bash ./.github/scripts/prepare-release-build-tree.sh
 
       - name: Configure source tree
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           shopt -s nullglob
           files=( $PVS_ARTIFACT_GLOB )
           if [ "${#files[@]}" -ne 1 ]; then
@@ -103,6 +104,9 @@ jobs:
           pkg_name="${artifact_base}.pkg"
           pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
           cp -f "${files[0]}" "$tgz_path"
+          bash ./.github/scripts/audit-release-artifact.sh \
+            --artifact "$tgz_path" \
+            --foreign-build-root "$PVS_RELEASE_WORKDIR"
 
           echo "tgz=$tgz_name" >> "$GITHUB_OUTPUT"
           echo "tgz_path=$tgz_path" >> "$GITHUB_OUTPUT"

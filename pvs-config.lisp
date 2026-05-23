@@ -194,6 +194,27 @@
 	*pvs-log-directory* "~/.pvslog/"
 	*pvs-path* nil))
 
+#+sbcl
+(defun build-time-shared-object-p (namestring)
+  (and namestring
+       (or (search "libcrypto." namestring :test #'char-equal)
+	   (search "libssl." namestring :test #'char-equal)
+	   (search "/file_utils." namestring :test #'char-equal)
+	   (search "/mu." namestring :test #'char-equal)
+	   (search "/ws1s." namestring :test #'char-equal))))
+
+#+sbcl
+(defun unload-build-time-shared-objects ()
+  (dolist (shobj (copy-list sb-sys:*shared-objects*))
+    (let ((namestring (sb-alien::shared-object-namestring shobj)))
+      (when (build-time-shared-object-p namestring)
+	(format t "~%Discarding build-time shared object ~a" namestring)
+	(ignore-errors
+	  (setf (sb-alien::shared-object-dont-save shobj) t))
+	(ignore-errors
+	  (sb-alien:unload-shared-object
+	   (sb-alien::shared-object-pathname shobj)))))))
+
 #+allegro
 (eval-when (:load-toplevel :execute)
   (setq *ignore-package-name-case* t))
@@ -518,16 +539,10 @@ targets and copying them to the corresponding bin directory."
 	   (lib-dst (format nil "~a/~a" build-dir lib)))
       (alexandria:copy-file lib-src lib-dst))
     ;;(clrhash asdf/source-registry:*source-registry*)
-    (dolist (shobj sb-sys:*shared-objects*)
-      (let ((namestring (sb-alien::shared-object-namestring shobj)))
-	(when (and namestring
-		   (or (search "libcrypto." namestring :test #'char-equal)
-		       (search "libssl." namestring :test #'char-equal)))
-	  (sb-alien:unload-shared-object (sb-alien::shared-object-pathname shobj))
-	  ;;(setf (sb-alien::shared-object-dont-save shobj) t)
-	  )))
+    (unload-build-time-shared-objects)
     (scrub-runtime-image-state)
     (copy-sbcl-install-tree sbcl-home sbcl-runtime bundled-sbcl-root)
+    (sb-ext:gc :full t)
     (with-open-file (stream pvs-runtime
 			    :direction :output
 			    :if-exists :supersede

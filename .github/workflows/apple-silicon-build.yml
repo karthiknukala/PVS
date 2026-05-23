@@ -71,17 +71,16 @@ jobs:
             echo "PVS_SBCL_BOOTSTRAP_HOME=$(brew --prefix sbcl)/lib/sbcl"
           } >> "$GITHUB_ENV"
 
-      - name: Prepare isolated build home
+      - name: Prepare neutral release build tree
         run: |
-          CI_HOME="$RUNNER_TEMP/pvs-home"
-          mkdir -p "$CI_HOME"
-          echo "CI_HOME=$CI_HOME" >> "$GITHUB_ENV"
+          bash ./.github/scripts/prepare-release-build-tree.sh
 
       - name: Build custom SBCL runtime
         run: |
-          PVS_BUILT_SBCL_PREFIX="$RUNNER_TEMP/pvs-sbcl-built"
+          cd "$PVS_RELEASE_WORKDIR"
+          PVS_BUILT_SBCL_PREFIX="$PVS_RELEASE_BUILD_ROOT/pvs-sbcl-built"
           bootstrap_xc_host="$PVS_SBCL_BOOTSTRAP_BIN --disable-debugger --no-userinit --no-sysinit"
-          bash ./.github/scripts/install-patched-sbcl-source.sh \
+          HOME="$CI_HOME" bash ./.github/scripts/install-patched-sbcl-source.sh \
             --prefix "$PVS_BUILT_SBCL_PREFIX" \
             --version "$PVS_SBCL_SOURCE_VERSION" \
             --xc-host "$bootstrap_xc_host" \
@@ -90,15 +89,18 @@ jobs:
 
       - name: Configure source tree
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
 
       - name: Build and smoke-test standalone bundle
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" make smoke-sbcl-release
 
       - name: Capture artifact paths
         id: artifacts
         run: |
+          cd "$PVS_RELEASE_WORKDIR"
           shopt -s nullglob
           files=( $PVS_ARTIFACT_GLOB )
           if [ "${#files[@]}" -ne 1 ]; then
@@ -119,6 +121,9 @@ jobs:
           pkg_name="${artifact_base}.pkg"
           pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
           cp -f "${files[0]}" "$tgz_path"
+          bash ./.github/scripts/audit-release-artifact.sh \
+            --artifact "$tgz_path" \
+            --foreign-build-root "$PVS_RELEASE_WORKDIR"
 
           echo "tgz=$tgz_name" >> "$GITHUB_OUTPUT"
           echo "tgz_path=$tgz_path" >> "$GITHUB_OUTPUT"
