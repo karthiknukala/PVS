@@ -215,67 +215,6 @@
 	  (sb-alien:unload-shared-object
 	   (sb-alien::shared-object-pathname shobj)))))))
 
-#+sbcl
-(defun scrub-sbcl-code-debug-info ()
-  (let ((seen (make-hash-table :test #'eq))
-	(count 0))
-    (labels ((scrub-debug-info (info)
-	       (when (and info
-			  (sb-c::debug-info-p info)
-			  (not (gethash info seen)))
-		 (setf (gethash info seen) t)
-		 (setf (sb-c::debug-info-source info) nil)
-		 (incf count))))
-      (sb-vm:map-allocated-objects
-       (lambda (object type size)
-	 (declare (ignore type size))
-	 (when (typep object 'sb-kernel:code-component)
-	   (scrub-debug-info (sb-kernel:%code-debug-info object))))
-       :dynamic :static :read-only)
-      (format t "~%Scrubbed source paths from ~d SBCL code debug records" count))))
-
-#+sbcl
-(defun split-release-forbidden-paths (string)
-  (when string
-    (remove-if
-     #'(lambda (path)
-	 (or (string= path "")
-	     (< (length path) 6)
-	     (not (char= (char path 0) #\/))))
-     (uiop:split-string string :separator '(#\Newline)))))
-
-#+sbcl
-(defun release-build-paths-to-scrub (&rest paths)
-  (remove-duplicates
-   (remove-if
-    #'null
-    (append (split-release-forbidden-paths
-	     (uiop:getenv "PVS_RELEASE_FORBIDDEN_PATHS"))
-	    paths))
-   :test #'string=))
-
-#+sbcl
-(defun scrub-sbcl-build-path-strings (paths)
-  (let* ((needles (coerce (mapcar #'copy-seq paths) 'vector))
-	 (count 0))
-    (labels ((needle-object-p (object)
-	       (loop for needle across needles thereis (eq object needle)))
-	     (scrub-string (string)
-	       (unless (needle-object-p string)
-		 (loop for needle across needles
-		       when (search needle string :test #'char=)
-			 do (fill string #\Space)
-			    (incf count)
-			    (return)))))
-      (when (< 0 (length needles))
-	(sb-vm:map-allocated-objects
-	 (lambda (object type size)
-	   (declare (ignore type size))
-	   (when (stringp object)
-	     (scrub-string object)))
-	 :dynamic :static :read-only)
-	(format t "~%Scrubbed build paths from ~d SBCL strings" count)))))
-
 #+allegro
 (eval-when (:load-toplevel :execute)
   (setq *ignore-package-name-case* t))
@@ -583,18 +522,7 @@ targets and copying them to the corresponding bin directory."
 	 (bundled-sbcl-root (format nil "~asbcl/" build-dir))
 	 (sbcl-runtime (namestring sb-ext:*runtime-pathname*))
 	 (sbcl-home (current-sbcl-home))
-	 (dynamic-space-size (default-pvs-sbcl-dynamic-space-size))
-	 (build-paths
-	   (release-build-paths-to-scrub
-	    *pvs-path*
-	    (build-target-root)
-	    (uiop:getenv "HOME")
-	    (uiop:getenv "QUICKLISP_HOME")
-	    (uiop:getenv "QUICKLISP_SETUP")
-	    (uiop:getenv "XDG_CACHE_HOME")
-	    (uiop:getenv "PVS_BUILD_CACHE")
-	    sbcl-home
-	    sbcl-runtime)))
+	 (dynamic-space-size (default-pvs-sbcl-dynamic-space-size)))
     (format t "~%Creating SBCL runtime launcher in ~a and core image in ~a"
 	    pvs-prog pvs-core)
     (ensure-directories-exist pvs-core)
@@ -614,8 +542,6 @@ targets and copying them to the corresponding bin directory."
     (unload-build-time-shared-objects)
     (scrub-runtime-image-state)
     (copy-sbcl-install-tree sbcl-home sbcl-runtime bundled-sbcl-root)
-    (scrub-sbcl-code-debug-info)
-    (scrub-sbcl-build-path-strings build-paths)
     (sb-ext:gc :full t)
     (with-open-file (stream pvs-runtime
 			    :direction :output

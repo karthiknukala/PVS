@@ -69,7 +69,6 @@ if [[ -n ${GITHUB_ENV:-} ]]; then
     echo "HOME=$ci_home"
     echo "PVS_RELEASE_FORBIDDEN_PATHS<<PVS_FORBIDDEN_PATHS"
     printf '%s\n' "$repo_dir"
-    printf '%s\n' "$build_root" "$source_tree" "$ci_home" "$tmp_dir"
     [[ -n ${GITHUB_WORKSPACE:-} ]] && (cd "$GITHUB_WORKSPACE" && pwd -P)
     [[ -n ${RUNNER_TEMP:-} ]] && printf '%s\n' "$RUNNER_TEMP"
     [[ -n ${RUNNER_TOOL_CACHE:-} ]] && printf '%s\n' "$RUNNER_TOOL_CACHE"

@@ -83,7 +83,9 @@ jobs:
           tgz_name="${artifact_base}.tgz"
           tgz_path="$RUNNER_TEMP/$tgz_name"
           cp -f "${files[0]}" "$tgz_path"
-          bash ./.github/scripts/audit-release-artifact.sh --artifact "$tgz_path"
+          bash ./.github/scripts/audit-release-artifact.sh \
+            --artifact "$tgz_path" \
+            --foreign-build-root "$PVS_RELEASE_WORKDIR"
 
           echo "tgz=$tgz_name" >> "$GITHUB_OUTPUT"
           echo "tgz_path=$tgz_path" >> "$GITHUB_OUTPUT"
