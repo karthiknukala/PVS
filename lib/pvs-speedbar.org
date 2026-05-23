@@ -1,0 +1,69 @@
+* PVS Speedbar
+
+The top level includes the user home directory, any current workspaces,
+the PVS Prelude, any libraries on the =PVS_LIBRARY_PATH= 
+
+Top level is directories or libraries, opening them generally leads to PVS
+files and subdirectories. Opening a PVS file will typecheck it, which can
+take some time. Clicking on the filename will simply bring up the file in
+a new buffer, without typechecking.
+
+After typechecking, a PVS file expands to a list of theories. Each theory
+expands to display its declarations, importings, etc.
+Declarations include a single letter indicating it's kind:
+
+| <+><-> | library/directory |
+| [+][-] | PVS file          |
+|       | theory            |
+|       | declaration       |
+|       | tcc               |
+|       | proof             |
+
+| I | importing    |
+| T | type         |
+| V | variable     |
+| C | const        |
+| F | formula      |
+| O | tcc          |
+| P | proof        |
+| J | judgement    |
+| > | conversion   |
+| d | datatype     |
+| c | codatatype   |
+| + | constructor  |
+| A | auto-rewrite |
+|   | exporting    |
+
+Note that hovering over a declaration displays it, which makes this useful
+for quick browsing. Declarations with a '+' button have proofs and/or
+TCCs, which in turn have proofs. Clicking on a declaration opens up the
+containing PVS file with focus on the declaration. Clicking on a TCC
+essentially runs =show-tccs= and focuses on the TCC.
+
+If a proof has a '+', it means the corresponding formula has multiple
+proofs; clicking on it shows other proofs from earlier attempts.
+
+Clicking on a proof starts a proof, and creates a =Proof= buffer, similar
+to the =step-proof= command.
+
+** PVS Speedbar Key Bindings
+
+| g | speedbar-refresh |
+| r | Previous display |
+| b | Quick Buffers    |
+| f | Files            |
+| i | Info             |
+| p | PVS Files        |
+
+| RET, e | speedbar-edit-line       |
+| +      | speedbar-expand-line     |
+| -      | speedbar-contract-line   |
+| t      | speedbar-toggle-updates  |
+| g      | speedbar-refresh         |
+| n      | speedbar-next            |
+| M-n    | speedbar-restricted-next |
+| M-p    | speedbar-restricted-prev |
+| C-M-n  | speedbar-forward-list    |
+| C-M-p  | speedbar-backward-list   |
+| q      | close-frame              |
+| Q      | delete-frame             |

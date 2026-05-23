@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 ;; The main tcc generation functions are:
@@ -2219,37 +2211,47 @@ the same id for the substitution."
 	  (when (and *false-tcc-error-flag*
 		     (tc-eq uform *false*))
 	    (type-error expr
-	      "Disjointness TCC for this expression simplifies to false:~2%  ~a"
-	      tform))
+			"Disjointness TCC for this expression simplifies to false:~2%  ~a"
+			tform))
 	  (typecheck* (mk-cond-disjoint-tcc id uform) nil nil nil))))))
 
 (defun make-disjoint-cond-property (conditions values)
   (let ((pairs (make-disjoint-cond-pairs conditions
 					 (pseudo-normalize values))))
-    (make-disjoint-cond-property* (nreverse pairs) nil)))
+    (make-disjoint-cond-property* pairs)))
 
-(defun make-disjoint-cond-property* (pairs prop)
-  (cond ((null pairs)
-	 prop)
-	((null prop)
-	 (make-disjoint-cond-property* (cdr pairs) (car pairs)))
-	(t (make-disjoint-cond-property*
-	    (cdr pairs)
-	    (make!-conjunction (car pairs) prop)))))
 
-(defun make-disjoint-cond-pairs (conditions values &optional result)
-  (if (null (cdr conditions))
-      result
-      (make-disjoint-cond-pairs
-       (cdr conditions)
-       (cdr values)
-       (append result
-	       (mapcan #'(lambda (c v)
-			   (unless (tc-eq v (car values))
-			     (list
-			      (make-negated-conjunction (car conditions) c))))
-		       (cdr conditions)
-		       (cdr values))))))
+(defun make-disjoint-cond-property* (pairs)
+  (when pairs
+    (let ((vec (coerce pairs 'vector)))
+      (labels ((mk-and (l r)
+		 (cond ((null l) r)
+		       ((null r) l)
+		       (t (make-instance 'infix-conjunction
+			    :operator (and-operator)
+			    :argument (make!-arg-tuple-expr l r)
+			    :type *boolean*))))
+	       (rec (lo hi)
+		 (cond ((>= lo hi) nil)
+		       ((= (+ lo 1) hi) (aref vec lo))
+		       (t (let ((mid (+ lo (floor (- hi lo) 2))))
+			    (mk-and (rec lo mid) (rec mid hi)))))))
+	(rec 0 (length vec))))))
+
+(defun make-disjoint-cond-pairs (conditions values)
+  (let ((res nil))
+    (loop while (cdr conditions)
+	  do (let ((c1 (car conditions))
+		   (v1 (car values))
+		   (restc (cdr conditions))
+		   (restv (cdr values)))
+	       (loop for c in restc
+		     for v in restv
+		     unless (tc-eq v v1)
+		     do (push (make-negated-conjunction c1 c) res))
+	       (setf conditions restc
+		     values restv)))
+    (nreverse res)))
 
 (defun generate-cond-coverage-tcc (expr conditions)
   (let* ((*old-tcc-name* nil)

@@ -5,21 +5,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -76,7 +68,8 @@
   input-queue
   output-queue
   outputs
-  logs)
+  logs
+  continuation)
 
 ;; Need to be able to return the following, note that only the commentary is
 ;; not derivable from the ps.
@@ -381,7 +374,7 @@ Returns a list of the form ((id . status) (id . status) ...)"
 ;;;       :waiting - prover is waiting for input
 ;;;      Note that if it's not waiting, then the session is gone
 
-(defun prover-init (formref &key rerun? input-hook)
+(defun prover-init (formref &key rerun? input-hook dont-save?)
   "Creates a proof-session, and returns (values proofstate log id status)."
   (let* ((fdecl (get-formula-decl formref))
 	 (id (get-new-session-id (id fdecl)))
@@ -437,7 +430,12 @@ Returns a list of the form ((id . status) (id . status) ...)"
 				;; (format t ~%Found quit on non-top-proofstate)
 				'quit)
 			       (t 'waiting)))
+		 (id-sym (intern id :pvs))
+		 (changed (eq (get id-sym :previous-proofstate) ps))
 		 (err (find-if #'(lambda (c) (typep c 'error)) commentary)))
+	    ;; Use symbol-plist for tracking previous proofstate, simpler
+	    ;; than using an alist indexed by proof ids.
+	    (setf (get id-sym :previous-proofstate) ps)
 	    (when err (setq commentary (remove err commentary)))
 	    (unless (eq status 'waiting)
 	      (loop while (session-alive-p sess)
@@ -449,6 +447,7 @@ Returns a list of the form ((id . status) (id . status) ...)"
 				 ("command" . ,cmd)
 				 ("proofstate" . ,ps)
 				 ("status" . ,(string-downcase status))
+				 ("changed" . ,changed)
 				 ("commentary" . ,commentary)
 				 ,@(when err
 				     `(("error" . ,(format nil "~a" err))))

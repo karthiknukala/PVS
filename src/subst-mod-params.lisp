@@ -11,21 +11,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006-2012, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -475,7 +467,9 @@
 					    (freevars obj)))
 	   (formals (unless (or (not (datatype-or-module? *subst-mod-params-theory*))
 				(eq (current-theory) *subst-mod-params-theory*))
-		      (formals-sans-usings *subst-mod-params-theory*)))
+		      (or (and (datatype? obj)
+			       (formals-sans-usings obj))
+			  (formals-sans-usings *subst-mod-params-theory*))))
 	   (dformals (when decl (all-decl-formals decl))) ; includes mapping lhs
 	   ;;(decl-formals decl)))
 	   (*subst-mod-free-params* nil)
@@ -1315,7 +1309,7 @@
 				   bindings
 				   (acons decl (or bval ndecl) bindings)))
 		    ;; dfbindings maps old decl-formals of decl to new
-		    (ndecl-bindings (append rbindings dfbindings bindings)))
+		    (ndecl-bindings (acons decl ndecl (append rbindings dfbindings bindings))))
 	       (unless (eq bindings nbindings)
 		 (clrhash *subst-mod-params-cache*)
 		 (clrhash *subst-mod-params-eq-cache*))
@@ -1567,8 +1561,8 @@ lift[T: TYPE]: DATATYPE BEGIN  | lift_nat: DATATYPE BEGIN
 			(setf (resolutions nmi) (list res))
 			nmi))
 	 (adt-tname (subst-mod-params* (adt-type-name adt) adt-modinst nbindings))
-	 (fbindings (acons adt-tname (mk-type-name *subst-mod-params-id*)
-			   nbindings))
+	 (nadt-tname (mk-type-name *subst-mod-params-id*))
+	 (fbindings (acons adt-tname nadt-tname nbindings))
 	 (adt-imps (subst-mod-params-adt-importings adt modinst fbindings))
 	 (constrs (subst-mod-params-constructors adt modinst fbindings))
 	 (nadt (make-instance (class-name (class-of adt))
@@ -1578,7 +1572,8 @@ lift[T: TYPE]: DATATYPE BEGIN  | lift_nat: DATATYPE BEGIN
 		:generated-by adt))
 	 (*save-adt-files* nil))
     (typecheck nadt)
-    (smp-insert-missing-adt-decls adt nadt modinst fbindings) 
+    (let ((nfbindings (acons (adt-type-name adt) (adt-type-name nadt) nbindings)))
+      (smp-insert-missing-adt-decls adt nadt modinst nfbindings))
     nadt))
 
 (defun smp-insert-missing-adt-decls (adt nadt modinst bindings)
@@ -1592,7 +1587,8 @@ lift[T: TYPE]: DATATYPE BEGIN  | lift_nat: DATATYPE BEGIN
 (defun smp-insert-missing-adt-decls* (adt-decls nadt-decls
 				      adt nadt alen nlen modinst bindings ndecls)
   (if (null adt-decls)
-      (setf (theory (adt-theory nadt)) (nreverse ndecls))
+      (setf (theory (adt-theory nadt)) (nreverse ndecls)
+	    (all-declarations (adt-theory nadt)) nil)
       (let ((adecl (car adt-decls))
 	    (ndecl (car nadt-decls)))
 	(if (or (eq (id adecl) (id ndecl))
@@ -1604,14 +1600,15 @@ lift[T: TYPE]: DATATYPE BEGIN  | lift_nat: DATATYPE BEGIN
 		       (> (length nstr) nlen)
 		       (string= (subseq astr alen) (subseq nstr nlen)))))
 	    (smp-insert-missing-adt-decls*
-	     (cdr adt-decls) (cdr nadt-decls) adt nadt alen nlen modinst bindings
+	     (cdr adt-decls) (cdr nadt-decls) adt nadt alen nlen modinst
+	     (acons adecl ndecl bindings)
 	     (cons ndecl ndecls))
 	    (let ((new-decl (car (subst-mod-params-decls (list adecl) modinst bindings
 							 (adt-theory nadt)))))
 	      (smp-insert-missing-adt-decls*
-	       (cdr adt-decls) nadt-decls adt nadt alen nlen modinst bindings
+	       (cdr adt-decls) nadt-decls adt nadt alen nlen modinst
+	       (acons adecl new-decl bindings)
 	       (cons new-decl ndecls)))))))
-      
 
 (defun subst-mod-params-adt-importings (adt modinst fbindings)
   (declare (ignore modinst))
@@ -3072,8 +3069,7 @@ lift[T: TYPE]: DATATYPE BEGIN  | lift_nat: DATATYPE BEGIN
 				   arg)
 				  ((compatible? dtype (type (argument expr)))
 				   (argument expr))
-				  (t (break "subst-mod-params* application: check")
-				     )))
+				  (t (break "subst-mod-params* application: check"))))
 		      (rtype (if (and (or (not (eq narg argument))
 					  (not (eq nop operator)))
 				      (typep (domain optype) 'dep-binding))
