@@ -48,9 +48,11 @@ sanitize_component() {
 
 stable_branch=${PVS_RELEASE_STABLE_BRANCH:-}
 dev_branch=${PVS_RELEASE_DEV_BRANCH:-}
+release_version=${PVS_RELEASE_VERSION:-}
 
 [[ -n $stable_branch ]] || fail "PVS_RELEASE_STABLE_BRANCH must be set in $config_file"
 [[ -n $dev_branch ]] || fail "PVS_RELEASE_DEV_BRANCH must be set in $config_file"
+[[ -n $release_version ]] || fail "PVS_RELEASE_VERSION must be set in $config_file"
 [[ -n ${GITHUB_REF_TYPE:-} ]] || fail "GITHUB_REF_TYPE is required"
 [[ -n ${GITHUB_REF_NAME:-} ]] || fail "GITHUB_REF_NAME is required"
 [[ -n ${GITHUB_SHA:-} ]] || fail "GITHUB_SHA is required"
@@ -69,15 +71,15 @@ case ${GITHUB_REF_TYPE} in
     if [[ ${GITHUB_REF_NAME} == "$stable_branch" ]]; then
       publish=true
       channel=stable
-      release_tag="stable-${release_date}"
-      release_title="Stable ${release_date}"
+      release_tag="pvs${release_version}-${artifact_branch}-${release_date}"
+      release_title="PVS ${release_version} ${artifact_branch} ${release_date}"
       prerelease=false
       move_tag=true
     elif [[ ${GITHUB_REF_NAME} == "$dev_branch" ]]; then
       publish=true
       channel=dev
-      release_tag="dev-${release_date}"
-      release_title="Dev ${release_date}"
+      release_tag="pvs${release_version}-${artifact_branch}-${release_date}"
+      release_title="PVS ${release_version} ${artifact_branch} ${release_date}"
       prerelease=true
       move_tag=true
     fi
@@ -103,6 +105,7 @@ if [[ -n ${GITHUB_OUTPUT:-} ]]; then
   {
     echo "stable_branch=$stable_branch"
     echo "dev_branch=$dev_branch"
+    echo "release_version=$release_version"
     echo "artifact_branch=$artifact_branch"
     echo "artifact_date=$release_date"
     echo "publish=$publish"
@@ -116,6 +119,7 @@ if [[ -n ${GITHUB_OUTPUT:-} ]]; then
 else
   printf 'stable_branch=%s\n' "$stable_branch"
   printf 'dev_branch=%s\n' "$dev_branch"
+  printf 'release_version=%s\n' "$release_version"
   printf 'artifact_branch=%s\n' "$artifact_branch"
   printf 'artifact_date=%s\n' "$release_date"
   printf 'publish=%s\n' "$publish"

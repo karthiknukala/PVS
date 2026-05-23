@@ -52,7 +52,7 @@
 
 (asdf:defsystem "pvs"
   :description "PVS is a verification system; see http://pvs.csl.sri.com"
-  :version "8.0"
+  :version "8.1"
   :author "Sam Owre, N. Shankar, and others"
   :maintainer "Sam Owre <owre@csl.sri.com>"
   :license "BSD-3-Clause"

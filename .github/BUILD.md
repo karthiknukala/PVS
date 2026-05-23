@@ -4,7 +4,7 @@ This directory contains the GitHub Actions workflows used to build PVS bundles f
 
 The top-level release entry point is [.github/workflows/release-builds.yml](./workflows/release-builds.yml). It runs the four platform workflows as reusable builders, waits for them to finish, then performs GitHub Release publication and stale-asset cleanup in one final job. The per-platform workflows still support `workflow_dispatch` for standalone debugging, but they no longer publish directly to GitHub Releases on push.
 
-This README focuses on the current packaging, notarization, and release flow, using Apple Silicon as the concrete example. The Apple x86 and Linux workflows mirror the same structure.
+This document focuses on the current packaging, notarization, and release flow, using Apple Silicon as the concrete example. The Apple x86 and Linux workflows mirror the same structure.
 
 ## Current Apple Silicon Flow
 
@@ -28,20 +28,21 @@ For the SBCL runtime, the packaged bundle now carries the generated `pvs-sbclisp
 
 The packaged install base is `/PVS`. That means:
 
-- installing with `-target /` places the bundle at `/PVS/pvs-8.0`
-- installing with `-target CurrentUserHomeDirectory` places it at `~/PVS/pvs-8.0`
+- installing with `-target /` places the bundle at `/PVS/pvs-8.1`
+- installing with `-target CurrentUserHomeDirectory` places it at `~/PVS/pvs-8.1`
 
 Release publication is controlled by [.github/release-config.env](./release-config.env):
 
 - `PVS_RELEASE_STABLE_BRANCH`
 - `PVS_RELEASE_DEV_BRANCH`
+- `PVS_RELEASE_VERSION`
 
-Those two variables determine which branch is treated as the stable source branch and which branch is treated as the dev source branch.
+Those variables determine which branches feed the stable/dev release tracks and which PVS version is embedded in branch-created release tags.
 
 The current release policy is:
 
-- pushes to the configured stable branch publish or update a release tagged `stable-YYYYMMDD`
-- pushes to the configured dev branch publish or update a prerelease tagged `dev-YYYYMMDD`
+- pushes to the configured stable branch publish or update a release tagged `pvs8.1-master-YYYYMMDD`
+- pushes to the configured dev branch publish or update a prerelease tagged `pvs8.1-dev-YYYYMMDD`
 - pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
 - the `publish-release` job in [.github/workflows/release-builds.yml](./workflows/release-builds.yml) is the only job that mutates GitHub Releases
 - the GitHub Releases page publishes the standalone platform tarballs for successful builds; macOS notarized `.pkg` assets are published in addition to those tarballs when signing and notarization are enabled
@@ -57,9 +58,9 @@ Build artifacts and GitHub Release assets use the same naming scheme: `pvs-<bran
 
 ## Release Tracks
 
-- Stable branch releases are named with the UTC date in `YYYYMMDD` form, for example `stable-20260420`.
+- Stable branch releases are named with the PVS version, branch, and UTC date, for example `pvs8.1-master-20260420`.
 - Stable version-tag releases are still supported when the pushed tag's commit is on the configured stable branch.
-- Dev releases are prereleases named with the UTC date in `YYYYMMDD` form, for example `dev-20260420`.
+- Dev releases are prereleases named with the PVS version, branch, and UTC date, for example `pvs8.1-dev-20260420`.
 - If multiple stable or dev builds run on the same UTC date, they update the same release for that channel and replace its assets in place.
 - Asset cleanup is centralized in the final publish job so old Linux/macOS tarballs and notarized macOS packages are pruned in one pass instead of by the individual builders.
 
@@ -289,7 +290,7 @@ If `notarytool` exits with an error like `must be a valid UUID` for `--issuer`:
 Once the pkg is built and downloaded onto a machine, run
 
 ```
-installer -pkg ./pvs8.0-<build>-arm-MacOSX-sbclisp.pkg -target CurrentUserHomeDirectory
+installer -pkg ./pvs-master-<date>-macos-arm64.pkg -target CurrentUserHomeDirectory
 ```
 
 to have PVS installed at ~/PVS.
