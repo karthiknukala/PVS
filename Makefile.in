@@ -801,6 +801,7 @@ sbclisp-distdir: $(SBCLISP_DISTFILES)
 	    "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime" ;; \
 	  *) : ;; \
 	esac
+	@"./.github/scripts/strip-runtime-debug-info.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime"
 
 dist-gzip: dist-allegro-gzip dist-sbclisp-gzip
 
