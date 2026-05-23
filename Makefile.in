@@ -848,12 +848,13 @@ release-sbcl: $(dist-sbclisp-gzip) smoke-sbcl-release
 smoke-sbcl-release: $(dist-sbclisp-gzip)
 	@tmpdir=`mktemp -d "$${TMPDIR:-/tmp}/pvs-release.XXXXXX"` && \
 	home="$$tmpdir/home" && \
+	extractdir="$$tmpdir/PVS release smoke (1)" && \
 	trap 'rm -rf "$$tmpdir"' EXIT HUP INT TERM && \
-	mkdir -p "$$home" && \
+	mkdir -p "$$home" "$$extractdir" && \
 	printf '%s\n' '(in-package :cl-user)' > "$$home/.pvs.lisp" && \
 	echo "Smoke check: extracting $(dist-sbclisp-gzip)" && \
-	tar xzf "$(dist-sbclisp-gzip)" -C "$$tmpdir" && \
-	root=`cd "$$tmpdir/$(DISTDIR)" && pwd -P` && \
+	tar xzf "$(dist-sbclisp-gzip)" -C "$$extractdir" && \
+	root=`cd "$$extractdir/$(DISTDIR)" && pwd -P` && \
 	echo "Smoke check: runtime directory contents" && \
 	ls -l "$$root/bin/$(PLATFORM)/runtime" && \
 	case "$(PLATFORM)" in \

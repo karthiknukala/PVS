@@ -7,7 +7,7 @@ usage() {
 Usage: resolve-release-policy.sh [--config <path>]
 
 Resolves whether the current GitHub Actions run should publish a stable release,
-a nightly prerelease, or no release at all.
+a dev prerelease, or no release at all.
 EOF
 }
 
@@ -39,11 +39,18 @@ done
 # shellcheck disable=SC1090
 source "$config_file"
 
+sanitize_component() {
+  local value=$1
+  value=${value//\//-}
+  value=${value// /-}
+  printf '%s' "$value" | tr -c 'A-Za-z0-9._-' '-' | sed 's/-\{1,\}/-/g;s/^-//;s/-$//'
+}
+
 stable_branch=${PVS_RELEASE_STABLE_BRANCH:-}
-nightly_branch=${PVS_RELEASE_NIGHTLY_BRANCH:-}
+dev_branch=${PVS_RELEASE_DEV_BRANCH:-}
 
 [[ -n $stable_branch ]] || fail "PVS_RELEASE_STABLE_BRANCH must be set in $config_file"
-[[ -n $nightly_branch ]] || fail "PVS_RELEASE_NIGHTLY_BRANCH must be set in $config_file"
+[[ -n $dev_branch ]] || fail "PVS_RELEASE_DEV_BRANCH must be set in $config_file"
 [[ -n ${GITHUB_REF_TYPE:-} ]] || fail "GITHUB_REF_TYPE is required"
 [[ -n ${GITHUB_REF_NAME:-} ]] || fail "GITHUB_REF_NAME is required"
 [[ -n ${GITHUB_SHA:-} ]] || fail "GITHUB_SHA is required"
@@ -54,16 +61,23 @@ release_tag=
 release_title=
 prerelease=false
 move_tag=false
-release_date=
+release_date=$(date -u +%Y%m%d)
+artifact_branch=$(sanitize_component "$GITHUB_REF_NAME")
 
 case ${GITHUB_REF_TYPE} in
   branch)
-    if [[ ${GITHUB_REF_NAME} == "$nightly_branch" ]]; then
-      release_date=$(date -u +%Y%m%d)
+    if [[ ${GITHUB_REF_NAME} == "$stable_branch" ]]; then
       publish=true
-      channel=nightly
-      release_tag="nightly-${release_date}"
-      release_title="Nightly ${release_date}"
+      channel=stable
+      release_tag="stable-${release_date}"
+      release_title="Stable ${release_date}"
+      prerelease=false
+      move_tag=true
+    elif [[ ${GITHUB_REF_NAME} == "$dev_branch" ]]; then
+      publish=true
+      channel=dev
+      release_tag="dev-${release_date}"
+      release_title="Dev ${release_date}"
       prerelease=true
       move_tag=true
     fi
@@ -80,6 +94,7 @@ case ${GITHUB_REF_TYPE} in
       release_title=${GITHUB_REF_NAME}
       prerelease=false
       move_tag=false
+      artifact_branch=$(sanitize_component "$stable_branch")
     fi
     ;;
 esac
@@ -87,7 +102,9 @@ esac
 if [[ -n ${GITHUB_OUTPUT:-} ]]; then
   {
     echo "stable_branch=$stable_branch"
-    echo "nightly_branch=$nightly_branch"
+    echo "dev_branch=$dev_branch"
+    echo "artifact_branch=$artifact_branch"
+    echo "artifact_date=$release_date"
     echo "publish=$publish"
     echo "channel=$channel"
     echo "release_tag=$release_tag"
@@ -98,7 +115,9 @@ if [[ -n ${GITHUB_OUTPUT:-} ]]; then
   } >> "$GITHUB_OUTPUT"
 else
   printf 'stable_branch=%s\n' "$stable_branch"
-  printf 'nightly_branch=%s\n' "$nightly_branch"
+  printf 'dev_branch=%s\n' "$dev_branch"
+  printf 'artifact_branch=%s\n' "$artifact_branch"
+  printf 'artifact_date=%s\n' "$release_date"
   printf 'publish=%s\n' "$publish"
   printf 'channel=%s\n' "$channel"
   printf 'release_tag=%s\n' "$release_tag"

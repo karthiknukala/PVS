@@ -14,19 +14,15 @@ It has two jobs:
 
 1. `build-macos-arm64`
    This job always runs. It builds the standalone Apple Silicon bundle, smoke-tests it, and uploads:
-   - `pvs-apple-silicon-tgz`
-   - `pvs-apple-silicon-custom-sbcl`
-   - `pvs-apple-silicon-bundle`
+   - `pvs-<branch>-<date>-macos-arm64.tgz`
 
 2. `package-macos-arm64`
    This job runs automatically whenever all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
-   - `pvs-apple-silicon-pkg`
+   - `pvs-<branch>-<date>-macos-arm64.pkg`
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
 Before building PVS itself, the Apple Silicon workflow installs Homebrew's native Apple Silicon `sbcl` package only as the bootstrap host, then builds a custom SBCL `2.6.3` install tree from source via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh). PVS is built against that custom SBCL, and the bundle step copies that active SBCL support tree into the release so the packaged runtime matches the source-built SBCL layout instead of shipping Homebrew's SBCL runtime directly.
-
-That same job also uploads the source-built SBCL install tree itself as `pvs-apple-silicon-custom-sbcl`. This is useful when testing whether the custom runtime binary survives relocation to another Apple Silicon Mac before going through the full PVS bundle or pkg path.
 
 For the SBCL runtime, the packaged bundle now carries the generated `pvs-sbclisp` and `pvs-sbclisp-bin` launchers, the saved `pvs-sbclisp.core`, and a bundled `runtime/sbcl/` tree containing the SBCL executable plus its `lib/sbcl/` support files. The launchers set `SBCL_HOME` to that bundled tree at runtime instead of assuming only a copied bare executable is sufficient.
 
@@ -38,39 +34,33 @@ The packaged install base is `/PVS`. That means:
 Release publication is controlled by [.github/release-config.env](./release-config.env):
 
 - `PVS_RELEASE_STABLE_BRANCH`
-- `PVS_RELEASE_NIGHTLY_BRANCH`
+- `PVS_RELEASE_DEV_BRANCH`
 
-Those two variables determine which branch is treated as the stable source branch and which branch is treated as the nightly source branch.
+Those two variables determine which branch is treated as the stable source branch and which branch is treated as the dev source branch.
 
 The current release policy is:
 
-- pushes to the configured nightly branch publish or update a prerelease tagged `nightly-YYYYMMDD`
+- pushes to the configured stable branch publish or update a release tagged `stable-YYYYMMDD`
+- pushes to the configured dev branch publish or update a prerelease tagged `dev-YYYYMMDD`
 - pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
 - the `publish-release` job in [.github/workflows/release-builds.yml](./workflows/release-builds.yml) is the only job that mutates GitHub Releases
 - the GitHub Releases page publishes the standalone platform tarballs for successful builds; macOS notarized `.pkg` assets are published in addition to those tarballs when signing and notarization are enabled
-- each nightly or stable asset family is reconciled once in that final publish job, so the release keeps only the latest asset for each platform/package kind
+- each stable or dev asset family is reconciled once in that final publish job, so the release keeps only the latest asset for each platform/package kind
 
-This keeps both stable and nightly builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
+This keeps stable and dev builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
 
 ## Which Artifact To Distribute
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact when one is available. The standalone platform tarballs are also published on the GitHub Releases page for successful builds.
 
-The standalone tarball, unpacked bundle, and Apple Silicon custom-SBCL tarball are still useful build artifacts. The standalone tarball is published on the GitHub Releases page, while the unpacked bundle and Apple Silicon custom-SBCL tarball remain GitHub Actions artifacts. The current release flow vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
-
-If the goal is to isolate an Apple Silicon SBCL runtime problem before involving the rest of the PVS bundle, use `pvs-apple-silicon-custom-sbcl` first. After extracting it on another machine, run:
-
-```bash
-SBCL_HOME=<extract>/pvs-sbcl-built/lib/sbcl <extract>/pvs-sbcl-built/bin/sbcl --version
-```
-
-If that fails with the same allocation error, the remaining issue is in the shipped SBCL runtime binary itself rather than in the PVS launchers, dylib loading, or pkg relocation.
+Build artifacts and GitHub Release assets use the same naming scheme: `pvs-<branch>-<date>-<os>-<arch>.tgz` for standalone tarballs and `pvs-<branch>-<date>-<os>-<arch>.pkg` for notarized macOS packages. The current release flow vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
 
 ## Release Tracks
 
-- Stable releases are intended to come from version tags whose commits are on the configured stable branch.
-- Nightly releases are prereleases named with the UTC date in `YYYYMMDD` form, for example `nightly-20260420`.
-- If multiple nightly builds run on the same UTC date, they update the same nightly release and replace its assets in place.
+- Stable branch releases are named with the UTC date in `YYYYMMDD` form, for example `stable-20260420`.
+- Stable version-tag releases are still supported when the pushed tag's commit is on the configured stable branch.
+- Dev releases are prereleases named with the UTC date in `YYYYMMDD` form, for example `dev-20260420`.
+- If multiple stable or dev builds run on the same UTC date, they update the same release for that channel and replace its assets in place.
 - Asset cleanup is centralized in the final publish job so old Linux/macOS tarballs and notarized macOS packages are pruned in one pass instead of by the individual builders.
 
 For the SBCL runtime, the packaged bundle now uses:
@@ -98,7 +88,7 @@ The `package-macos-arm64` job only runs if all of these secrets are non-empty:
 - `MACOS_NOTARY_KEY_ID`
 - `MACOS_NOTARY_API_KEY_P8_BASE64`
 
-If any one of these is missing, the workflow still produces the tarball and unpacked bundle, but it skips the pkg/notarization job.
+If any one of these is missing, the workflow still produces the standalone tarball, but it skips the pkg/notarization job.
 
 ## What The Certificate Files Mean
 
@@ -237,7 +227,7 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_AP
 
 Once all nine secrets are present:
 
-1. `build-macos-arm64` builds and uploads the standalone tarball and unpacked bundle.
+1. `build-macos-arm64` builds and uploads the standalone tarball.
 2. `package-macos-arm64` runs automatically.
 3. The second job:
    - imports the `Developer ID Application` and `Developer ID Installer` identities into a temporary keychain
@@ -246,7 +236,7 @@ Once all nine secrets are present:
    - builds a signed installer package
    - submits the package to Apple's notarization service
    - staples the notarization ticket
-   - uploads the final `pvs-apple-silicon-pkg` artifact
+   - uploads the final `pvs-<branch>-<date>-macos-arm64.pkg` artifact
 
 ## Current Authentication Choice
 

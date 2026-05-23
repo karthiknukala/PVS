@@ -56,7 +56,7 @@ fi
 #
 
 readVersion() {
-    if ! type "$PVSPATH/pvs" > /dev/null 2>&1  || ! VERSION=$($PVSPATH/pvs -raw -E '(format t "~&~%PVSIOVERSION ~a~%~%" *prooflite-version*)(bye)' 2> /dev/null | grep PVSIOVERSION | sed 's/^.*PVSIOVERSION \(.*\)$/\1/g') ; then
+    if [ ! -x "$PVSPATH/pvs" ] || ! VERSION=$("$PVSPATH/pvs" -raw -E '(format t "~&~%PVSIOVERSION ~a~%~%" *prooflite-version*)(bye)' 2> /dev/null | grep PVSIOVERSION | sed 's/^.*PVSIOVERSION \(.*\)$/\1/g') ; then
 	printf "PVS could not be located. Please double check PVS installation.\n"
 	exit 1;
     fi
