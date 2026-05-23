@@ -188,7 +188,7 @@
 	  (insert "\n")))
     ;;(insert "\n\n   Welcome to the PVS\n   Specification and Verification System\n")
     ;;[CAM]
-    (insert (format "\n   Version 8.0 -- Build %s" (get-pvs-build-date)))
+    (insert (format "\n   Version 8.1 -- Build %s" (get-pvs-build-date)))
     (insert "\n   SRI International -- Computer Science Laboratory\n")
     (setq cpoint (point))
     (insert "\n   Type C-c h for a summary of the commands.")
