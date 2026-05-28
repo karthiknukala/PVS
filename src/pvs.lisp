@@ -1390,6 +1390,8 @@ escapes here."
 			    (otail (memq odecl (all-decls othy)))
 			    (last-kept-decl (unless (or (formal-decl? odecl)
 							(generated-by odecl))
+					      ;;NSH(5-27-26): moved remove-if out of ldiff
+					      ;;otherwise the null-compare assert in merged-parsed-theory-decls fails
 					      (car (last (remove-if #'(lambda (d)
 									 (or (formal-decl? d)
 									     (generated-by d)))
