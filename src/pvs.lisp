@@ -1390,12 +1390,12 @@ escapes here."
 			    (otail (memq odecl (all-decls othy)))
 			    (last-kept-decl (unless (or (formal-decl? odecl)
 							(generated-by odecl))
-					      (car (last (ldiff
-							  (remove-if #'(lambda (d)
+					      (car (last (remove-if #'(lambda (d)
 									 (or (formal-decl? d)
 									     (generated-by d)))
-							    (all-decls othy))
-							  otail))))))
+							    (ldiff
+							     (all-decls othy)
+							     otail)))))))
 		       (cond (last-kept-decl
 			      ;; Copies lexical info from new to old, up to diff.
 			      ;; This is info that can't change the semantcs, like
@@ -1406,10 +1406,13 @@ escapes here."
 				(unless (eq prev-kept-decl last-kept-decl)
 				  (if (and prev-kept-decl
 					   (memq prev-kept-decl (all-decls othy)))
+				      ;;NSH(5-27-26): commented out the conditional setting of last-kept-decl
+				      ;;to only updated the prev-kept-decl-entry 
 				      ;; Check if last-kept-decl needs updating for this theory
-				      (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
-					  (setf (cdr prev-kept-decl-entry) last-kept-decl)
-					  (setq last-kept-decl prev-kept-decl))
+				      (setf (cdr prev-kept-decl-entry) last-kept-decl)
+				      ;; (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
+				      ;; 	  (setf (cdr prev-kept-decl-entry) last-kept-decl)
+				      ;; 	  (setq last-kept-decl prev-kept-decl))
 				      (push (cons (id othy) last-kept-decl)
 					    (last-kept-decls *workspace-session*)))))
 			      (copy-lex-upto diff othy nthy)
