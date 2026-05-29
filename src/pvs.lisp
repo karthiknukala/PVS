@@ -1369,7 +1369,8 @@ escapes here."
 				       (and (null (car diff))
 					    (theory-element? (cdr diff))))))))
 	      ;; Update othy, th-diffs, last-kept-decls,
-	      (unless (null diff) (setf (status othy) '(parsed)))
+	      (unless (null diff)
+		(setf (status othy) '(parsed)))
 	      (cond ((null diff) ;; Only lexical diffs, e.g., whitespace, comments
 		     (copy-lex othy nthy))
 		    ((datatype-or-module? (car diff))
@@ -1390,12 +1391,14 @@ escapes here."
 			    (otail (memq odecl (all-decls othy)))
 			    (last-kept-decl (unless (or (formal-decl? odecl)
 							(generated-by odecl))
-					      (car (last (ldiff
-							  (remove-if #'(lambda (d)
+					      ;;NSH(5-27-26): moved remove-if out of ldiff
+					      ;;otherwise the null-compare assert in merged-parsed-theory-decls fails
+					      (car (last (remove-if #'(lambda (d)
 									 (or (formal-decl? d)
 									     (generated-by d)))
-							    (all-decls othy))
-							  otail))))))
+							    (ldiff
+							     (all-decls othy)
+							     otail)))))))
 		       (cond (last-kept-decl
 			      ;; Copies lexical info from new to old, up to diff.
 			      ;; This is info that can't change the semantcs, like
@@ -1406,10 +1409,14 @@ escapes here."
 				(unless (eq prev-kept-decl last-kept-decl)
 				  (if (and prev-kept-decl
 					   (memq prev-kept-decl (all-decls othy)))
+				      ;;NSH(5-27-26): commented out the conditional setting of last-kept-decl
+				      ;;to only updated the prev-kept-decl-entry 
 				      ;; Check if last-kept-decl needs updating for this theory
+				      ;(setf (cdr prev-kept-decl-entry) last-kept-decl)
 				      (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
+					  (setq last-kept-decl prev-kept-decl)
 					  (setf (cdr prev-kept-decl-entry) last-kept-decl)
-					  (setq last-kept-decl prev-kept-decl))
+					  )
 				      (push (cons (id othy) last-kept-decl)
 					    (last-kept-decls *workspace-session*)))))
 			      (copy-lex-upto diff othy nthy)
@@ -1426,6 +1433,10 @@ escapes here."
 			      (setf (formals-sans-usings nthy)
 				    (remove-if #'importing-param? (formals nthy)))
 			      (untypecheck-usedbys othy)
+			      (let ((prev-kept-decl-entry (assq (id othy) (last-kept-decls *workspace-session*))))
+				(when prev-kept-decl-entry
+				  (setf (last-kept-decls *workspace-session*)
+					(delete prev-kept-decl-entry (last-kept-decls *workspace-session*)))))
 			      (setq replace? t)
 			      ;; (setf (gethash (id nthy) (current-pvs-theories)) nthy)
 			      (push (list othy nthy) th-diffs))
