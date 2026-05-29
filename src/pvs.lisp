@@ -1369,7 +1369,8 @@ escapes here."
 				       (and (null (car diff))
 					    (theory-element? (cdr diff))))))))
 	      ;; Update othy, th-diffs, last-kept-decls,
-	      (unless (null diff) (setf (status othy) '(parsed)))
+	      (unless (null diff)
+		(setf (status othy) '(parsed)))
 	      (cond ((null diff) ;; Only lexical diffs, e.g., whitespace, comments
 		     (copy-lex othy nthy))
 		    ((datatype-or-module? (car diff))
@@ -1411,10 +1412,11 @@ escapes here."
 				      ;;NSH(5-27-26): commented out the conditional setting of last-kept-decl
 				      ;;to only updated the prev-kept-decl-entry 
 				      ;; Check if last-kept-decl needs updating for this theory
-				      (setf (cdr prev-kept-decl-entry) last-kept-decl)
-				      ;; (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
-				      ;; 	  (setf (cdr prev-kept-decl-entry) last-kept-decl)
-				      ;; 	  (setq last-kept-decl prev-kept-decl))
+				      ;(setf (cdr prev-kept-decl-entry) last-kept-decl)
+				      (if (memq last-kept-decl (memq prev-kept-decl (all-decls othy)))
+					  (setq last-kept-decl prev-kept-decl)
+					  (setf (cdr prev-kept-decl-entry) last-kept-decl)
+					  )
 				      (push (cons (id othy) last-kept-decl)
 					    (last-kept-decls *workspace-session*)))))
 			      (copy-lex-upto diff othy nthy)
@@ -1431,6 +1433,10 @@ escapes here."
 			      (setf (formals-sans-usings nthy)
 				    (remove-if #'importing-param? (formals nthy)))
 			      (untypecheck-usedbys othy)
+			      (let ((prev-kept-decl-entry (assq (id othy) (last-kept-decls *workspace-session*))))
+				(when prev-kept-decl-entry
+				  (setf (last-kept-decls *workspace-session*)
+					(delete prev-kept-decl-entry (last-kept-decls *workspace-session*)))))
 			      (setq replace? t)
 			      ;; (setf (gethash (id nthy) (current-pvs-theories)) nthy)
 			      (push (list othy nthy) th-diffs))
