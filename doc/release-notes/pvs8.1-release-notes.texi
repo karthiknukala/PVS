@@ -1,0 +1,372 @@
+@node PVS 8.1 Release Notes
+@unnumbered PVS 8.1 Release Notes
+
+PVS 8.1 is a significant new release; the main thing is the move to SBCL
+as the primary Common Lisp; in fact only earlier versions of PVS are
+available in Allegro CL. Note that 8.0 was an unofficial release while
+moving to SBCL.
+
+In addition to this, there are a number of new and improved features, as
+well as the usual bug fixes, etc.
+
+Other significant changes include
+@itemize @bullet
+@item SBCL
+@item Better VSCode-PVS Integration
+@item Multi-threaded proofs
+@item User-defined PVS Images
+@item PVS2C
+@item PVS and Machine Learning
+@item Use of Quicklisp/ASDF
+@item Docker
+@end itemize
+
+@ifnottex
+@menu
+* 8.1 Installation Notes::
+* 8.1 New Features::
+* 8.1 Incompatibilities::
+@end menu
+@end ifnottex
+
+@node    8.1 Installation Notes
+@section Installation Notes
+
+PVS 8.1 can be downloaded directly from releases, or built from
+sources. Note that Allegro Common Lisp is no longer supported, though the
+earlier releases are still available.
+
+@subsection GitHub Releases/Prebuilt Packages
+
+PVS (as of version 8.1) is continuously built in GitHub runners for the following architectures:
+ - MacOS Apple Silicon (aarch64/arm64)
+ - MacOS x86/64
+ - Linux (Ubuntu) (aarch64/arm64)
+ - Linux (Ubuntu) (x86/64)
+
+Please see https://github.com/SRI-CSL/PVS/releases for the appropriate version.
+
+VSCode extensions will automatically pull the right version from here, and a similar Emacs integration is on the way.
+
+@subsection Sources
+
+Sources are available from 
+PVS 8.1 follows the usual @code{./configure}; @code{make}
+
+installation uses Make, rather than distributing a tar file as in
+the past. The reason for this is that Websocket and other Quicklisp
+packages rely on various shared libraries (@code{.so} and @code{.dylib}
+files), and it is very difficult to make an SBCL image that can find all
+the these on a separate platform. Building the image directly as needed
+mitigates this problem. Another advantage to this is you can always do a
+Git pull and make to have the latest version, rather than relying on patch
+files.
+
+Note that PVS still doesn't directly work in Windows, but there is an
+included @code{Dockerfile} that can make a Docker container; read the
+@code{Dockerfile} itself for details.
+
+Prerequisites include development tools, such as make, a C compiler, etc.
+For Macs, Xcode should be installed. Linux usually has these installed,
+but for Ubuntu, @code{apt-get install build-essentials} provides this.
+Git, SBCL, Emacs, and curl should be installed; the version is not so
+important, as long as it's reasonably recent. These can generally be found
+in your package manager. Note that these prerequisites are checked for in
+the @code{./configure} file, you can run this and install whatever it
+complains about lazily.
+
+@b{Instructions:} Change directory (@code{cd}) to where you want to
+install PVS, then
+@itemize @bullet
+@item
+@code{git clone https://github.com/SRI-CSL/PVS.git}
+@item
+@code{cd PVS}
+@item
+@code{./configure} - if something is missing, provide it and repeat
+@item
+@code{make}
+@end itemize
+If this finishes successfully, you should be able to run @code{./pvs} and see an
+Emacs window with the PVS Welcome buffer.
+
+If you want to use the NASA PVS library, please get it (temporarily) from
+a fork using @code{git clone https://github.com/samowre/pvslib.git --branch
+pvs8.1}. This has many fixes so that almost all the proofs work in SBCL.
+
+If you have problems, or suggestions for improvement, let us know at
+@email{pvs-bugs@@csl.sri.com}.
+
+@node    8.1 New Features
+@section New Features
+
+@menu
+* SBCL::
+* Prover Threads::
+* User-defined PVS Images::
+* PVS2C::
+* PVS and Machine Learning::
+* Use of Quicklisp/ASDF::
+* Docker::
+@end menu
+
+@node SBCL
+@subsection PVS in SBCL
+PVS 8 now has SBCL as its default Common Lisp.
+@c The primary developers can no longer afford the Allegro license for
+@c providing a runtime version.
+This has several differences with previous Allegro versions. The main
+difference is that the Allegro versions were case-sensitive, whereas SBCL
+is not. This can possibly affect proofs, strategies, and loaded Lisp
+files.
+
+With pvs-strategies and Lisp files, the place that was most common was
+with PVS ids, for example @code{(eq id 'abs)} should instead be
+@code{(eq id '|abs|)}. Note that @code{eq} in this case could be replaced
+with @code{string=}, which is useful if @code{id} could be a string or
+symbol. If case doesn't matter, then use
+@code{string-equal}.@footnote{These are functions of Common Lisp, not
+specific to PVS.} For example, @code{(string= 'a "a")} returns @code{NIL},
+since @code{'a} is the same as @code{'A}, but this is true for
+@code{(string-equal 'a "a")}.
+
+@node       Prover Threads
+@subsection Prover Threads
+
+One of the most difficult parts of the previous XML-RPC implementation was
+the support for prover sessions. When in a prover session, a few
+non-prover commands are possible, but they need to interrupt the prover to
+run. In the relatively simple Emacs interface this is not difficult, but
+supporting VSCode-PVS got complicated.
+
+For this and other reasons, we decided to allow proofs to be run in separate
+threads. The API is rather simple; there are two basic functions:
+@itemize @bullet
+@item @code{prover-init}: takes a formula reference, starts a prover session
+  on a new thread, and returns a unique prover id and the initial sequent.
+@item @code{prover-step}: takes a prover id and a proof command,
+  applies the command to the thread associated with the id, and returns the
+  result.
+@end itemize
+
+The result of these functions consists of a number of fields:
+@itemize @bullet
+@item @code{id}: the proof session id
+@item @code{proofstate}: the resulting sequent
+@item @code{status}: one of @code{init}, @code{waiting}, @code{proved}, or @code{quit}
+@item @code{commentary}:
+all of the messages that are generated between the proof command and the
+resulting sequent are collected here. This includes information such as
+instantiations that are found, counterexamples from running the
+@code{random-test} command, etc.
+@item @code{command}: the proof command that was given that led to this sequent.
+@item @code{error}:
+this is optional, and indicates there was an error in executing the
+command. Note that this is not a Websocket error, but an error within the
+prover, for example, typecheck errors. In this case, the sequent will be
+the same one, as if the command was @code{skip}.
+@end itemize
+
+Because each session is on a thread with a unique id, several sessions can
+be run concurrently; they can even be run on the same formula, allowing
+one to explore different possible proofs at the same time, without having
+to undo/redo a given proof. PVS already has a notion of multiple proofs
+associated with a given formula, we make use of this both in generating
+the unique id, and at the end, if the proof is saved, it is saved with
+that id.
+
+Here is an example run in the SBCL version. Note that this does not involve Websocket, but is easily converted to JSON for that purpose.
+@verbatim
+* (prover-init "axiom_of_archimedes")
+(("id" . "axiom_of_archimedes0")
+ ("proofstate" . 
+axiom_of_archimedes :  
+
+  |-------
+{1}   FORALL (x: real): EXISTS (i: int): x < i
+)
+ ("status" . "init")
+ ("commentary" "axiom_of_archimedes0 started at 2022-06-30T14:32:11+8"
+  "Installing rewrite rule sets.singleton_rew (all instances)"))
+* (prover-step "axiom_of_archimedes0" "(skeep)")
+(("id" . "axiom_of_archimedes0") ("command" . "(skeep)")
+ ("proofstate" . 
+axiom_of_archimedes :  
+
+  |-------
+{1}   EXISTS (i: int): x < i
+)
+ ("status" . "waiting")
+ ("commentary"
+  "Skolemizing and keeping names of the universal formula in (+ -),"
+  "this simplifies to:"))
+@end verbatim
+
+@node User-defined PVS Images
+@subsection User-defined images
+One strong advantage with SBCL is that images can easily be
+generated. This is also possible from PVS itself, e.g., after loading a
+large library. The function @code{make-new-pvs-image} takes a name and
+generates a new image from the current state of the system. This means if
+you loaded some PVS libraries, or some Quicklisp packages, they would be
+included in the resulting image. To access this image later, use the
+@code{-image @emph{name}} option to PVS.
+
+It is probably easy to invoke this function such that the resulting image
+has errors, and almost impossible to protect against this. For example,
+soon after adding the logging facility it turned out none of these images
+would run because they tried to write to broken stream. This was easy to
+fix in the logger by catching the error and reopening the stream, but
+what happens if a proof is started
+
+Probably the best way to use @code{make-new-pvs-image} is to start a fresh
+PVS, load up whatever libraries, packages, etc., you want, and then
+immediately create the new image.
+
+@node PVS2C
+@subsection PVS2C
+See the documentation in the @code{doc} subdirectory.
+
+@node PVS and Machine Learning
+@subsection PVS and Machine Learning
+We have been actively exploring the combination of PVS with machine
+learning. Some examples of how agents could be created are in the
+@code{python/websocket-examples} subdirectory. Note that these are not
+complete, but are useful in showing how to create agents for PVS.
+
+@c @node PVS Log Files
+@c @subsection PVS Log Files
+
+@c PVS now has the option to save log files for an interactive PVS session as
+@c well as separately for each interactive proof. Though the logs are
+@c relatively small, and the proof logs won't save duplicates, This feature
+@c is off by default.
+
+@c Session logs are primarily useful if you work regularly with PVS, in
+@c effect they track your interaction with PVS Lisp through either Emacs or
+@c VSCode. Actual file contents or diffs are not included, so this is not
+@c enough to recreate a session, more like a reminder of when and how PVS was
+@c used in the past.
+
+@c Proof logs are actually valuable data for machine learning. In past
+@c projects we tried to learn from the NASA libraries, but these have the
+@c problem that they don't reflect failed proof attempts. The proof logs
+@c capture all the prover interaction, almost as if cut and pasted from the
+@c Emacs buffer.
+
+@c The logs are controlled by the special variables
+@c @itemize @bullet
+@c @item @code{*pvs-log-preference*} - can be one of @code{nil}, @code{t},
+@c       @code{:session}, or @code{:proofs}. Defaults to @code{nil}
+@c @item @code{*pvs-log-directory*} - defaults to @code{~/.pvslog}
+@c @end itemize
+
+@c Note that these can be set in @code{~/.pvs.lisp}.
+
+@c The log files are not buffered, thus even if the PVS process is killed the
+@c log files will still be written.
+
+@c @subsubsection PVS Session logs
+
+@c Sessions logs are saved if @code{*pvs-log-preference*} is @code{t} or
+@c @code{:session}. The files are named
+@c @code{pvs-@emph{yyyy-mm-ddThh:mm}.log}, with the date representing the
+@c start of the session. The contents are basically the interactions
+@c with the Lisp process, i.e., the API with Emacs or vscode-pvs. In
+@c addition, any messages, buffers, etc. That are passed will be shown.
+
+@c @subsubsection Proof logs
+
+@c Proof logs are kept in the @code{proofs} subdirectory of the
+@c @code{*pvs-log-directory*}. Each proof log has a name of the form
+@c @code{@emph{thy-fmla-yyyy-mm-ddThh:mm}.log}, where the timestamp reflects
+@c when the proof is started. However, proof logs are not kept if they match
+@c an earlier file, thus interactively rerunning a proof will only generate
+@c one file. The proof log contains essentially what you see when running in
+@c Emacs. However, any breaks into Lisp, tracing, etc. are not part of it.
+@c However, proof commands such as @code{undo} and @code{postpone} do show
+@c up. This makes these files useful for machine learning, as they will
+@c reflect different proof attempts.
+
+@c @subsection Proof Label Addition
+
+@c This is a minor one, though it can be very helpful. The proof label above
+@c a sequent now has the parent rule displayed. Sometimes after a subgoal is
+@c proved, or postpone or undo commands are given, It can be difficult to
+@c recall where the resulting sequent came from. Ancestry gives this
+@c information, but seems a bit much.
+
+@node Use of Quicklisp/ASDF
+@subsection ASDF and Quicklisp
+@emph{ASDF} (Another System Definition Facility) is the @emph{make} for Common
+Lisp, and @emph{Quicklisp} is the package manager. The @code{pvs.asd} file
+uses ASDF to specify the files and dependencies that make up the Lisp
+components of the PVS system. Although most of the PVS system is built
+this way, it is called from the Makefile, which is better at things like
+installing Yices and compiling Emacs files.
+
+The Makefile also installs the @code{~/quicklisp/} directory, which is
+where packages loaded with Quicklisp are kept.  Using Quicklisp, PVS 8.1
+loads the Websocket package, along with several others:
+@itemize @bullet
+@item @code{clack}: web application environment
+@item @code{hunchentoot}: web server
+@item @code{lparallel}: parallel programming library
+@item @code{cl-json}: JSON encoder/decoder library
+@item @code{bable}: charset encoding/decoding library
+@item @code{cffi}: Common Foreign Function Interface
+@item @code{anaphora}: anaphoric macro collection
+@end itemize
+
+If you want to install further packages into PVS, go to
+@url{https://www.quicklisp.org/beta/} for an overview of how to use it,
+and @url{https://www.quicklisp.org/beta/UNOFFICIAL/docs/} for a summary of
+available Quicklisp packages.
+
+@node Docker
+@subsection Docker
+A @code{Dockerfile} is included; this is mostly useful on a Windows
+machine as PVS has not yet been ported to Windows. Read the Dockerfile
+itself for details.
+
+
+@node    8.1 Incompatibilities
+@section Incompatibilities
+
+There are a few incompatibilities in PVS 8.1, largely due to moving to
+SBCL, and there mostly related to the use of case-sensitivity in Allegro,
+which SBCL doesn't support.
+
+@subsection Use of symbols in proofs
+Many proof commands allow symbols or strings (within double quotes) as
+input for PVS terms, for example, @code{typepred}. Thus both
+@code{typepred x} and @code{typepred "x"} are accepted. However, in SBCL,
+the former is treated the same as @code{typepred X}, which will either
+result in a typecheck error or produce the type predicates for the wrong
+term. Unfortunately, this is almost impossible to catch in general, though
+in some cases (e.g., the @code{lemma} and @command{expand} commands) the
+prover will try to find other cases before giving an error. Much of the
+work done to produce the NASA PVS library fork was in fixing these kinds
+of problems. In general, you should always use strings instead of symbols
+for PVS terms.
+
+@subsection Use of symbols in Lisp code
+The above also is a problem in Lisp code, usually related to
+@code{pvs-strategies} files. In some places the system was looking for
+occurrences of @code{abs}, but using the symbol directly. It's OK in
+Common Lisp to use the symbol, but it should be surrounded with vertical
+bars, e.g., @code{|abs|} in order to work in both Allegro and SBCL. Note
+that Common Lisp has many forms of equality, and if you want to check
+against a string or symbol in a case-insensitive way, you can use the
+built-in function @code{string-equal}.
+
+@subsection TCCs
+As usual, there are some TCC differences, mostly due to improvements in
+the use of judgements. This is generally better for new proofs, but often
+breaks existing proofs. Over the NASA PVS library this was a small
+percentage, but is worth keeping in mind in moving to PVS 8.1.
+
+Some of the proofs in the NASA PVS library were broken because they
+brought in a TCC as a lemma, and TCC renumbering caused problems. As a
+general rule, any such TCC should be extracted to a lemma, which can be
+used to prove the TCC and safely used in other proofs.

@@ -1,21 +1,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; -*- Mode: Lisp -*- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 ;; This is loaded right after packages.lisp in pvs.asd, providing globals
@@ -94,6 +86,134 @@
 (defvar *pvs-fasl-type*
   #+allegro excl:*fasl-default-type*
   #+sbcl sb-fasl:*fasl-file-type*)
+
+(defun build-target-root ()
+  (namestring
+   (uiop:ensure-directory-pathname
+    (or (uiop:getenv "TARGETPATH") "./"))))
+
+(defun platform-build-dir (platform subdir)
+  (format nil "~abin/~a/~a/" (build-target-root) platform subdir))
+
+(defun default-pvs-sbcl-dynamic-space-size ()
+  (let ((value (string-trim '(#\Space #\Tab #\Newline #\Return)
+			    (or (uiop:getenv "PVS_SBCL_DYNAMIC_SPACE_SIZE")
+				"6000"))))
+    (if (string= value "")
+	"6000"
+	value)))
+
+#+sbcl
+(defun current-sbcl-home ()
+  (namestring
+   (uiop:ensure-directory-pathname
+    (or (uiop:getenv "SBCL_HOME")
+	(and (boundp 'sb-ext:*core-pathname*)
+	     sb-ext:*core-pathname*
+	     (uiop:pathname-directory-pathname sb-ext:*core-pathname*))
+	(error "Cannot determine SBCL_HOME for runtime bundling")))))
+
+#+sbcl
+(defun copy-sbcl-runtime-binary (sbcl-runtime bundled-runtime)
+  (uiop:run-program
+   (list "cp" "-fpL" sbcl-runtime bundled-runtime)
+   :output *standard-output*
+   :error-output *error-output*))
+
+#+(or macosx os-macosx)
+(defun sbcl-runtime-loader-path-dependencies (sbcl-runtime)
+  (let ((prefix "@loader_path/"))
+    (loop for line in (cdr (uiop:split-string
+			    (uiop:run-program
+			     (list "otool" "-L" sbcl-runtime)
+			     :output :string
+			     :error-output *error-output*)
+			    :separator '(#\Newline)))
+	  for trimmed = (string-trim '(#\Space #\Tab) line)
+	  for dep = (car (uiop:split-string trimmed :separator '(#\Space #\Tab)))
+	  when (and dep
+		    (<= (length prefix) (length dep))
+		    (string= prefix dep :end2 (length prefix)))
+	    collect dep)))
+
+#+(or macosx os-macosx)
+(defun copy-sbcl-runtime-loader-dependencies (sbcl-runtime source-runtime-dir-path bundled-bin-path)
+  (dolist (dep (sbcl-runtime-loader-path-dependencies sbcl-runtime))
+    (let* ((relative (subseq dep (length "@loader_path/")))
+	   (source-path (merge-pathnames relative source-runtime-dir-path))
+	   (target-path (merge-pathnames relative bundled-bin-path)))
+      (unless (probe-file source-path)
+	(error "Missing SBCL runtime sibling dependency ~a referenced by ~a"
+	       dep sbcl-runtime))
+      (ensure-directories-exist target-path)
+      (uiop:run-program
+       (list "cp" "-fpL" (namestring source-path) (namestring target-path))
+       :output *standard-output*
+       :error-output *error-output*))))
+
+#+sbcl
+(defun copy-sbcl-install-tree (sbcl-home sbcl-runtime bundled-root)
+  (let* ((bundled-root-path (uiop:ensure-directory-pathname bundled-root))
+	 (bundled-bin-path (merge-pathnames #P"bin/" bundled-root-path))
+	 (bundled-runtime (namestring (merge-pathnames #P"bin/sbcl" bundled-root-path)))
+	 (bundled-home-path (merge-pathnames #P"lib/sbcl/" bundled-root-path))
+	 (source-home-path (uiop:ensure-directory-pathname sbcl-home))
+	 #+(or macosx os-macosx)
+	 (source-runtime-dir-path
+	   (uiop:pathname-directory-pathname (truename sbcl-runtime))))
+    (when (probe-file bundled-root-path)
+      (uiop:delete-directory-tree bundled-root-path :validate t))
+    (ensure-directories-exist (merge-pathnames #P"bin/.keep" bundled-root-path))
+    (ensure-directories-exist (merge-pathnames #P"lib/sbcl/.keep" bundled-root-path))
+    ;; Copy the runtime binary itself everywhere. Some hosts install sbcl under
+    ;; broad bin directories (for example /usr/bin or /usr/local/bin) that may
+    ;; contain unrelated broken or cyclic symlinks, so avoid cloning the whole
+    ;; directory. On macOS, also copy the binary's direct @loader_path siblings.
+    (copy-sbcl-runtime-binary sbcl-runtime bundled-runtime)
+    #+(or macosx os-macosx)
+    (copy-sbcl-runtime-loader-dependencies sbcl-runtime source-runtime-dir-path bundled-bin-path)
+    (chmod "a+rx" bundled-runtime)
+    (uiop:run-program
+     (list "cp" "-pR" (format nil "~a." (namestring source-home-path)) (namestring bundled-home-path))
+     :output *standard-output*
+     :error-output *error-output*)
+    (namestring bundled-root-path)))
+
+#+sbcl
+(defun scrub-runtime-image-state ()
+  (ignore-errors (asdf:clear-system :pvs))
+  (ignore-errors (asdf/source-registry:clear-source-registry))
+  (ignore-errors (asdf/output-translations:clear-output-translations))
+  (ignore-errors (uiop:clear-configuration))
+  (ignore-errors
+    (setf uiop/configuration:*user-cache*
+          (uiop/configuration::compute-user-cache)))
+  (ignore-errors (when (fboundp 'close-pvs-log) (close-pvs-log)))
+  (setf asdf:*central-registry* nil)
+  (setq *pvs-log-stream* nil
+	*pvs-log-directory* "~/.pvslog/"
+	*pvs-path* nil))
+
+#+sbcl
+(defun build-time-shared-object-p (namestring)
+  (and namestring
+       (or (search "libcrypto." namestring :test #'char-equal)
+	   (search "libssl." namestring :test #'char-equal)
+	   (search "/file_utils." namestring :test #'char-equal)
+	   (search "/mu." namestring :test #'char-equal)
+	   (search "/ws1s." namestring :test #'char-equal))))
+
+#+sbcl
+(defun unload-build-time-shared-objects ()
+  (dolist (shobj (copy-list sb-sys:*shared-objects*))
+    (let ((namestring (sb-alien::shared-object-namestring shobj)))
+      (when (build-time-shared-object-p namestring)
+	(format t "~%Discarding build-time shared object ~a" namestring)
+	(ignore-errors
+	  (setf (sb-alien::shared-object-dont-save shobj) t))
+	(ignore-errors
+	  (sb-alien:unload-shared-object
+	   (sb-alien::shared-object-pathname shobj)))))))
 
 #+allegro
 (eval-when (:load-toplevel :execute)
@@ -235,7 +355,7 @@ targets and copying them to the corresponding bin directory."
       ;; 	    (delete-file exe-file))
       ;; 	  (uiop:copy-file (format nil "~a/~a" make-dir exe) exe-file)))
       #+allegro (format t "~% make-in-platform loading ~a" lib-file)
-      #+allegro (cffi:load-foreign-library lib-file)
+      (cffi:load-foreign-library lib-file)
       )))
 
 (defun finally-do ()
@@ -282,11 +402,10 @@ targets and copying them to the corresponding bin directory."
   (format t "~%Making Allegro ~a" (if runtime? "runtime" "devel"))
   (let* ((tmp-dir "/tmp/pvs-allegro-build/")
 	 (platform (pvs-platform))
-	 (platform-dir (format nil "./bin/~a/" platform))
-	 (build-dir (format nil "~a~a/"
-		     platform-dir (if runtime? "runtime" "devel")))
+	 (platform-dir (format nil "~abin/~a/" (build-target-root) platform))
+	 (build-dir (platform-build-dir platform (if runtime? "runtime" "devel")))
 	 (foreign-ext #-(or macosx os-macosx) "so" #+(or macosx os-macosx) "dylib")
-	 (bin-dir (format nil "bin/~a/~a/" platform (if runtime? "runtime" "devel")))
+	 (bin-dir (platform-build-dir platform (if runtime? "runtime" "devel")))
 	 (allegro-home (or (sys:getenv "ALLEGRO_HOME") "~/acl")))
     ;; (setq *pvs-path* nil)
     (ensure-directories-exist build-dir)
@@ -367,8 +486,7 @@ targets and copying them to the corresponding bin directory."
     (dolist (sdir-file '(("utils" . "file_utils") ("BDD" . "mu") ("WS1S" . "ws1s")))
       (let* ((file (format nil "~a.~a" (cdr sdir-file) foreign-ext))
 	     (libsrc (format nil "src/~a/~a/~a" (car sdir-file) platform file))
-	     (libdest (format nil "bin/~a/~a/~a"
-			platform (if runtime? "runtime" "devel") file)))
+	     (libdest (format nil "~a~a" build-dir file)))
 	(format t "~%Copying ~a to ~a" libsrc libdest)
 	(sys:copy-file libsrc libdest :overwrite t)))
     ;; Now copy files.bu and libacli10196s.{so,dylib} from ALLEGRO_HOME
@@ -395,14 +513,19 @@ targets and copying them to the corresponding bin directory."
 
 #+sbcl
 (defun make-pvs-program ()
-  (let* ((tmp-dir "/tmp/pvs-sbcl-build/")
-	 (platform (pvs-platform))
-	 (platform-dir (format nil "./bin/~a/" platform))
+  (let* ((platform (pvs-platform))
 	 (lext #-(or macosx os-macosx) "so" #+(or macosx os-macosx) "dylib")
-	 (build-dir (format nil "~aruntime/" platform-dir))
-	 (pvs-prog (format nil "~apvs-sbclisp" build-dir)))
-    (format t "~%Creating SBCL core image in ~a" pvs-prog)
-    (ensure-directories-exist pvs-prog)
+	 (build-dir (platform-build-dir platform "runtime"))
+	 (pvs-prog (format nil "~apvs-sbclisp" build-dir))
+	 (pvs-core (format nil "~apvs-sbclisp.core" build-dir))
+	 (pvs-runtime (format nil "~apvs-sbclisp-bin" build-dir))
+	 (bundled-sbcl-root (format nil "~asbcl/" build-dir))
+	 (sbcl-runtime (namestring sb-ext:*runtime-pathname*))
+	 (sbcl-home (current-sbcl-home))
+	 (dynamic-space-size (default-pvs-sbcl-dynamic-space-size)))
+    (format t "~%Creating SBCL runtime launcher in ~a and core image in ~a"
+	    pvs-prog pvs-core)
+    (ensure-directories-exist pvs-core)
     (let* ((lib (format nil "file_utils.~a" lext))
 	   (lib-src (format nil "~asrc/utils/~a/~a" *pvs-path* platform lib))
 	   (lib-dst (format nil "~a/~a" build-dir lib)))
@@ -416,15 +539,32 @@ targets and copying them to the corresponding bin directory."
 	   (lib-dst (format nil "~a/~a" build-dir lib)))
       (alexandria:copy-file lib-src lib-dst))
     ;;(clrhash asdf/source-registry:*source-registry*)
-    (dolist (shobj sb-sys:*shared-objects*)
-      (when (member (sb-alien::shared-object-namestring shobj)
-		    '("libcrypto.so" "libssl.so")
-		    :test #'(lambda (str1 str2) (uiop:string-prefix-p str2 str1)))
-	(sb-alien:unload-shared-object (sb-alien::shared-object-pathname shobj))
-	;;(setf (sb-alien::shared-object-dont-save shobj) t)
-	))
+    (unload-build-time-shared-objects)
+    (scrub-runtime-image-state)
+    (copy-sbcl-install-tree sbcl-home sbcl-runtime bundled-sbcl-root)
+    (sb-ext:gc :full t)
+    (with-open-file (stream pvs-runtime
+			    :direction :output
+			    :if-exists :supersede
+			    :if-does-not-exist :create)
+      (format stream "#!/bin/sh~%")
+      (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "export PVS_RUNTIME_DIR=\"$script_dir\"~%")
+      (format stream "export SBCL_HOME=\"$script_dir/sbcl/lib/sbcl\"~%")
+      (format stream "exec \"$script_dir/sbcl/bin/sbcl\" \"$@\"~%"))
+    (with-open-file (stream pvs-prog
+			    :direction :output
+			    :if-exists :supersede
+			    :if-does-not-exist :create)
+      (format stream "#!/bin/sh~%")
+      (format stream "script_dir=$(CDPATH= cd -- \"$(dirname \"$0\")\" 2>/dev/null && pwd -P) || exit 1~%")
+      (format stream "export PVS_RUNTIME_DIR=\"$script_dir\"~%")
+      (format stream "dynamic_space_size=${PVS_SBCL_DYNAMIC_SPACE_SIZE:-~a}~%" dynamic-space-size)
+      (format stream "exec \"$script_dir/pvs-sbclisp-bin\" --dynamic-space-size \"$dynamic_space_size\" --core \"$script_dir/pvs-sbclisp.core\" \"$@\"~%"))
+    (chmod "a+rx" pvs-prog)
+    (chmod "a+rx" pvs-runtime)
     (sb-ext:save-lisp-and-die
-     pvs-prog
+     pvs-core
      :toplevel (function startup-pvs)
-     :executable t
+     :executable nil
      :save-runtime-options t)))

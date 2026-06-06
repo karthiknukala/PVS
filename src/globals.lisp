@@ -11,21 +11,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006-2013, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -62,12 +54,12 @@ in util.lisp")
   (let ((end (position #\space excl::cl-release-date :from-end t)))
     (subseq excl::cl-release-date 0 end)))
 
-(defvar *pvs-version* "8.0")
+(defvar *pvs-version* "8.1")
 
 (eval-when (:execute :compile-toplevel :load-toplevel)
   ;; Not used in PVS sources, but may be useful for patches, strategies, etc.
   ;;(pushnew (intern (format nil "pvs~a" *pvs-version*) :keyword) *features*)
-  (pushnew :pvs8.0 *features*)
+  (pushnew :pvs8.1 *features*)
   (pushnew :pvs8 *features*)
   (pushnew :pvs *features*)
   )
@@ -490,6 +482,7 @@ that gensubst does not try to pseudo-normalize inappropriately.")
 
 ;;; Prover-related variables
 
+(defvar *dont-save-proof* nil)
 (defvar *use-default-dp?* nil)
 (defvar *prover-print-lines* nil)
 

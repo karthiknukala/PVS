@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -154,8 +146,20 @@
       (format t "~%Done typechecking the core prelude")
       (restore-prelude-proofs)
       ;;(initialize-prelude-attachments)
-      (pvs2c-prelude)
-      (ignore-errors (uiop:run-program (format nil "~a/lib/pvs2c/src/make" *pvs-path*)))
+
+      (handler-case (progn
+		      (format t "~%[PVS2C] Generating prelude...~%")
+		      (pvs2c-prelude)
+		      (format t "~%[PVS2C] Generated prelude. Making...~%")
+		      (uiop:run-program (format nil "cd ~a/lib/pvs2c/src/ && make" *pvs-path*))
+		      (format t "~%[PVS2C] Done with Make, removing .o files...~%")
+		      (uiop:run-program (format nil "rm ~a/lib/pvs2c/src/*.o" *pvs-path*))
+		      (format t "~%[PVS2C] Done with PVS2C."))
+	(pvs2c-warning (w)
+	  (format t "~%[PVS2C] Warning: ~a~%" w))
+	(error (e)
+	  (format t "~%[PVS2C] Error: ~a~%" e)))
+      
       (register-manip-type *number_field* 'pvs-type-real))))
 
 (defun load-pvsio-prelude ()
@@ -245,31 +249,29 @@
 				 "prelude.prf")))
     (assert (uiop:file-exists-p prfile))
     (format t "~%Restoring the prelude proofs from ~a" prfile)
-    (let ((proofs (read-pvs-file-proofs prfile)))
-      (dolist (theory (core-prelude-theories))
-	;; (format t "~%Restoring proofs for ~a" (id theory))
-	(restore-proofs prfile theory proofs)
-	(mapc #'(lambda (decl)
-		  (if (justification decl)
-		      (setf (proof-status decl) 'proved)
-		      ;;(break "No proof for ~a?" (id decl))
-		      ))
-	      (provable-formulas theory))))))
+    (dolist (theory (core-prelude-theories))
+      ;; (format t "~%Restoring proofs for ~a" (id theory))
+      (restore-proofs prfile theory)
+      (mapc #'(lambda (decl)
+		(if (justification decl)
+		    (setf (proof-status decl) 'proved)
+		    ;;(break "No proof for ~a?" (id decl))
+		    ))
+	    (provable-formulas theory)))))
 
 (defun restore-pvsio-proofs ()
   (let ((prfile (merge-pathnames (format nil "~a/lib/" *pvs-path*)
 				 "pvsio_prelude.prf")))
     (assert (uiop:file-exists-p prfile))
     (format t "~%Restoring the prelude proofs from ~a" prfile)
-    (let ((proofs (read-pvs-file-proofs prfile)))
-      (dolist (theory (pvsio-prelude-theories))
-	(restore-proofs prfile theory proofs)
-	(mapc #'(lambda (decl)
-		  (if (justification decl)
-		      (setf (proof-status decl) 'proved)
-		      ;;(break "No proof for ~a?" (id decl))
-		      ))
-	      (provable-formulas theory))))))
+    (dolist (theory (pvsio-prelude-theories))
+      (restore-proofs prfile theory)
+      (mapc #'(lambda (decl)
+		(if (justification decl)
+		    (setf (proof-status decl) 'proved)
+		    ;;(break "No proof for ~a?" (id decl))
+		    ))
+	    (provable-formulas theory)))))
 
 ;;; This is invoked after adding some theories to the prelude Takes a file
 ;;; name (e.g., "~/widget/foo", and installs all proofs from
@@ -295,7 +297,7 @@
       (unless (every #'consp proofs)
 	(error "Proofs file ~a is corrupted" prfpath))
       (cond (theory
-	     (restore-theory-proofs theory proofs)
+	     (restore-theory-proofs theory proofs t)
 	     (format t "~%Theory ~a proofs restored" newthid))
 	    (t (format t "~%Theory ~a not in prelude, ignoring" newthid))))))
 
@@ -569,6 +571,7 @@ in your PVS_LIBRARY_PATH."
 which is loaded into (current-pvs-context) by restore-context.  (cddr (current-pvs-context))
 corresponds to the list of pvs-files which have at least been parsed at some
 point."
+  (declare (ignore globally?)) ;; Should fix this
   (assert (pathnamep lib-path))
   (unless (absolute-pathname-p lib-path)
     (setq lib-path (merge-pathnames lib-path)))
@@ -801,7 +804,6 @@ point."
 (defun current-libraries ()
   (let ((libs nil))
     (dolist (ws *all-workspace-sessions*)
-      (break "fix this")
       (push (path ws) libs))
     (sort libs #'string<)))
 

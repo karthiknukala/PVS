@@ -62,6 +62,10 @@ MKDIR = @MKDIR@
 MKDIR_P = $(MKDIR) -p
 PACKAGE = @PACKAGE_NAME@
 VERSION = @PACKAGE_VERSION@
+QUICKLISP_HOME ?= $(HOME)/quicklisp
+QUICKLISP_SETUP ?= $(QUICKLISP_HOME)/setup.lisp
+PVS_BUILD_CACHE ?= $(abspath .build/cache)
+PVS_BUILD_LOGDIR ?= $(abspath .build/log)
 
 # If SBCL_HOME is set, it is preferred over SBCL; useful when testing
 # PVS in different SBCL versions
@@ -80,9 +84,9 @@ ifneq ($(SBCL),)
 SBCL_VERSION = $(shell $(SBCL) --version)
 SBCL_SPACE_SIZE = 6000 # 6Gb, default is 1.8Gb
 SBCL_STACK_SIZE = 8 # 8Mb, default is 2Mb
-sbcl-rt = $(PVSPATH)bin/$(PLATFORM)/runtime/pvs-sbclisp
-pvs-images += $(HOME)/.sbclrc $(sbcl-rt)
-fasldirs += $(shell $(SBCL) --noinform \
+sbcl-rt = $(bindir)/runtime/pvs-sbclisp
+pvs-images += $(sbcl-rt)
+fasldirs += $(shell XDG_CACHE_HOME="$(PVS_BUILD_CACHE)" $(SBCL) --noinform \
 	--eval '(require :asdf)' \
 	--eval '(format t (namestring (asdf:apply-output-translations ".")))' --quit)
 endif
@@ -102,7 +106,7 @@ allegro-devel = $(bindir)/devel/$(PACKAGE)-allegro
 pvs-images += $(allegro-devel)
 ifneq ($(wildcard $(ALLEGRO_HOME)/devel.lic),)
 allegro-rt = $(bindir)/runtime/$(PACKAGE)-allegro
-pvs-images += $(HOME)/.clinit.cl $(allegro-rt)
+pvs-images += $(allegro-rt)
 endif
 endif
 
@@ -145,27 +149,34 @@ endif
 
 # Below this is only for dist; i.e., generating tar files
 
-SYSTEM_FILES = README.md INSTALL LICENSE LICENSE-SRI NOTICES install-sh \
+RELEASE_NOTES_TEXI = doc/release-notes/pvs$(VERSION)-release-notes.texi
+
+SYSTEM_FILES = README.md INSTALL LICENSE NOTICES install-sh \
 	pvs.asd pvs pvsio proveit provethem emacs/pvs.xpm emacs/pvslogo.gif \
-	pvs-tex.sub pvs.sty bin/pvs-platform \
-	bin/tar-b64-mail Examples \
+	pvs-tex.sub pvs.sty Examples \
 	$(wildcard lib/*.pvs lib/*.prf lib/*.help) \
 	lib/pvs.grammar lib/pvs.bnf lib/pvs-style.css \
 	wish/pvs-support.tcl \
-	python doc/release-notes/pvs-release-notes.info \
-	doc/release-notes/pvs-release-notes*.html doc/release-notes/pvs-release-notes.ps \
-	doc/release-notes/pvs-release-notes.pdf \
-	doc/user-guide/user-guide.pdf doc/language/language.pdf doc/prover/prover.pdf \
-	doc/PVSio-2.d.pdf doc/manip-guide.pdf doc/extrategies.pdf doc/ProofLite-4.2.pdf \
+	python $(wildcard doc/release-notes/pvs-release-notes.info) \
+	$(RELEASE_NOTES_TEXI) \
+	$(wildcard doc/release-notes/pvs-release-notes*.html \
+		   doc/release-notes/pvs-release-notes.ps \
+		   doc/release-notes/pvs-release-notes.pdf \
+		   doc/user-guide/user-guide.pdf \
+		   doc/language/language.pdf \
+		   doc/prover/prover.pdf \
+		   doc/PVSio-2.d.pdf \
+		   doc/manip-guide.pdf \
+		   doc/extrategies.pdf \
+		   doc/ProofLite-4.2.pdf) \
 	wish/gray.xbm wish/sequent.xbm \
 	$(wildcard lib/finite_sets/*.pvs lib/finite_sets/*.prf) \
-	lib/finite_sets/.pvscontext lib/finite_sets/pvsbin \
+	$(wildcard lib/finite_sets/.pvscontext lib/finite_sets/pvsbin) \
 	$(wildcard lib/bitvectors/*.pvs lib/bitvectors/*.prf) \
-	lib/bitvectors/.pvscontext lib/bitvectors/pvsbin \
-	yices/$(PLATFORM) \
-	$(bindir)/yices2 \
-	emacs/configured-for-x Vagrantfile vagrant.README \
-	pvs-version.lisp git-commit
+	$(wildcard lib/bitvectors/.pvscontext lib/bitvectors/pvsbin) \
+	$(wildcard yices/$(PLATFORM) $(bindir)/yices1 $(bindir)/yices2) \
+	emacs/configured-for-x \
+	$(wildcard pvs-version.lisp git-commit)
 
 ALLEGRO_FILES = $(bindir)/runtime/file_utils.$(LOAD-FOREIGN-EXTENSION) \
 	$(wildcard $(bindir)/runtime/libacli*.$(LOAD-FOREIGN-EXTENSION)) \
@@ -184,6 +195,8 @@ ALLEGRO_DEVEL_FILES = $(bindir)/devel/files.bu \
 	$(bindir)/devel/ws1s.$(LOAD-FOREIGN-EXTENSION)
 
 SBCLISP_FILES = $(bindir)/runtime/pvs-sbclisp \
+	$(bindir)/runtime/pvs-sbclisp-bin \
+	$(bindir)/runtime/pvs-sbclisp.core \
 	$(bindir)/runtime/file_utils.$(LOAD-FOREIGN-EXTENSION) \
 	$(bindir)/runtime/mu.$(LOAD-FOREIGN-EXTENSION) \
 	$(bindir)/runtime/ws1s.$(LOAD-FOREIGN-EXTENSION)
@@ -515,50 +528,36 @@ dist-sbclisp-gzip = $(GIT_DESC)-$(PLATFORM)-sbclisp.tgz
 
 # @echo $(shell $(GIT) rev-parse HEAD) > git-commit
 
-.PHONY : all parser yices emacs
+.PHONY : all parser yices emacs quicklisp
 
-all : $(HOME)/quicklisp $(pvs-images) yices # $(emacs-deps)
+all : $(QUICKLISP_SETUP) $(pvs-images) yices # $(emacs-deps)
 
 devel : $(allegro-devel) 
 
 runtime : $(sbcl-rt) # $(allegro-rt)
 
 # Quicklisp is a package manager for lisp; see src/quicklisp.lisp for details.
-# This assumes quicklisp is installed in the default directory '~/quicklisp'
-# It will create that directory, and update the ~/.sbclrc init file to initialize
-# quicklisp automatically.
+# The install location is configurable so CI/release builds can avoid mutating
+# the builder's home-directory init files.
 
-# First install ~/quicklisp; any Common Lisp will do that
-ifeq ("$(wildcard $(HOME)/quicklisp/.*)","")
+# First install Quicklisp; any Common Lisp will do that
+ifeq ("$(wildcard $(QUICKLISP_SETUP))","")
 ifneq ($(SBCL),)
-$(HOME)/quicklisp : src/quicklisp.lisp
+$(QUICKLISP_SETUP) : src/quicklisp.lisp
+	@-$(MKDIR_P) $(QUICKLISP_HOME)
 	$(SBCL) --load src/quicklisp.lisp \
-                --eval "(quicklisp-quickstart:install)" \
+                --eval "(quicklisp-quickstart:install :path \"$(QUICKLISP_HOME)\")" \
                 --quit
 else
-$(HOME)/quicklisp : src/quicklisp.lisp
+$(QUICKLISP_SETUP) : src/quicklisp.lisp
+	@-$(MKDIR_P) $(QUICKLISP_HOME)
 	$(ALLEGRO) -L "src/quicklisp.lisp" \
-                   -e "(quicklisp-quickstart:install)" \
+                   -e "(quicklisp-quickstart:install :path \"$(QUICKLISP_HOME)\")" \
                    --kill
 endif
 endif
 
-# Now make sure init file is set up to automatically load quicklisp/setup.lisp
-# Note that if .sbclrc or .clinit.cl already exist, they are assumed to load
-# quicklisp
-ifneq ($(SBCL),)
-$(HOME)/.sbclrc : $(HOME)/quicklisp
-	$(SBCL) --load "$(HOME)/quicklisp/setup.lisp" \
-                --eval "(ql-util:without-prompting (ql:add-to-init-file))" \
-                --quit
-endif
-
-ifneq ($(ALLEGRO),)
-$(HOME)/.clinit.cl : $(HOME)/quicklisp
-	$(ALLEGRO) -L "$(HOME)/quicklisp/setup.lisp" \
-                   -e "(ql-util:without-prompting (ql:add-to-init-file))" \
-                   --kill
-endif
+quicklisp : $(QUICKLISP_SETUP)
 
 etags : $(PVSPATH)TAGS
 
@@ -589,11 +588,11 @@ yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-pc-l
 else
 ifeq ($(PLATFORM),ix86-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-x86_64-apple-darwin20.6.0.tar.gz
 else
 ifeq ($(PLATFORM),arm-MacOSX)
 yices1-tar = $(yices1-url)/yices-$(yices1-version)-x86_64-apple-darwin10.8.0-static-gmp.tar.gz
-yices2-tar = $(yices2-url)/Yices-$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
+yices2-tar = $(yices2-url)/$(yices2-version)/yices-$(yices2-version)-arm-apple-darwin20.6.0.tar.gz
 endif
 endif
 endif
@@ -606,6 +605,9 @@ yices1-lnk = bin/$(PLATFORM)/yices1
 yices2-lnk = bin/$(PLATFORM)/yices2
 
 yices : | $(yices2-lnk) $(yices1-lnk) 
+
+yices/$(PLATFORM) : | $(yices1-lnk) $(yices2-lnk)
+	@test -d "$@"
 
 $(yices1-tgt) :
 	@-$(MKDIR_P) yices/$(PLATFORM)
@@ -633,29 +635,42 @@ $(yices2-lnk) : $(yices2-tgt)
 # Quicklisp itself uses *central-registry*.
 
 ifneq ($(SBCL),)
-$(sbcl-rt) : $(PVSPATH)pvs.asd $(image-deps)
-	@-$(MKDIR_P) bin/$(PLATFORM)/runtime
-	$(SBCL) --dynamic-space-size $(SBCL_SPACE_SIZE) \
+$(sbcl-rt) : $(QUICKLISP_SETUP) $(PVSPATH)pvs.asd $(image-deps)
+	@-$(MKDIR_P) $(bindir)/runtime
+	@-$(MKDIR_P) $(PVS_BUILD_CACHE)
+	@-$(MKDIR_P) $(PVS_BUILD_LOGDIR)
+	XDG_CACHE_HOME="$(PVS_BUILD_CACHE)" PVS_LOG_DIR="$(PVS_BUILD_LOGDIR)" QUICKLISP_SETUP="$(QUICKLISP_SETUP)" TARGETPATH="$(TARGETPATH)" \
+	PVS_SBCL_DYNAMIC_SPACE_SIZE="$(strip $(SBCL_SPACE_SIZE))" \
+	$(SBCL) --dynamic-space-size $(strip $(SBCL_SPACE_SIZE)) \
 	        --control-stack-size $(SBCL_STACK_SIZE) \
 		--eval "(require :asdf)" \
-		--eval "(ql:quickload (list :babel :clack :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
+		--load "$(QUICKLISP_SETUP)" \
+		--eval "(ql:quickload (list :babel :clack :clack-handler-hunchentoot :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
 		--eval "(push *default-pathname-defaults* asdf:*central-registry*)" \
 	        --eval "(asdf:operate :program-op :pvs)" \
 	        --quit
 endif
 
 ifneq ($(ALLEGRO_HOME),)
-$(allegro-rt) : $(image-deps) $(allegro-make-files) $(allegrolisp)
+$(allegro-rt) : $(QUICKLISP_SETUP) $(image-deps) $(allegro-make-files) $(allegrolisp)
 	@-$(MKDIR_P) bin/$(PLATFORM)/runtime
+	@-$(MKDIR_P) $(PVS_BUILD_CACHE)
+	@-$(MKDIR_P) $(PVS_BUILD_LOGDIR)
+	XDG_CACHE_HOME="$(PVS_BUILD_CACHE)" PVS_LOG_DIR="$(PVS_BUILD_LOGDIR)" QUICKLISP_SETUP="$(QUICKLISP_SETUP)" TARGETPATH="$(TARGETPATH)" \
 	$(ALLEGRO) -e "(require :asdf)" \
+		-L "$(QUICKLISP_SETUP)" \
 		-e "(ql:quickload (list :babel :clack :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
 		-e "(defvar *runtime* t)" \
 		-e "(push *default-pathname-defaults* asdf:*central-registry*)" \
 		-e "(asdf:operate :program-op :pvs)" \
 		--kill
-$(allegro-devel) : $(image-deps) $(allegro-make-files) $(allegrolisp)
+$(allegro-devel) : $(QUICKLISP_SETUP) $(image-deps) $(allegro-make-files) $(allegrolisp)
 	@-$(MKDIR_P) bin/$(PLATFORM)/devel
+	@-$(MKDIR_P) $(PVS_BUILD_CACHE)
+	@-$(MKDIR_P) $(PVS_BUILD_LOGDIR)
+	XDG_CACHE_HOME="$(PVS_BUILD_CACHE)" PVS_LOG_DIR="$(PVS_BUILD_LOGDIR)" QUICKLISP_SETUP="$(QUICKLISP_SETUP)" TARGETPATH="$(TARGETPATH)" \
 	$(ALLEGRO) -e "(require :asdf)" \
+		-L "$(QUICKLISP_SETUP)" \
 		-e "(ql:quickload (list :babel :clack :websocket-driver :hunchentoot :anaphora :lparallel :cl-json :cffi) :silent t)" \
 		-e "(defvar *runtime* nil)" \
 		-e "(push *default-pathname-defaults* asdf:*central-registry*)" \
@@ -663,7 +678,7 @@ $(allegro-devel) : $(image-deps) $(allegro-make-files) $(allegrolisp)
 		--kill
 endif
 
-.PHONY: all doc clean distclean tar
+.PHONY: all doc clean distclean tar release-sbcl smoke-sbcl-release
 
 make-release-notes :
 	$(MAKE) -C $(PVSPATH)doc/release-notes
@@ -779,6 +794,15 @@ allegro-devel-distdir: $(ALLEGRO_DEVEL_DISTFILES)
 
 sbclisp-distdir: $(SBCLISP_DISTFILES)
 	$(create-distdir)
+	@if test -d "$(bindir)/runtime/sbcl"; then \
+	  cp -fpR "$(bindir)/runtime/sbcl" "$(DISTDIR)/bin/$(PLATFORM)/runtime/" || exit 1; \
+	fi
+	@case "$(PLATFORM)" in \
+	  *MacOSX*) \
+	    "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime" ;; \
+	  *) : ;; \
+	esac
+	@"./.github/scripts/strip-runtime-debug-info.sh" --runtime-dir "$(DISTDIR)/bin/$(PLATFORM)/runtime"
 
 dist-gzip: dist-allegro-gzip dist-sbclisp-gzip
 
@@ -820,6 +844,53 @@ dist-zip: distdir
 	$(am__post_remove_distdir)
 
 dist dist-all: dist-gzip
+
+release-sbcl: $(dist-sbclisp-gzip) smoke-sbcl-release
+
+# SBCL saved cores retain compile-time source file names even with low debug
+# settings, so smoke coverage focuses on runtime path resolution and the shipped
+# scripts/launchers that must remain relocatable.
+smoke-sbcl-release: $(dist-sbclisp-gzip)
+	@tmpdir=`mktemp -d "$${TMPDIR:-/tmp}/pvs-release.XXXXXX"` && \
+	home="$$tmpdir/home" && \
+	extractdir="$$tmpdir/PVS release smoke (1)" && \
+	trap 'rm -rf "$$tmpdir"' EXIT HUP INT TERM && \
+	mkdir -p "$$home" "$$extractdir" && \
+	printf '%s\n' '(in-package :cl-user)' > "$$home/.pvs.lisp" && \
+	echo "Smoke check: extracting $(dist-sbclisp-gzip)" && \
+	tar xzf "$(dist-sbclisp-gzip)" -C "$$extractdir" && \
+	root=`cd "$$extractdir/$(DISTDIR)" && pwd -P` && \
+	echo "Smoke check: runtime directory contents" && \
+	ls -l "$$root/bin/$(PLATFORM)/runtime" && \
+	case "$(PLATFORM)" in \
+	  *MacOSX*) \
+	    echo "Smoke check: runtime dylibs are self-contained" && \
+	    if ! "./.github/scripts/bundle-macos-runtime-deps.sh" --runtime-dir "$$root/bin/$(PLATFORM)/runtime" --check-only; then \
+	      echo "Found external runtime dylib references" >&2; \
+	      exit 1; \
+	    fi \
+	    ;; \
+	  *) : ;; \
+	esac && \
+	echo "Smoke check: pvs -raw -version with PVSMINUSQ" && \
+	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvs" -raw -version >/dev/null || { echo "pvs -raw -version with PVSMINUSQ failed" >&2; exit 1; } && \
+	echo "Smoke check: pvs -raw -version without PVSMINUSQ" && \
+	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSPATCHLEVEL=0 "$$root/pvs" -raw -version >/dev/null || { echo "pvs -raw -version without PVSMINUSQ failed" >&2; exit 1; } && \
+	echo "Smoke check: verify PVSROOT resolves to $$root/" && \
+	resolved=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvs" -raw -E '(format t "PVSROOT=~a" pvs::*pvs-path*)(bye)' | sed -n 's/^PVSROOT=//p'` && \
+	test "$$resolved" = "$$root/" || { echo "Expected PVSROOT=$$root/ but got $$resolved" >&2; exit 1; } && \
+	echo "Smoke check: verify ASDF central registry is clear" && \
+	central=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" --no-userinit --eval '(progn (format t "CENTRAL=~S~%" asdf:*central-registry*)(pvs::bye))' | sed -n 's/^CENTRAL=//p'` && \
+	test "$$central" = "NIL" || { echo "Expected CENTRAL=NIL but got $$central" >&2; exit 1; } && \
+	echo "Smoke check: verify ASDF system source directory is clear" && \
+	sysdir=`env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" --no-userinit --eval '(progn (let ((dir (ignore-errors (asdf:system-source-directory :pvs)))) (format t "SYSDIR=~S~%" dir))(pvs::bye))' | sed -n 's/^SYSDIR=//p'` && \
+	test "$$sysdir" = "NIL" || { echo "Expected SYSDIR=NIL but got $$sysdir" >&2; exit 1; } && \
+	echo "Smoke check: packaged scripts and launcher do not reference build root $(abspath .)" && \
+	! rg -F "$(abspath .)" "$$root/pvs" "$$root/pvsio" "$$root/proveit" "$$root/provethem" "$$root/bin/$(PLATFORM)/runtime/pvs-sbclisp" >/dev/null || { echo "Found build root path in packaged scripts or launcher" >&2; exit 1; } && \
+	echo "Smoke check: pvsio --version" && \
+	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/pvsio" --version >/dev/null || { echo "pvsio --version failed" >&2; exit 1; } && \
+	echo "Smoke check: proveit --version" && \
+	env -u PVSPATH HOME="$$home" PVS_LIBRARY_PATH= PVSMINUSQ=t PVSPATCHLEVEL=0 "$$root/proveit" --version >/dev/null || { echo "proveit --version failed" >&2; exit 1; }
 
 # Cute hack for printing variables, e.g.,
 #  make print-emacs-elc

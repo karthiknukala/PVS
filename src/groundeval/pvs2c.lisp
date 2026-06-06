@@ -1,26 +1,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; -*- Mode: Lisp -*- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; pvs2c.lisp -- 
-;; Author          : Shankar, Gaspard Ferey, and Sam Owre
+;; Author          : Shankar and Sam Owre
 ;; Status          : Stable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2024, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -32,6 +24,7 @@
 (defvar *pvs2c-library-path* nil)
 (defvar *pvs2c-theory-importings* nil)
 (defvar *pvs2c-theory-decls* nil)
+(defvar *pvs2c-top-c-file* nil)
 
 ;;; SO The following are from the pvs-strings branch of my clib/src,
 ;;; but I'm not certain of the source.
@@ -46,7 +39,8 @@
 ;;during partial monomorphization.
 (defparameter *primitive-prelude-theories*
   '(|booleans| |equalities| |notequal| |if_def| |boolean_props| ;; |xor_def|
-    |quantifier_props| |defined_types| |exists1| |equality_props| |if_props| |functions|
+    |quantifier_props|;; |defined_types|
+    |exists1| |equality_props| |if_props| |functions|
     |functions_alt| ;; |transpose| |restrict|
     |restrict_props| |extend| ;; |extend_bool|
     |extend_props| |extend_func_props| ;; |K_conversion| |K_props| ;; |identity|
@@ -57,7 +51,7 @@
     |relation_props| |relation_props2| |relation_converse_props| |indexed_sets|
     |operator_defs| |numbers| |number_fields| |reals| |real_axioms| |bounded_real_defs|
     |bounded_real_defs_alt| |real_types| |rationals| |integers| |naturalnumbers|
-    ;; |min_nat| |real_defs|
+    |min_nat| ;;|real_defs|
     |real_props| |extra_real_props| |extra_tegies| |rational_props| |integer_props|
     |floor_ceil| |exponentiation| ;; |euclidean_division|
     |divides| ;; |modulo_arithmetic|
@@ -98,9 +92,9 @@
     |lift| |lift_adt| |lift_adt_map|
     |file|
     |list| |list_adt| |list_adt_map| |list_props|
-    |min_nat| |modulo_arithmetic| |finite_sequences| |more_finseq| |array_sequences|
+    |modulo_arithmetic| |finite_sequences| |more_finseq| |array_sequences|
     |ordinals| |ordstruct| |real_defs| |sequences| |sets| |strings|
-    |transpose| |xor_def|))
+    |transpose| |defined_types| |xor_def|))
 
 (defun ensure-c-directories-exist ()
   (when *pvs2c-library-path*
@@ -150,27 +144,33 @@
 			:direction :output :if-exists :supersede :if-does-not-exist :create)
       (case platform
 	(|ix86_64-Linux|
-	 (format mf "CFLAGS := -I ../include -fPIC -Wall -Winline -O -ggdb~%")
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
+	 (format mf "CFLAGS := -I $(PVS2CPATH)/include -fPIC -Wall -Winline -O -ggdb~%")
 	 (format mf "LDFLAGS = -Bsymbolic -shared -L./ -lc -lm -lgmp~%"))
 	(|ix86-MacOSX|
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
 	 (format mf "SDK=$(shell xcrun --show-sdk-path)~%")
-	 (format mf "CFLAGS := -fPIC -Wall -Winline -O2 -dynamic -DNDEBUG -arch x86_64 -I ../include~%")
-	 (format mf "LDFLAGS =  -dylib -flat_namespace -platform_version macos 11.0.0 12.0 -L $(SDK)/usr/lib -L./ -lc -lgmp~%"))
+	 (format mf "CFLAGS := -fPIC -Wall -Winline -O2 -foptimize-sibling-calls -dynamic -DNDEBUG -arch x86_64 -I $(PVS2CPATH)/include~%")
+	 (format mf "LDFLAGS =  -dylib -flat_namespace  -L $(SDK)/usr/lib -L./ -lc -lgmp~%"))
 	(|arm-MacOSX|
+	 (format mf "PVSPATH := ~a~%" *pvs-path*)
+	 (format mf "PVS2CPATH := ~a/lib/pvs2c~%" *pvs-path*)
 	 (format mf "SDK=$(shell xcrun --show-sdk-path)~%")
-	 (format mf "CFLAGS := -g -O2 -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I ../include~%")
-	 (format mf "LDFLAGS = -dylib -flat_namespace -undefined suppress -arch arm64 -platform_version macos 11.0.0 12.0 -L $(SDK)/usr/lib -L./ -L /opt/homebrew/lib -L /usr/local/lib -lc -lm -lgmp~%")))
+	 (format mf "CFLAGS := -O2 -foptimize-sibling-calls  -Wall -pedantic -std=gnu99 -mtune=native -mcpu=apple-a14 -I $(PVS2CPATH)/include~%")
+	 (format mf "LDFLAGS = -dylib -flat_namespace -undefined suppress -arch arm64 -L $(SDK)/usr/lib -L./ -L /opt/homebrew/lib -L /usr/local/lib -lc -lm -lgmp~%")))
       (format mf "~%src := ~{~a~^ ~}~%" c-files)
       (format mf "~%obj := $(src:.c=.o)~%")
       (format mf "~%.c.o : ; $(CC) ${CFLAGS} -c $< -o $@~%")
-      (format mf "~%all : ../lib/libpvs-prelude.~a ../lib/libpvs-prelude.a~%" lib-suffix)
-      (format mf "~%../lib/libpvs-prelude.~a : ${obj}~%" lib-suffix)
+      (format mf "~%all : $(PVS2CPATH)/lib/libpvs-prelude.~a $(PVS2CPATH)/lib/libpvs-prelude.a~%" lib-suffix)
+      (format mf "~%$(PVS2CPATH)/lib/libpvs-prelude.~a : ${obj}~%" lib-suffix)
       (format mf "~a$(LD) $(LDFLAGS) -o $@ ${obj}~%" #\tab)
-      (format mf "~%../lib/libpvs-prelude.a : $(obj)~%")
+      (format mf "~%$(PVS2CPATH)/lib/libpvs-prelude.a : $(obj)~%")
       (format mf "~a$(AR) r $@ ${obj}~%" #\tab)
       (format mf "~%clean :~%")
       (format mf "~a-rm $(obj)~%" #\tab)
-      (format mf "~a-rm ../lib/libpvs-prelude.~a ../lib/libpvs-prelude.a~%"
+      (format mf "~a-rm $(PVS2CPATH)/lib/libpvs-prelude.~a $(PVS2CPATH)/lib/libpvs-prelude.a~%"
 	      #\tab lib-suffix))
     (format t "~%Generated ~a" makefile)))
   
@@ -274,9 +274,10 @@
 (defun pvs2c-theories (theories force?)
   (mapcar #'(lambda (th) (pvs2c-theory* th force?)) theories));NSH(4-25-25) was (reverse theories)
 
-(defun pvs2c-theory (theoryref &optional force?)
+(defun pvs2c-theory (theoryref &optional (force? t))
   (let* ((theory (get-typechecked-theory theoryref nil t))
-	 (all-imported-theories (when theory (all-imported-theories theory))))
+	 (all-imported-theories (when theory (all-imported-theories theory)))
+	 (*suppress-output* t))
     (pvs2c-theories all-imported-theories force?);;NSH(4-25-25)
     (pvs2c-theory* theory force?)))
 
@@ -297,7 +298,7 @@
 
 (defun pvs2c-theory-body (theory &optional force? indecl);;*theory-id* needs to be bound by caller
   (let* ((*theory-id* (simple-id (id theory)))
-	 ;; (*preceding-mono-theories* nil) ; monomorphised theory instances used in this theory
+	 (*all-mono-theories* nil) ; monomorphised theory instances generated so far
 	 )
     (pvs2c-theory-body-step theory force? indecl)))
 
@@ -367,9 +368,13 @@
 	  )
       (cond (*pvs2c-theory-decls*
 	     (print-header-file *theory-id* theory)
-	     (print-body-file *theory-id* theory))
-	    (t (format t "~%No C code generated for theory ~a, since no declarations were translatable"
-		 (id theory)))))))
+	     (let ((cfilename (print-body-file *theory-id* theory)))
+	       (setq *pvs2c-top-c-file* (list cfilename));;for communicating with M-x pvs-c-theory/files Emacs commands
+	       cfilename))
+	    (t (setf (no-pvs2c-generated theory) t)
+	       (setq *pvs2c-top-c-file* nil)
+	       (format t "~%No C code generated for theory ~a, since no declarations were translatable"
+		       (id theory)))))))
 
 (defun pvs2c-decls (decls indecl force?)
   (when decls
@@ -388,7 +393,7 @@
 					    	  (not (member mod-id
 							       *pvs2c-prelude-theories*)))))
 				 (pushnew (module ref) *pvs2c-theory-importings*))))
-	  (pvs2c-error (c)
+	  (pvs2c-warning (c)
 	    (let ((warning (format nil "~%No C code generated for ~a~%  ~a" (id decl) c)))
 	      (push (cons decl warning) (pvs2c-warnings (module decl)))
 	      (warn warning))))))
@@ -417,7 +422,8 @@
     (when  (and (ir-typename? typename)
 		(ir-type-value decl));some type definitions translate to no-ops
       ;(break "pvs2c-decl*:type-eq-decl")
-      (add-c-type-definition typename))))
+      (let ((ir-type-id (add-c-type-definition typename)))
+	(setf (ir-type-id typename) ir-type-id)))))
 
 
 (defmethod pvs2c-decl* ((decl type-decl)) ;;has to be an adt-type-decl
@@ -530,9 +536,7 @@
 	       ;; 		   (mppointer-type c-result-type) ir-function-name
 	       ;; 		   (c-args-string ir-args)))
 	       )
-	  (unless *to-emacs* ;; causes problems
-	    (break "make-c-defn-info: no defn")
-	    (format t "~%No definition for ~a" ir-function-name))
+	  (pvs2c-warn "~%No definition for ~a" ir-function-name)
 	  nil)
 	  ;; (mk-c-defn-info ir-function-name (format nil "~a;" c-header) nil nil
 	  ;; 		  c-result-type)
@@ -678,6 +682,17 @@
       (format t "~%Generates C definition = ~%~a" c-defn))
     (mk-c-defn-info ir-function-name (format nil "~a;" c-header) c-defn
 		    c-defn-arg-types c-defn-result-type)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun replace-in-file (in out filename)
+  (let ((backup-file (concatenate 'string filename ".bak")))
+    (uiop:copy-file filename backup-file)
+    (with-open-file (in-stream backup-file :direction :input)
+      (with-open-file (out-stream filename :direction :output 
+                                  :if-exists :supersede)
+	(loop for line = (read-line in-stream nil)
+              while line
+              do (write-line  (replace-all line in out)
+			      out-stream))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -693,32 +708,37 @@
 	 ;; (preceding-prelude-theories (pvs2c-preceding-prelude-theories theory))
 	 ;; (theory-instances (when (ht-instance-clone theory)
 	 ;; 		     (maphash #'(lambda (x y) x) (ht-instance-clone theory))))
-	 (dependency-file-string
-	  (cond (*pvs2c-library-path*
-		 (format nil "~a/include/~a.pvs2c" *pvs2c-library-path* theory-id))
-		(t (ensure-directories-exist "pvs2c/src/test")
-		   (format nil "pvs2c/src/~a.deps" theory-id)))))
+	 ;; (dependency-file-string
+	 ;;  (cond (*pvs2c-library-path*
+	 ;; 	 (format nil "~a/include/~a.pvs2c" *pvs2c-library-path* theory-id))
+	 ;; 	(t (ensure-directories-exist "pvs2c/src/test")
+	 ;; 	   (format nil "pvs2c/src/~a.deps" theory-id))))
+	 )
     (unless *pvs2c-library-path*
       (ensure-directories-exist "pvs2c/include/test"))
-    (with-open-file (output dependency-file-string :direction :output
-			    :if-exists :supersede :if-does-not-exist :create)
-      (let ((importings-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *pvs2c-theory-importings*
-			   unless (from-prelude? x)
-			   collect (id x))))
-	    (prelude-importings-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *pvs2c-theory-importings*
-			   when (from-prelude? x)
-			   collect (id x))))
-	    (mono-theories-string
-	     (format nil "~{\"~a\"~^, ~}"
-		     (loop for x in *preceding-mono-theories*
-			   collect (id x)))))
-      (format output "{\"theory\" : \"~a\", ~% \"importings\" : [~a], ~% \"prelude-importings\"
- : [~a], ~% \"monoTheories\" : [~a]~%}"
-	      theory-id importings-string prelude-importings-string mono-theories-string)))
+    (unless (or *pvs2c-library-path* (file-exists-p "Makefile"))
+      (uiop::copy-file (format nil "~a/src/groundeval/pvs2c-Makefile" *pvs-path*)
+		       "Makefile")
+      (replace-in-file "<pvspath>" (format nil "~a" *pvs-path*) "Makefile"))
+    ;; (with-open-file (output dependency-file-string :direction :output
+ ;; 			    :if-exists :supersede :if-does-not-exist :create)
+ ;;      (let ((importings-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *pvs2c-theory-importings*
+ ;; 			   unless (from-prelude? x)
+ ;; 			   collect (id x))))
+ ;; 	    (prelude-importings-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *pvs2c-theory-importings*
+ ;; 			   when (from-prelude? x)
+ ;; 			   collect (id x))))
+ ;; 	    (mono-theories-string
+ ;; 	     (format nil "~{\"~a\"~^, ~}"
+ ;; 		     (loop for x in *preceding-mono-theories*
+ ;; 			   collect (id x)))))
+ ;;      (format output "{\"theory\" : \"~a\", ~% \"importings\" : [~a], ~% \"prelude-importings\"
+ ;; : [~a], ~% \"monoTheories\" : [~a]~%}"
+ ;; 	      theory-id importings-string prelude-importings-string mono-theories-string)))
     (with-open-file (output file-string :direction :output
 			    :if-exists :supersede :if-does-not-exist :create)
       (format output "//Code generated using pvs2ir")
@@ -737,9 +757,9 @@
       (format output "~%~%#include <gmp.h>")
       (format output "~%~%#include \"pvslib.h\"")
       (dolist (th *pvs2c-theory-importings*)
-	(format output "~%~%#include \"~a_c.h\"" (id th)))
+	(format output "~%~%#include \"~a_c.h\"~%" (id th)))
       (dolist (th *preceding-mono-theories*)
-	(format output "~%~%#include \"~a_c.h\"" (id th)))
+	(format output "~%~%#include \"~a_c.h\"~%" (id th)))
       ;; (format output "~%~%#include \"~a_c.h\"" (id theory))
       ;; (format t "~%mono-theories: ~{ ~a~^,~}" *preceding-mono-theories*)
       ;; (loop for thy in  *preceding-mono-theories*
@@ -777,7 +797,7 @@
 		      (eval-info decl)
 		      (cdefn (eval-info decl)))
 	    do (print-header-decl decl output))
-      (format output "~%#endif")
+      (format output "~%#endif~%")
       (unless *to-emacs*
 	(format t "~%Wrote ~a" file-string))
       (id theory))))
@@ -905,7 +925,7 @@ successful."
 			    :if-exists :supersede
 			    :if-does-not-exist :create)
       (format output "//Code generated using pvs2ir2c")
-      (format output "~%#include \"~a_c.h\""  theory-id)
+      (format output "~%#include \"~a_c.h\"~%"  theory-id)
       (print-type-info-defns-to-file output *c-type-info-table*)
       (loop for decl in (theory theory)
 	 do (let ((einfo (and (slot-exists-p decl 'eval-info) (eval-info decl))))
@@ -913,11 +933,11 @@ successful."
 		(let ((op-defn (op-defn (cdefn einfo))))
 		  (when op-defn
 		    (when (accessor-eval-info? einfo)
-		      (format output "~%~%~a" (op-defn (update-cdefn (eval-info decl)))))
-		    (format output "~%~%~a" (op-defn (cdefn (eval-info decl)))))))))
+		      (format output "~%~a~%" (op-defn (update-cdefn (eval-info decl)))))
+		    (format output "~%~a~%" (op-defn (cdefn (eval-info decl)))))))))
       (unless *to-emacs*
 	(format t "~%Wrote ~a" file-string)))
-    (make-c-tests-main theory-id)
+    (make-c-tests-main theory)
     (concatenate 'string file-path file-string)))
 
 (defparameter *usable-prelude-theories*
@@ -926,25 +946,48 @@ successful."
     |integer_bv_ops|))
 
 
-(defun make-c-tests-main (name &optional (path *default-pathname-defaults*))
+(defun make-c-tests-main (theory &optional (path *default-pathname-defaults*))
   (with-workspace path
-    (let* ((theory (get-typechecked-theory name nil t))
-	   (filename (format nil "~a/pvs2c/src/~a.c" (context-path theory) name))
+    (let* ((theory-id (id theory))
+	   (cpath (or (context-path theory);fall through to path for mono-theories
+		      path))
+	   (filename (format nil "~a/pvs2c/src/~a.c" cpath theory-id))
 	   (test-formulas (remove-if-not #'test-formula? (all-decls theory))))
       (cond ((null test-formulas)
-	     (format t "~%No test-formulas found in typechecked theory: ~a" name))
+	     (format t "~%No test-formulas found in typechecked theory: ~a" theory-id))
 	    (t (with-open-file (main filename :direction :output :if-exists :supersede)
-		 (format main "// test main ~a generated by make-c-tests-main" name)
+		 (format main "// test main ~a generated by make-c-tests-main" theory-id)
 		 (format main "~2%// Includes")
-		 (format main "~%#include \"~a_c.h\"" (id theory))
+		 (format main "~%#include \"~a_c.h\"~%" (id theory))
 		 ;; (dolist (th (remove-duplicates (mapcar #'module test-formulas)))
 		 ;;   (format main "~%#include \"~a_c.h\"" (id th)))
 		 (format main "~2%int main () {")
 		 (dolist (tform test-formulas)
 		   (format main "~2%~Tprintf(\"~a.~a ==> %s\\n\", ~a() ? \"true\" : \"false\");"
 			   (id (module tform)) (id tform) (op-name (cdefn (eval-info tform)))))
-		 (format main "~%}~%")
-		 (format t "Writing ~a" filename)))))))
+		 (format main "~% return 0;~%}~%")
+		 (format t "~%Wrote ~a" filename))
+	       (let* ((mkfile-string (cond (*pvs2c-library-path*
+					    (format nil "~a/include/~a.mk" *pvs2c-library-path* theory-id))
+					   (t (ensure-directories-exist "pvs2c/src/test")
+					      (format nil "pvs2c/include/~a.mk" theory-id)))))
+		 (with-open-file (output mkfile-string :direction :output
+					 :if-exists :supersede :if-does-not-exist :create)
+		   (format output "# Auto-generated fragment for ~a" theory-id)
+		   (format output "~%OBJS_~a := $(SRCDIR)/~a.o $(SRCDIR)/~a_c.o ~{~a_c.o ~} ~{~a_c.o ~}"
+			   theory-id theory-id theory-id
+			   (loop for thy in (all-importings theory)
+				 when (and (not (from-prelude? thy))(not (no-pvs2c-generated thy))(not (datatype? thy)))
+				 collect (format nil "$(SRCDIR)/~a"  (id thy)))
+			   (loop for thy in  *preceding-mono-theories* collect (format nil "$(SRCDIR)/~a" (id thy))))
+		   (format output "~%pvs2c/bin/~a: $(OBJS_~a) | $(BINDIR)~%~c$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)" theory-id theory-id #\Tab)
+		   (format output "~%~%.PHONY: ~a" theory-id)
+		   (format output "~%~a: pvs2c/bin/~a" theory-id theory-id)
+		   (format output "~%~%.PHONY: run_~a" theory-id)
+		   (format output "~%run_~a: ~a~%~c./pvs2c/bin/~a~%"  theory-id theory-id #\Tab theory-id)
+		   (format t "~%Wrote pvs2c/include/~a.mk" theory-id)
+		   ))
+	       )))))
 
 (defun collect-test-formulas ()
   (let ((th-hash (current-pvs-theories))

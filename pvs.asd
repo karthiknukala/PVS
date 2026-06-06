@@ -5,21 +5,15 @@
 ;; facility for Common Lisp see https://common-lisp.net/project/asdf/
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Copyright (C) 2006-2021, SRI International.  All Rights Reserved.
-
+;; --------------------------------------------------------------------
+;; PVS
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 ;; The asdf file for PVS
@@ -58,13 +52,13 @@
 
 (asdf:defsystem "pvs"
   :description "PVS is a verification system; see http://pvs.csl.sri.com"
-  :version "8.0"
+  :version "8.1"
   :author "Sam Owre, N. Shankar, and others"
   :maintainer "Sam Owre <owre@csl.sri.com>"
-  :license "GPL"
+  :license "BSD-3-Clause"
   :entry-point "pvs::startup-pvs"
   ;;:defsystem-depends-on (#:asdf-shared-library)
-  :depends-on (#:babel #:clack #:websocket-driver
+  :depends-on (#:babel #:clack #:clack-handler-hunchentoot #:websocket-driver
 		       #:hunchentoot #:anaphora #:lparallel #:cl-json #:cffi)
   :serial t
   :perform (asdf:load-op :after (op cmp)
@@ -283,6 +277,7 @@
 		  (:file "allegro")
 		  #+cmu
 		  (:file "cmulisp")
+		  (:file "pvs-speedbar")
 		  ))
    (:module typechecker
      :pathname "src/"

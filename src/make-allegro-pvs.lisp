@@ -7,21 +7,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :cl-user)
@@ -131,7 +123,12 @@
     ))
 ;;(mk:operate-on-system :pvs :compile)
 (require :asdf)
-(load "~/quicklisp/setup.lisp")
+(let* ((quicklisp-setup
+	(or (sys:getenv "QUICKLISP_SETUP")
+	    (format nil "~aquicklisp/setup.lisp" (user-homedir-pathname)))))
+  (unless (probe-file quicklisp-setup)
+    (error "Quicklisp setup file not found: ~a" quicklisp-setup))
+  (load quicklisp-setup))
 (push *default-pathname-defaults* asdf:*central-registry*)
 (asdf:load-system :pvs)
 (when (sys:getenv "PVSMAKELOADAFTER")

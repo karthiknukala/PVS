@@ -10,7 +10,7 @@
 /*
  * Fatal error: out of memory
  */
-void out_of_memory() {
+void out_of_memory(void) {
   fprintf(stderr, "Out of memory\n");
   exit(PVS2C_EXIT_OUT_OF_MEMORY);
 }
@@ -470,7 +470,7 @@ mpq_ptr_t mpq_mul_z(mpq_t ret, mpq_t x, mpz_t y){
 
 uint32_t code(uint32_t x){
   return x;
-};
+}
 
 stringliteral_t mk_string(uint32_t length, uint32_t * instring){ 
   stringliteral_t result = (stringliteral_t) safe_malloc(sizeof(struct stringliteral_s) + (length  * sizeof(uint32_t)));
@@ -485,23 +485,23 @@ stringliteral_t mk_string(uint32_t length, uint32_t * instring){
    //	  result->count, result->size, result->max);
    //for (uint32_t j = 0; j < length; j++) printf(" %"PRIu32",", result->elems[j]);    
    return result; 
- };
+ }
 
 char * byte2cstring(uint32_t length, uint8_t * bstring){
   char * outstring = (char *) safe_malloc(length + 1);
   memcpy(outstring, bstring, length);
   outstring[length] = '\0';
   return outstring;
-};
+}
 
 bool_t equal_uint64(pointer_t x, pointer_t y, ...){
   uint64_t ux = (uint64_t)x;
   uint64_t uy = (uint64_t)y;
   return (ux == uy);
-};
+}
 
 void release_uint64(pointer_t x, ...){
-};
+}
 
 void release_file__file(file_t file){
   if (file->count <= 1){

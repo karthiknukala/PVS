@@ -27,14 +27,19 @@ encounter them.
 \index{environment|see{PVS environment}}
 
 PVS runs under 64-bit versions of Linux and MacOSX.  It can be run on
-other 64-bit platforms using virtualbox or VMWare.  PVS is
-implemented in Common Lisp\index{Common Lisp}, but it is not necessary to
-know Lisp to effectively use the system.\footnote{The only exception to
-  this is in writing complex prover strategies.}  PVS runs best using the
-X window system, though it is not required.  The Emacs
-(\gnuemacs\index{Gnu Emacs} or XEmacs\index{XEmacs}) editors provide one
-interface to PVS; familiarity with Emacs and access to the GNU Emacs
-manual~\cite{emacs20} (usually available as an info file) are desirable.
+other 64-bit platforms using Virtualbox or VMWare.  PVS is implemented in
+Common Lisp\index{Common Lisp}, but it is not necessary to know Lisp to
+effectively use the system.\footnote{An exception to this is in writing
+  complex prover strategies.}
+
+PVS was developed with the Emacs (\gnuemacs\index{Gnu Emacs} editor, which
+also acts as a GUI. In addition, NASA has provided a VSCode interface to
+PVS as an alternative (\url{http://github.com/nasa/vscode-pvs}). This
+guide will focus on the Emacs interface.
+
+familiarity with Emacs and access to
+the GNU Emacs manual~\cite{emacs20} (usually available as an info file)
+are desirable.
 % A brief introduction to Emacs is provided in Appendix~\ref{emacs-intro} on
 % page~\pageref{emacs-intro} of this manual.
 The \LaTeX\index{Latex@{\LaTeX}} generating facilities require a good
@@ -68,7 +73,7 @@ reference~\cite{PVS:language}.
 \section*{Specification Files and the PVS Context}
 \index{specifications}
 
-PVS specifications are ordinary {\sc ascii} text files prepared and
+PVS specifications are {\sc UTF-8} files prepared and
 modified using a text editor---usually the Emacs editor that acts as the
 interface to PVS.  A PVS specification consists of any number of such
 files, each of which contains one or more theories or datatypes.  PVS
