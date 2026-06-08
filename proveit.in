@@ -17,36 +17,54 @@
 # Script for batch proving in PVS 
 #  
 
-PVSPATH=@PVSPATH@
+normalize_dir() {
+  case $1 in
+    */) printf '%s\n' "$1" ;;
+    *) printf '%s/\n' "$1" ;;
+  esac
+}
+
+resolve_script_dir() {
+  target=$1
+  case $target in
+    */*) ;;
+    *) target=`command -v "$target"` || return 1 ;;
+  esac
+  while [ -h "$target" ]
+  do
+    link=`readlink "$target"` || return 1
+    case $link in
+      /*) target=$link ;;
+      *) target=`dirname "$target"`/$link ;;
+    esac
+  done
+  CDPATH= cd -- "`dirname "$target"`" 2>/dev/null && pwd -P
+}
+
+if [ -n "$PVSPATH" -a -d "$PVSPATH" ]
+then PVSPATH=`normalize_dir "$PVSPATH"`
+else
+  PVSPATH=`resolve_script_dir "$0"` || {
+    echo "Unable to determine the PVS installation directory"
+    exit 1
+  }
+  PVSPATH=`normalize_dir "$PVSPATH"`
+fi
 
 #-------------------------------------------------
 # Nothing below this line should need modification
 #
 
 readVersion() {
-    if ! type "$PVSPATH/pvs" > /dev/null 2>&1  || ! VERSION=$($PVSPATH/pvs -raw -E '(format t "~&~%PVSIOVERSION ~a~%~%" *prooflite-version*)(bye)' 2> /dev/null | grep PVSIOVERSION | sed 's/^.*PVSIOVERSION \(.*\)$/\1/g') ; then
+    if [ ! -x "$PVSPATH/pvs" ] || ! VERSION=$("$PVSPATH/pvs" -raw -E '(format t "~&~%PVSIOVERSION ~a~%~%" *prooflite-version*)(bye)' 2> /dev/null | grep PVSIOVERSION | sed 's/^.*PVSIOVERSION \(.*\)$/\1/g') ; then
 	printf "PVS could not be located. Please double check PVS installation.\n"
 	exit 1;
     fi
 }
 
-type "$PVSPATH/pvs"  > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    PVSPATH=$PVSPATH/
-else
-    type pvs  > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-	PVSPATH="" # pvs is in the system path, then no path information is needed
-    else
-	PVSPATH=`dirname $0`
-	type "$PVSPATH/pvs"  > /dev/null 2>&1
-	if [ $? -eq 0 ]; then
-	    PVSPATH=$PVSPATH/
-	else
-	    printf "Error: PVS could not be located. Add it to the system path or run install-scripts in the PVS folder.\n"
-	    exit 1;
-	fi
-    fi
+if [ ! -x "$PVSPATH/pvs" ]; then
+    printf "Error: PVS could not be located relative to %s\n" "$0"
+    exit 1;
 fi
 
 PVS_RETURN_VALUE_MISSED_FORMS=142 # PVS' return value indicating missed (ie, not proved) formulas

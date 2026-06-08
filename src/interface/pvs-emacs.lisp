@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006-2013 SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -373,9 +365,10 @@
       (decode-universal-time (get-universal-time))
     ;; First time will set the log file and open it for writing
     (unless *pvs-log-stream*
-      (let ((fname (format nil "~apvs-~4,'0d-~2,'0d-~2,'0d.log"
-		     *pvs-log-directory* year month date)))
-	(ensure-directories-exist *pvs-log-directory*)
+      (let* ((log-dir (reset-pvs-log-directory))
+	     (fname (format nil "~apvs-~4,'0d-~2,'0d-~2,'0d.log"
+			    log-dir year month date)))
+	(ensure-directories-exist log-dir)
 	(setq *pvs-log-stream*
 	      (open (uiop:native-namestring fname) :direction :output
 		    :if-exists :append :if-does-not-exist :create))))

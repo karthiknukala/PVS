@@ -64,9 +64,42 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 # --------------------------------------------------------------------
 
-# PVSPATH should be set after installation by <PVS>/bin/relocate or by hand
-# to the location of the PVS installation
-PVSPATH=@PVSPATH@
+# PVSPATH may be used to override the PVS installation location.
+# By default, this script resolves the installation root from its own path.
+
+normalize_dir() {
+  case $1 in
+    */) printf '%s\n' "$1" ;;
+    *) printf '%s/\n' "$1" ;;
+  esac
+}
+
+resolve_script_dir() {
+  target=$1
+  case $target in
+    */*) ;;
+    *) target=`command -v "$target"` || return 1 ;;
+  esac
+  while [ -h "$target" ]
+  do
+    link=`readlink "$target"` || return 1
+    case $link in
+      /*) target=$link ;;
+      *) target=`dirname "$target"`/$link ;;
+    esac
+  done
+  CDPATH= cd -- "`dirname "$target"`" 2>/dev/null && pwd -P
+}
+
+if [ -n "$PVSPATH" -a -d "$PVSPATH" ]
+then PVSPATH=`normalize_dir "$PVSPATH"`
+else
+  PVSPATH=`resolve_script_dir "$0"` || {
+    echo "Unable to determine the PVS installation directory"
+    exit 1
+  }
+  PVSPATH=`normalize_dir "$PVSPATH"`
+fi
 
 #-------------------------------------------------
 # Nothing below this line should need modification
@@ -90,6 +123,7 @@ pvsemacsinit=
 pvsimagepath=
 pvsruntime=
 rawmode=
+minusq=
 
 # Process the command-line options
 
@@ -149,7 +183,7 @@ do
 	 esac;;
      -name|-title|-xrm) emacsargs="$emacsargs $1 $2"
                         shift;;
-     -q|-no-init-file) emacsargs="$emacsargs $1"
+     -q|-no-init-file) minusq=1
                        PVSMINUSQ="-q"
 		       dotemacs= ;;
      -E) PVSEVALLOAD="$PVSEVALLOAD $2"
@@ -219,6 +253,10 @@ else if [ -n "${emacscmd}" ]
      then PVSEMACS=${emacscmd}
      else PVSEMACS=${PVSEMACS:-"emacs"}
      fi
+
+     if [ -n "${minusq}" ]
+     then emacsargs="$emacsargs -q"
+     fi
      
      # Exit if PVSEMACS is not executable
      if [ ! -x `which ${PVSEMACS}` ]
@@ -231,7 +269,7 @@ else if [ -n "${emacscmd}" ]
      esac
      
      pvsemacsinit="-load ${PVSPATH}/emacs/go-pvs.el ${emacs_args} ${loadafter}"
-     if [ -f ${HOME}/.emacs ]
+     if [ -f "${HOME}/.emacs" ]
      then dotemacs="-l ${HOME}/.emacs"
      fi
      PVSINEMACS=1
@@ -269,13 +307,13 @@ fi
 
 # Check which lisp to use
 if [ -z "$PVSLISP" ]
-   then if   [ -x $PVSBINPATH/devel/pvs-allegro ]
+   then if   [ -x "$PVSBINPATH/devel/pvs-allegro" ]
         then PVSLISP=allegro
-        elif [ -x $PVSBINPATH/runtime/pvs-allegro ]
+        elif [ -x "$PVSBINPATH/runtime/pvs-allegro" ]
         then PVSLISP=allegro
-	elif [ -x $PVSBINPATH/devel/pvs-sbclisp ]
+	elif [ -x "$PVSBINPATH/devel/pvs-sbclisp" ]
 	then PVSLISP=sbclisp
-	elif [ -x $PVSBINPATH/runtime/pvs-sbclisp ]
+	elif [ -x "$PVSBINPATH/runtime/pvs-sbclisp" ]
 	then PVSLISP=sbclisp
         else echo "No executable available in $PVSBINPATH"
              exit 1
@@ -288,13 +326,13 @@ if [ -n "$PVSIMAGE" ]; then PVSLISP=sbclisp; fi
 PVSIMAGE=${PVSIMAGE:=pvs-$PVSLISP}
 
 # Set path related environment variables
-if [ -d $PVSBINPATH/devel -a -e $PVSBINPATH/devel/$PVSIMAGE -a -z "$pvsruntime" ]
+if [ -d "$PVSBINPATH/devel" ] && [ -e "$PVSBINPATH/devel/$PVSIMAGE" ] && [ -z "$pvsruntime" ]
 then
   PATH=$PVSBINPATH/devel:$PVSBINPATH:$PVSPATH/bin:$PATH
   LD_LIBRARY_PATH=$PVSBINPATH/devel:$LD_LIBRARY_PATH
   DYLD_LIBRARY_PATH=$PVSBINPATH/devel:$DYLD_LIBRARY_PATH
   pvsimagepath=$PVSBINPATH/devel/$PVSIMAGE
-elif [ -d $PVSBINPATH/runtime -a -e $PVSBINPATH/runtime/$PVSIMAGE ]
+elif [ -d "$PVSBINPATH/runtime" ] && [ -e "$PVSBINPATH/runtime/$PVSIMAGE" ]
 then
   PATH=$PVSBINPATH/runtime:$PVSBINPATH:$PVSPATH/bin:$PATH
   LD_LIBRARY_PATH=$PVSBINPATH/runtime:$LD_LIBRARY_PATH
@@ -351,17 +389,17 @@ if [ -n "${getversion}" ]
 then
   export PVSEMACS=
   export PVS_LIBRARY_PATH=
-  echo `${pvsimagepath} ${noinit} ${evalflag} "(progn(pvs::pvs-version)(terpri)(pvs::exit-pvs))"`
+  echo `"${pvsimagepath}" ${noinit} ${evalflag} "(progn(pvs::pvs-version)(terpri)(pvs::exit-pvs))"`
   exit 0
 fi
 
 # Warn about for PVS_LIBRARY_PATH conflicts
 if [ -n "$PVS_LIBRARY_PATH" -a -z "$rawmode" ]
  then
-  plibs=`for plib in ${PVSPATH}/lib/*; do if [ -d $plib -a -f $plib/.pvscontext ]; then basename $plib; fi; done`
+  plibs=`for plib in "${PVSPATH}"/lib/*; do if [ -d "$plib" ] && [ -f "$plib/.pvscontext" ]; then basename "$plib"; fi; done`
   for path in `echo $PVS_LIBRARY_PATH | tr ':' ' '`
    do for plib in $plibs
-       do if [ -d $path/$plib ]
+       do if [ -d "$path/$plib" ]
            then echo "Warning: PVS_LIBRARY_PATH $path/$plib"
 	        echo "         conflicts with $PVSPATH/lib/$plib"
 		echo "    $plib will default to $path/$plib"
@@ -373,14 +411,14 @@ fi
 # Now run pvs, either through Emacs or the raw PVS image
 # emacsargs is the arguments not otherwise hendled while processing the command line args
 if [ -n "${rawmode}" ] # No Emacs involved - PVSEMACS is not set
-then ${pvsimagepath} ${noinit} ${otherargs}
+then "${pvsimagepath}" ${noinit} ${otherargs}
 elif [ -n "${batch}" ] # Emacs, but no windows
 then ${PVSEMACS} ${batch} ${dotemacs} ${pvsemacsinit} ${emacsargs} ${otherargs} 2>&1
 elif [ -n "${nowin}" ]
 then ${PVSEMACS} -nw ${pvsemacsinit} ${emacsargs} ${otherargs}
 else
   pvsrun="${PVSEMACS} -name pvs ${pvsemacsinit} ${PVSXINIT} ${emacsargs} ${otherargs}"
-  if [ -z ${nobg} ]
+  if [ -z "${nobg}" ]
   then (${pvsrun} --chdir `pwd` &)
   else ${pvsrun}
   fi

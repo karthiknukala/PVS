@@ -1,25 +1,8 @@
 #!/bin/sh
 
-mvprog="${MVPROG-mv}"
-chmodprog="${CHMODPROG-chmod}"
-sedprog="${SEDPROG-sed}"
 emacsprog="${PVSEMACS-emacs}"
 
-# Relocate PVSPATH and in the pvs shell script.
-
-echo Setting PVSPATH in the \"pvs\", \"pvsio\", \"proveit\", and \"provethem\"
-echo "  shell scripts to $PWD"
-echo If this is not the right path, edit the scripts before using them.
-$chmodprog u+w pvs pvsio proveit provethem
-$sedprog -e "s,^PVSPATH=.*$,PVSPATH=$PWD," < pvs > tmp.$$
-$mvprog tmp.$$ pvs
-$sedprog -e "s,^PVSPATH=.*$,PVSPATH=$PWD," < pvsio > tmp.$$
-$mvprog tmp.$$ pvsio
-$sedprog -e "s,^PVSPATH=.*$,PVSPATH=$PWD," < proveit > tmp.$$
-$mvprog tmp.$$ proveit
-$sedprog -e "s,^\$PVSPATH=.*$,\$PVSPATH=\"$PWD\";," < provethem > tmp.$$
-$mvprog tmp.$$ provethem
-$chmodprog a+x pvs pvsio proveit provethem
+echo "Launcher scripts are relocatable; no PVSPATH rewrite is needed."
 
 # Take care of Catalina quarantine issues
 if [ `uname -s` = "Darwin" ]; then

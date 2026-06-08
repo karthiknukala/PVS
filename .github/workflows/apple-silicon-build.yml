@@ -1,0 +1,355 @@
+name: Apple Silicon Build
+
+on:
+  workflow_call:
+    inputs:
+      artifact_branch:
+        required: false
+        type: string
+      artifact_date:
+        required: false
+        type: string
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-silicon-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos-arm64:
+    name: Build macOS arm64 bundle
+    runs-on: macos-15
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      bundle_dir: ${{ steps.artifacts.outputs.bundle_dir }}
+      pkg_enabled: ${{ steps.pkg_mode.outputs.enabled }}
+      pkg_name: ${{ steps.artifacts.outputs.pkg_name }}
+      pkg_version: ${{ steps.artifacts.outputs.pkg_version }}
+      release_channel: ${{ steps.release_policy.outputs.channel }}
+      release_move_tag: ${{ steps.release_policy.outputs.move_tag }}
+      release_prerelease: ${{ steps.release_policy.outputs.prerelease }}
+      release_publish: ${{ steps.release_policy.outputs.publish }}
+      release_tag: ${{ steps.release_policy.outputs.release_tag }}
+      release_title: ${{ steps.release_policy.outputs.release_title }}
+      tgz: ${{ steps.artifacts.outputs.tgz }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      PVS_ARTIFACT_GLOB: pvs*-arm-MacOSX-sbclisp.tgz
+      PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
+      PVS_PKG_INSTALL_BASE: /PVS
+      PVS_RELEASE_ARCH: arm64
+      PVS_RELEASE_OS: macos
+      PVS_SBCL_SOURCE_VERSION: 2.6.3
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Resolve release policy
+        id: release_policy
+        run: |
+          bash ./.github/scripts/resolve-release-policy.sh
+
+      - name: Install build dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          brew list make >/dev/null 2>&1 || brew install make
+          brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          brew list sbcl >/dev/null 2>&1 || brew install sbcl
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+          {
+            echo "PVS_SBCL_BOOTSTRAP_BIN=$(brew --prefix sbcl)/bin/sbcl"
+            echo "PVS_SBCL_BOOTSTRAP_HOME=$(brew --prefix sbcl)/lib/sbcl"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare neutral release build tree
+        run: |
+          bash ./.github/scripts/prepare-release-build-tree.sh
+
+      - name: Build custom SBCL runtime
+        run: |
+          cd "$PVS_RELEASE_WORKDIR"
+          PVS_BUILT_SBCL_PREFIX="$PVS_RELEASE_BUILD_ROOT/pvs-sbcl-built"
+          bootstrap_xc_host="$PVS_SBCL_BOOTSTRAP_BIN --disable-debugger --no-userinit --no-sysinit"
+          HOME="$CI_HOME" bash ./.github/scripts/install-patched-sbcl-source.sh \
+            --prefix "$PVS_BUILT_SBCL_PREFIX" \
+            --version "$PVS_SBCL_SOURCE_VERSION" \
+            --xc-host "$bootstrap_xc_host" \
+            --host-home "$PVS_SBCL_BOOTSTRAP_HOME" \
+            --github-env "$GITHUB_ENV"
+
+      - name: Configure source tree
+        run: |
+          cd "$PVS_RELEASE_WORKDIR"
+          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" ./configure --with-pvspath="$PWD"
+
+      - name: Build and smoke-test standalone bundle
+        run: |
+          cd "$PVS_RELEASE_WORKDIR"
+          SBCL="$PVS_BUILT_SBCL_WRAPPER" HOME="$CI_HOME" make smoke-sbcl-release
+
+      - name: Capture artifact paths
+        id: artifacts
+        run: |
+          cd "$PVS_RELEASE_WORKDIR"
+          shopt -s nullglob
+          files=( $PVS_ARTIFACT_GLOB )
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "Expected exactly one standalone tarball, found ${#files[@]}" >&2
+            printf '%s\n' "${files[@]}" >&2
+            exit 1
+          fi
+
+          bundle_dir=$(make print-DISTDIR | sed -n 's/^DISTDIR=//p')
+          if [ -z "$bundle_dir" ] || [ ! -d "$bundle_dir" ]; then
+            echo "Expected unpacked bundle directory to exist, got '$bundle_dir'" >&2
+            exit 1
+          fi
+
+          artifact_base="pvs-${PVS_ARTIFACT_BRANCH}-${PVS_ARTIFACT_DATE}-${PVS_RELEASE_OS}-${PVS_RELEASE_ARCH}"
+          tgz_name="${artifact_base}.tgz"
+          tgz_path="$RUNNER_TEMP/$tgz_name"
+          pkg_name="${artifact_base}.pkg"
+          pkg_version=$(make print-VERSION | sed -n 's/^VERSION=//p')
+          cp -f "${files[0]}" "$tgz_path"
+          bash ./.github/scripts/audit-release-artifact.sh \
+            --artifact "$tgz_path" \
+            --foreign-build-root "$PVS_RELEASE_WORKDIR"
+
+          echo "tgz=$tgz_name" >> "$GITHUB_OUTPUT"
+          echo "tgz_path=$tgz_path" >> "$GITHUB_OUTPUT"
+          echo "bundle_dir=$bundle_dir" >> "$GITHUB_OUTPUT"
+          echo "pkg_name=$pkg_name" >> "$GITHUB_OUTPUT"
+          echo "pkg_version=$pkg_version" >> "$GITHUB_OUTPUT"
+        env:
+          PVS_ARTIFACT_BRANCH: ${{ inputs.artifact_branch || steps.release_policy.outputs.artifact_branch }}
+          PVS_ARTIFACT_DATE: ${{ inputs.artifact_date || steps.release_policy.outputs.artifact_date }}
+
+      - name: Check whether notarized packaging is enabled
+        id: pkg_mode
+        env:
+          MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_APPLICATION_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_PASSWORD }}
+          MACOS_DEV_ID_APPLICATION_CERT_NAME: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_NAME }}
+          MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+          MACOS_DEV_ID_INSTALLER_CERT_NAME: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+        run: |
+          if [ -n "$MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64" ] \
+            && [ -n "$MACOS_DEV_ID_APPLICATION_CERT_PASSWORD" ] \
+            && [ -n "$MACOS_DEV_ID_APPLICATION_CERT_NAME" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_PASSWORD" ] \
+            && [ -n "$MACOS_DEV_ID_INSTALLER_CERT_NAME" ] \
+            && [ -n "$MACOS_NOTARY_ISSUER_ID" ] \
+            && [ -n "$MACOS_NOTARY_KEY_ID" ] \
+            && [ -n "$MACOS_NOTARY_API_KEY_P8_BASE64" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload standalone tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts.outputs.tgz }}
+          path: ${{ steps.artifacts.outputs.tgz_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Apple Silicon bundle"
+            echo
+            echo "- Runner: \`macos-15\`"
+            echo "- Tarball artifact: \`${{ steps.artifacts.outputs.tgz }}\`"
+            if [ '${{ steps.release_policy.outputs.publish }}' = 'true' ]; then
+              echo "- GitHub release publication: handled by the consolidated release workflow"
+            else
+              echo "- GitHub release publication: skipped for ref \`${{ github.ref_name }}\`"
+            fi
+            if [ '${{ steps.pkg_mode.outputs.enabled }}' = 'true' ]; then
+              echo "- Signed installer package artifact: produced by the \`package-macos-arm64\` job as \`${{ steps.artifacts.outputs.pkg_name }}\`"
+              echo "- Package notarization: runs automatically because all signing and notary credentials were configured"
+            else
+              echo "- Signed installer package artifact: skipped because one or more signing/notary secrets are missing"
+            fi
+            echo "- To test manually, extract \`${{ steps.artifacts.outputs.tgz }}\` and run \`./pvs -raw -version\` from the extracted \`${{ steps.artifacts.outputs.bundle_dir }}\` directory."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  package-macos-arm64:
+    name: Build notarized macOS arm64 package
+    runs-on: macos-15
+    needs: build-macos-arm64
+    if: ${{ needs['build-macos-arm64'].outputs.pkg_enabled == 'true' }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      PVS_PKG_IDENTIFIER: com.sri-csl.pvs.macos.arm64
+      PVS_PKG_INSTALL_BASE: /PVS
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Download standalone tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs['build-macos-arm64'].outputs.tgz }}
+          path: ${{ runner.temp }}/standalone-artifacts
+
+      - name: Restore standalone bundle from tarball
+        id: bundle
+        env:
+          PVS_BUNDLE_DIR: ${{ needs['build-macos-arm64'].outputs.bundle_dir }}
+          PVS_TGZ: ${{ needs['build-macos-arm64'].outputs.tgz }}
+        run: |
+          artifact_root="$RUNNER_TEMP/standalone-artifacts"
+          tgz_path="$artifact_root/$PVS_TGZ"
+          extract_root="$RUNNER_TEMP/standalone-bundle"
+
+          if [ ! -f "$tgz_path" ]; then
+            echo "Expected standalone tarball to exist at '$tgz_path'" >&2
+            exit 1
+          fi
+
+          mkdir -p "$extract_root"
+          tar xzf "$tgz_path" -C "$extract_root"
+
+          bundle_path="$extract_root/$PVS_BUNDLE_DIR"
+          if [ ! -d "$bundle_path" ]; then
+            echo "Expected unpacked bundle directory to exist at '$bundle_path'" >&2
+            exit 1
+          fi
+
+          echo "bundle_path=$bundle_path" >> "$GITHUB_OUTPUT"
+
+      - name: Import Apple signing certificates
+        env:
+          MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_APPLICATION_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_PASSWORD }}
+          MACOS_DEV_ID_APPLICATION_CERT_NAME: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_NAME }}
+          MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 }}
+          MACOS_DEV_ID_INSTALLER_CERT_PASSWORD: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_PASSWORD }}
+          MACOS_DEV_ID_INSTALLER_CERT_NAME: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+        run: |
+          keychain="$RUNNER_TEMP/pvs-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 18)
+          application_cert="$RUNNER_TEMP/dev-id-application.p12"
+          installer_cert="$RUNNER_TEMP/dev-id-installer.p12"
+
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64" | base64 --decode > "$application_cert"
+          printf '%s' "$MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64" | base64 --decode > "$installer_cert"
+
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+
+          existing_keychains=$(security list-keychains -d user | tr -d '"')
+          security list-keychains -d user -s "$keychain" $existing_keychains
+
+          security import "$application_cert" \
+            -k "$keychain" \
+            -P "$MACOS_DEV_ID_APPLICATION_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+
+          security import "$installer_cert" \
+            -k "$keychain" \
+            -P "$MACOS_DEV_ID_INSTALLER_CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productsign \
+            -T /usr/bin/pkgbuild \
+            -T /usr/bin/security
+
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign:,productsign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain"
+
+          echo "Available code-signing identities in $keychain:"
+          security find-identity -v -p codesigning "$keychain"
+          echo "Available basic identities in $keychain:"
+          security find-identity -v -p basic "$keychain"
+
+          security find-identity -v -p codesigning "$keychain" | grep -F "$MACOS_DEV_ID_APPLICATION_CERT_NAME" >/dev/null || {
+            echo "Expected Developer ID Application identity '$MACOS_DEV_ID_APPLICATION_CERT_NAME' was not found in $keychain" >&2
+            exit 1
+          }
+
+          security find-identity -v -p basic "$keychain" | grep -F "$MACOS_DEV_ID_INSTALLER_CERT_NAME" >/dev/null || {
+            echo "Expected Developer ID Installer identity '$MACOS_DEV_ID_INSTALLER_CERT_NAME' was not found in $keychain" >&2
+            exit 1
+          }
+
+      - name: Build signed installer package
+        id: pkg
+        env:
+          MACOS_APPLICATION_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_APPLICATION_CERT_NAME }}
+          MACOS_APPLICATION_SIGN_ENTITLEMENTS_FILE: ${{ github.workspace }}/.github/macos-sbcl-entitlements.plist
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_DEV_ID_INSTALLER_CERT_NAME }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_API_KEY_P8_BASE64: ${{ secrets.MACOS_NOTARY_API_KEY_P8_BASE64 }}
+          MACOS_SIGNING_KEYCHAIN: ${{ runner.temp }}/pvs-signing.keychain-db
+          PVS_PKG_NAME: ${{ needs['build-macos-arm64'].outputs.pkg_name }}
+          PVS_PKG_VERSION: ${{ needs['build-macos-arm64'].outputs.pkg_version }}
+        run: |
+          pkg_dir="$RUNNER_TEMP/pkg-artifacts"
+          notary_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+
+          printf '%s' "$MACOS_NOTARY_API_KEY_P8_BASE64" | base64 --decode > "$notary_key"
+          chmod 600 "$notary_key"
+          export MACOS_NOTARY_KEY_FILE="$notary_key"
+
+          ./.github/scripts/build-macos-pkg.sh \
+            --bundle-dir '${{ steps.bundle.outputs.bundle_path }}' \
+            --output-dir "$pkg_dir" \
+            --pkg-name "$PVS_PKG_NAME" \
+            --pkg-identifier "$PVS_PKG_IDENTIFIER" \
+            --pkg-version "$PVS_PKG_VERSION" \
+            --install-base "$PVS_PKG_INSTALL_BASE"
+
+      - name: Upload signed installer package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs['build-macos-arm64'].outputs.pkg_name }}
+          path: ${{ steps.pkg.outputs.pkg_path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Summarize outputs
+        run: |
+          {
+            echo "### Apple Silicon package"
+            echo
+            echo "- Runner: \`macos-15\`"
+            echo "- Source tarball artifact: \`${{ needs['build-macos-arm64'].outputs.tgz }}\`"
+            echo "- Signed installer package artifact: \`${{ needs['build-macos-arm64'].outputs.pkg_name }}\`"
+            echo "- Installer destination: \`${{ steps.pkg.outputs.pkg_install_path }}\`"
+            echo "- GitHub release publication: handled by the consolidated release workflow"
+            if [ '${{ steps.pkg.outputs.pkg_notarized }}' = 'true' ]; then
+              echo "- Package notarization: completed and stapled"
+            else
+              echo "- Package notarization: skipped"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

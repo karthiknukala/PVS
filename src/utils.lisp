@@ -10,21 +10,13 @@
 
 ;; --------------------------------------------------------------------
 ;; PVS
-;; Copyright (C) 2006, SRI International.  All Rights Reserved.
-
+;; Copyright (C) 2026, SRI International. All Rights Reserved.
 ;; This program is free software; you can redistribute it and/or
-;; modify it under the terms of the GNU General Public License
-;; as published by the Free Software Foundation; either version 2
-;; of the License, or (at your option) any later version.
-
+;; modify it under the terms of the 3-Clause BSD License.
 ;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program; if not, write to the Free Software
-;; Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+;; 3-Clause BSD License for more details.
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
@@ -450,12 +442,13 @@ is replaced with replacement."
 	     (error "File ~a.~a cannot be found in *pvs-directories*"
 		    name type)))))
 
-(defun make-fasl-file-name (file)
+(defun make-fasl-file-name (file &key (ensure-dir? t))
   (unless (uiop:file-exists-p file)
     (error "Source file not found: ~a" file))
   (let* ((path (make-pathname :defaults file :type *pvs-fasl-type*))
 	 (fpath (asdf:apply-output-translations path)))
-    (ensure-directories-exist fpath)
+    (when ensure-dir?
+      (ensure-directories-exist fpath))
     fpath))
 
 (defun compiled-file-older-than-source? (sourcefile binfile)
@@ -3989,6 +3982,16 @@ space")
 (defun direct-superclasses (class)
   (sb-mop:class-direct-superclasses class))
 
+;; (defmethod superclasses ((class standard-object) &optional classes)
+;;   (if (or (memq class classes)
+;; 	  (eq class (find-class 'standard-object)))
+;;       classes
+;;       (let ((sclasses (direct-superclasses class)))
+;; 	(dolist (sclass sclasses)
+;; 	  (setq classes (cons sclass (superclasses sclass classes))))
+;; 	classes)))
+  
+
 (defun types-of (obj)
   (let ((types nil))
     (labels ((tof (type)
@@ -4004,7 +4007,6 @@ space")
 			  (direct-superclasses class)))))))
       (tof (type-of obj)))
     (nreverse types)))
-
 
 (defun fully-typed? (obj)
   (let ((untyped? nil)
@@ -5221,6 +5223,17 @@ we can get this method using
 		    specs))
 	 (method (find-method gf quals classes)))
     method))
+
+(defun all-classes ()
+  (let ((pvs-pkg (find-package :pvs))
+	(classes nil))
+    (do-all-symbols (sym)
+      (when (and (eq (symbol-package sym) pvs-pkg)
+		 (find-class sym nil))
+	(push sym classes)))
+    classes))
+
+
 
 ;;; equals is like equalp, but is case-sensitive
 (defun equals (x y)
