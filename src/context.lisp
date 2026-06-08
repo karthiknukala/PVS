@@ -2120,7 +2120,8 @@ Note that the lists might not be the same length."
   (let ((tcc-proofs (mapcar #'(lambda (mprf)
 				(let ((pinfo (apply #'mk-tcc-proof-info
 					       (if (listp (car mprf)) (car mprf) mprf))))
-				  (setf (origin pinfo) (origin tcc))
+				  (when pinfo
+				    (setf (origin pinfo) (origin tcc)))
 				  pinfo))
 		      (cddr mproof)))
 	(fe (get-context-formula-entry tcc)))

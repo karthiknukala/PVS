@@ -41,8 +41,6 @@
 (defmacro length= (l1 l2)
   `(= (length ,l1) (length ,l2)))
 
-(defmacro singleton? (obj)
-  `(and (consp ,obj) (null (cdr ,obj))))
 
 ;;; Like typep, but a little faster.
 ;;; Can only be used on instances of classes.
@@ -262,9 +260,10 @@ After exiting, all of these are reverted to their previous values."
 			 (assert (pvs-context *workspace-session*)
 				 () "Bad pvs-context")
 			 (unwind-protect 
-			      (prog1 (progn (set-working-directory ,truedir) ,@forms)
-				(when (pvs-context-changed *workspace-session*)
-				  (save-context nil t)))
+			      (progn (set-working-directory ,truedir)
+				     ,@forms)
+			   (when (pvs-context-changed *workspace-session*)
+			     (save-context nil t))
 			   (set-working-directory ,orig-dir))))))
 	     (t (error "Library ~a does not exist" (or ,lib-path ,lref)))))))
 
@@ -535,14 +534,12 @@ and all *all-workspace-sessions* applying fn to each theory."
        ;; We want to push new decl-formals into the current-declarations-hash
        ;; But there may already be some there (recursively)
        ;; We remove any clashing ones, and restore after executing body
-       (if (null ,gdecls)
-	   (progn ,@body)
-	   (unwind-protect
-		;; Might have a problem here, if there are decl-formals
-		;; already in the declarations hash
-		(progn (add-decl-formals-to-declarations-hash ,gdecls)
-		       ,@body)
-	     (remove-decl-formals-from-declarations-hash ,gdecls))))))
+       (unwind-protect
+	    ;; Might have a problem here, if there are decl-formals
+	    ;; already in the declarations hash
+	    (progn (add-decl-formals-to-declarations-hash ,gdecls)
+		   ,@body)
+	 (remove-decl-formals-from-declarations-hash ,gdecls)))))
 
 (defun remove-decl-formals-from-declarations-hash (dfmls)
   "Tries to remove the dfmls from the declarations-hash, returining the list
@@ -790,3 +787,16 @@ obj may be of type:
      (handler-case
 	 (progn ,@body)
        (sb-ext:timeout () ,@timeout-body))))
+
+;; (defmethod update-fetched ((obj mapping-with-formals))
+(defmacro undefmethod (name &rest args)
+  (multiple-value-bind (qualifiers lambda-list body)
+      (sb-pcl::parse-defmethod args)
+    `(let ((meth (find-method (function ,name) ,qualifiers
+				 ,(cons 'list
+					(mapcar #'(lambda (x)
+						    `(find-class ',(if (consp x) (cadr x) t)))
+					  lambda-list))
+				 nil)))
+       (when meth
+	 (remove-method (function ,name) meth)))))

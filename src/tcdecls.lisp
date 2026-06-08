@@ -216,13 +216,13 @@
 
 (defmethod new-decl-formals ((decl declaration))
   (when (decl-formals decl)
-    (let* ((dfmls (new-decl-formals* decl))
-	   (dacts (mk-dactuals dfmls))
-	   (th (or (module decl) (current-theory)))
-	   (thinst (mk-modname (id th) nil nil nil dacts decl))
-	   (res (mk-resolution th thinst nil)))
-      (setf (resolutions thinst) (list res))
-      (values dfmls dacts thinst))))
+    (multiple-value-bind (dfmls dacts)
+	(new-decl-formals* decl)
+      (let* ((th (or (module decl) (current-theory)))
+	     (thinst (mk-modname (id th) nil nil nil dacts decl))
+	     (res (mk-resolution th thinst nil)))
+	(setf (resolutions thinst) (list res))
+	(values dfmls dacts thinst)))))
 
 (defmethod new-decl-formals ((decl mapping-lhs))
   (when (decl-formals decl)
@@ -240,14 +240,17 @@
 (defun new-decl-formals* (decl)
   (new-decl-formals** (decl-formals decl)))
 
-(defun new-decl-formals** (dfmls &optional nfmls)
+(defun new-decl-formals** (dfmls &optional nfmls nacts alist)
   (if (null dfmls)
-      (nreverse nfmls)
-      (new-decl-formals**
-       (cdr dfmls)
-       (with-added-decls nfmls
-	 (let ((nfml (new-decl-formal (car dfmls))))
-	   (cons nfml nfmls))))))
+      (values (nreverse nfmls) (nreverse nacts))
+      (with-added-decls nfmls
+	(let* ((sfml (subst-acts-in-form (car dfmls) alist))
+	       (nfml (if (eq sfml (car dfmls))
+			 (new-decl-formal (car dfmls))
+			 sfml))
+	       (nact (mk-actual nfml)))
+	  (new-decl-formals** (cdr dfmls) (cons nfml nfmls) (cons nact nacts)
+			      (acons (car dfmls) nact alist))))))
 
 (defmethod new-decl-formal ((fml decl-formal-type) &optional id)
   (let ((nfml (copy fml
@@ -3273,8 +3276,9 @@ The dependent types are created only when needed."
 	   (cdecl (current-declaration)))
       (setf (module pdecl) (module decl)
 	    (declared-type pdecl) ftype)
-      (typecheck* pdecl nil nil nil) ;; This will set (current-declaration) to pdecl
-      (typecheck* pexpr ftype nil nil)
+      (with-current-decl pdecl
+	(typecheck* pdecl nil nil nil)
+	(typecheck* pexpr ftype nil nil))
       (when (decl-formal-subtype? decl)
 	(setf (generated-by pdecl) decl
 	      (generated decl) (cons pdecl (generated decl))))
@@ -3284,8 +3288,9 @@ The dependent types are created only when needed."
       (if (decl-formal-subtype? decl)
 	  (setf (generated decl) (list pdecl))
 	  (add-decl pdecl (not (formal-subtype-decl? decl))))
-      (let ((subty (mk-subtype stype pexpr)))
-	(assert (fully-instantiated? subty))
+      (let ((subty (mk-subtype ptype pexpr)))
+	(with-current-decl pdecl
+	  (assert (fully-instantiated? subty)))
 	subty))))
 
 (defun formal-subtype? (type)

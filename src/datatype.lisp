@@ -1499,8 +1499,7 @@ generated")
 			  (generate-adt-ord-selections (constructors adt))
 			  nil)))
        (list (mk-arg-bind-decl var
-			       (mk-type-name (id adt) nil nil nil
-					     :dactuals dacts)))
+			       (mk-type-name (id adt) nil nil nil :dactuals dacts)))
        nil dfmls))))
 
 (defun set-constructor-ord-numbers (constructors &optional (num 0))
@@ -1746,7 +1745,6 @@ generated")
     (dolist (a (arguments c))
       (multiple-value-bind (dfmls dacts thinst)
 	  (new-decl-formals adt)
-	(declare (ignore dacts))
 	(let* ((vars (mapcar #'get-adt-var (arguments c)))
 	       (cappl (mk-application* (id c) vars))
 	       (consappl (if (> (count-if #'(lambda (d)
@@ -1773,7 +1771,7 @@ generated")
 	  (setf (definition fdecl)
 		(mk-forall-expr bindings
 		  (mk-application '=
-		    (mk-application (id a) consappl)
+		    (mk-application (mk-name-expr (id a) nil nil nil :dactuals dacts) consappl)
 		    (get-adt-var a))))
 	  (typecheck-adt-decl fdecl t nil))))))
 
@@ -1791,8 +1789,7 @@ generated")
 	(adt-forall-bindings (cdr vars)
 			     (substit (cdr bds)
 			       (acons (car bds) var nil))
-			     (cdr accs)
-			     thinst
+			     (cdr accs) thinst
 			     (cons nbd result)))))
 
 (defun generate-disjoint-axiom (adt)
@@ -2745,8 +2742,10 @@ generated")
 	 (let* ((dfml (car dfmls))
 		(nid (make-new-variable (id dfml)
 		       (cons dfmls pairs)))
-		(nfml (with-added-decls nfmls
-			(new-decl-formal dfml nid))))
+		(nfml (if nfmls
+			  (with-added-decls nfmls
+			    (new-decl-formal dfml nid))
+			  (new-decl-formal dfml nid))))
 	   (adt-map-inline-formals (cdr dfmls) adt ofmls
 				   (cons nfml nfmls)
 				   (acons dfml nfml pairs)
@@ -2802,9 +2801,7 @@ generated")
 					 :test #'same-id))))))
 	   (adt-map-formal-pairs (cdr formals)
 				 adt
-				 (if nil ;(eq nusing (car formals))
-				     pairs
-				     (acons (car formals) nusing pairs)))))
+				 (acons (car formals) nusing pairs))))
 	((if (formal-const-decl? (car formals))
 	     (not (some #'(lambda (fty)
 			    (member fty (positive-types adt)
@@ -3967,12 +3964,18 @@ generated")
 	   (cdef (with-current-decl cdecl
 		   (gen-adt-reduce-definition adt fname fdoms fran thinst adttype strong?)))
 	   (cformals
-	    (with-added-decls cfmls
-	      (mapcar #'(lambda (c bndgs)
-			  (mk-arg-bind-decl
-			   (makesym "~a_fun" (op-to-id (recognizer c)))
-			   (gen-adt-reduce-funtype c bndgs rtype adt adttype thinst strong?)))
-		(constructors adt) bindings))))
+	    (if cfmls
+		(with-added-decls cfmls
+		  (mapcar #'(lambda (c bndgs)
+			      (mk-arg-bind-decl
+			       (makesym "~a_fun" (op-to-id (recognizer c)))
+			       (gen-adt-reduce-funtype c bndgs rtype adt adttype thinst strong?)))
+		    (constructors adt) bindings))
+		(mapcar #'(lambda (c bndgs)
+			    (mk-arg-bind-decl
+			     (makesym "~a_fun" (op-to-id (recognizer c)))
+			     (gen-adt-reduce-funtype c bndgs rtype adt adttype thinst strong?)))
+		  (constructors adt) bindings))))
       (setf (definition cdecl) cdef
 	    (formals cdecl) (list cformals))
       (typecheck-adt-decl cdecl t nil))))

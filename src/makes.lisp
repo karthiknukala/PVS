@@ -1202,11 +1202,6 @@
 (defun make-record-expr (assignments expected)
   (typecheck (mk-record-expr assignments) :expected expected))
 
-(defun make-cases-expr (expr selections else)
-  (let ((expr (mk-cases-expr expr selections else)))
-    (break "make-cases-expr - need to handle expected type")
-    (typecheck expr nil nil nil)))
-
 (defun make-arg-tuple-expr (args)
   (assert (every #'type args))
   (if (cdr args)
