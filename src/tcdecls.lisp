@@ -1282,9 +1282,9 @@ bindings."
 	  (decl-formals decl))
       ;; check-positive-types* essentially filters out those postypes
       ;; that are found to not be positive
-      (let* ((aformals (append (remove-if-not #'formal-type-decl?
-				 (formals-sans-usings (current-theory)))
-			       (decl-formals decl)))
+      (let* ((aformals (remove-if-not #'formal-type-decl?
+			 (append (formals-sans-usings (current-theory))
+				 (decl-formals decl))))
 	     (dformals (apply #'append (formals decl)))
 	     ;; Check the arg types
 	     (pformals (check-positive-types* (mapcar #'type dformals)
