@@ -3268,29 +3268,38 @@ The dependent types are created only when needed."
 		      (with-current-decl pdecl
 			(subst-mod-params stype thinst (current-theory) decl))
 		      stype))
-	   (ftype (with-current-decl pdecl
-		    (typecheck* (mk-funtype (list ptype) *boolean*)
-				nil nil nil)))
+	   (ftype (if thinst
+		      (with-current-decl pdecl
+			(typecheck* (mk-funtype (list ptype) *boolean*)
+				    nil nil nil))
+		      (typecheck* (mk-funtype (list ptype) *boolean*)
+				  nil nil nil)))
 	   (pres (mk-resolution pdecl (current-theory-name) ftype))
 	   (pexpr (mk-name-expr pname nil nil pres))
-	   (cdecl (current-declaration)))
+	   ;;(cdecl (current-declaration))
+	   )
       (setf (module pdecl) (module decl)
 	    (declared-type pdecl) ftype)
-      (with-current-decl pdecl
-	(typecheck* pdecl nil nil nil)
-	(typecheck* pexpr ftype nil nil))
+      (cond (thinst
+	     (with-current-decl pdecl
+	       (typecheck* pdecl nil nil nil)
+	       (typecheck* pexpr ftype nil nil)))
+	    (t (typecheck* pdecl nil nil nil)
+	       (typecheck* pexpr ftype nil nil)))
       (when (decl-formal-subtype? decl)
 	(setf (generated-by pdecl) decl
 	      (generated decl) (cons pdecl (generated decl))))
-      (setf (current-declaration) cdecl)
+      ;; (setf (current-declaration) cdecl)
       (setf (predicate decl) pdecl)
       (setf (dactuals pexpr) dacts)
       (if (decl-formal-subtype? decl)
 	  (setf (generated decl) (list pdecl))
 	  (add-decl pdecl (not (formal-subtype-decl? decl))))
       (let ((subty (mk-subtype ptype pexpr)))
-	(with-current-decl pdecl
-	  (assert (fully-instantiated? subty)))
+	(if thinst
+	    (with-current-decl pdecl
+	      (assert (fully-instantiated? subty)))
+	    (assert (fully-instantiated? subty)))
 	subty))))
 
 (defun formal-subtype? (type)
