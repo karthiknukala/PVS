@@ -21,6 +21,39 @@
 
 (in-package :pvs)
 
+;;; SBCL has two main types of character: base-string and (vector character)
+;;; When *print-readably* is t, this causes "foo" of type base-string to print
+;;; as #A((3) BASE-CHAR . "foo"). The SBCL manual says that with Unicode
+;;; enabled (the default) strings are all of type (vector character). However,
+;;; symbol-name returns a base-string unless some character within it has code
+;;; above 127. Similarly, (format nil ...) also returns a base-string (same
+;;; conditions).
+
+;;; SBCL includes a setf-able "sb-ext:readtable-base-char-preference" function
+;;; that gives the preference for a specific readtable. This is set to nil for
+;;; *readtable* in the Makefile, to ensure all created symbols have a
+;;; symbol-name of type (vector character).
+
+;;; Unfortunately, format doesn't pay attention to this. To deal with that, we
+;;; redefine format to return the desired type, keeping the original
+;;; definition in 'orig-format.
+
+;;; Note that there may be other ways to generate base-strings, but these are
+;;; the two most common uses in PVS.
+
+#+sbcl
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (fboundp 'orig-format)
+    (setf (symbol-function 'orig-format) (symbol-function 'format))))
+
+#+sbcl
+(sb-ext:without-package-locks
+    (defun format (destination control-string &rest format-arguments)
+      "Redefinition of format to return (vector charater) when a string is returned.
+The original definition is in 'orig-format."
+      (let ((result (apply #'orig-format destination control-string format-arguments)))
+   	(if (typep result 'base-string) (coerce result '(vector character)) result))))
+
 (defmacro tcdebug (ctl &rest args)
   `(when *tcdebug*
      (if *to-emacs*
@@ -790,7 +823,7 @@ obj may be of type:
 
 ;; (defmethod update-fetched ((obj mapping-with-formals))
 (defmacro undefmethod (name &rest args)
-  (multiple-value-bind (qualifiers lambda-list body)
+  (multiple-value-bind (qualifiers lambda-list)
       (sb-pcl::parse-defmethod args)
     `(let ((meth (find-method (function ,name) ,qualifiers
 				 ,(cons 'list
