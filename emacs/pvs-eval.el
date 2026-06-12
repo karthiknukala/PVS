@@ -39,7 +39,7 @@
   (interactive (complete-theory-name "Generate C code for theory: "))
   (pvs-bury-output)
   (pvs-message "Generating C code for theory %s..." theoryref)
-  (pvs-send (format "(pvs2c-theory \"%s \")" theoryref))
+  (pvs-send-and-wait (format "(pvs2c-theory \"%s \")" theoryref))
   (let ((c-files (pvs-send-and-wait (format "*pvs2c-top-c-file*") nil nil 'list)))
     (if c-files 
 	(let ((buf (find-file-noselect (car c-files) t)))
@@ -57,7 +57,7 @@
   (pvs-bury-output)
   (pvs-message (format "Generating C for PVS file %s ..." filename))
   (let* ((pvs-error nil))
-      (pvs-send (format "(pvs2c-pvs-file \"%s\")" filename))
+      (pvs-send-and-wait (format "(pvs2c-pvs-file \"%s\")" filename))
       (let ((c-files (pvs-send-and-wait (format "*pvs2c-top-c-file*") nil nil 'list)))
 	(if c-files 
 	    (let ((buf (find-file-noselect (car c-files) t)))
