@@ -1643,13 +1643,14 @@ Note that this doesn't check if the .pvs file is the matches as well."
 	(maphash #'(lambda (file mods)
 		     ;; (car mods) is the timestamp
 		     (when (some #'has-proof? (cdr mods))
-		       (save-proofs (make-prf-pathname file) (cdr mods))))
+		       (save-proofs (make-prf-pathname file) (cdr mods) force?)))
 		 (current-pvs-files)))))
 
-(defun save-pvs-file-proofs (fileref)
+(defun save-pvs-file-proofs (fileref &optional force?)
   (with-pvs-file (file) fileref
     (save-proofs (make-prf-pathname file)
-		 (cdr (gethash file (current-pvs-files))))))
+		 (cdr (gethash file (current-pvs-files)))
+		 force?)))
 
 (defun has-proof? (mod)
   (some #'(lambda (d) (and (formula-decl? d) (justification d)))
@@ -1698,7 +1699,8 @@ Note that this doesn't check if the .pvs file is the matches as well."
 		     (write prf :stream out :length nil :level nil
 			    ;; In SBCL, :readably causes, e.g., "" to be printed as
 			    ;;   #A((0) BASE-CHAR . "")
-			    :readably #-sbcl t #+sbcl nil
+			    ;; See macros.lisp for details on how this is currently handled
+			    :readably t
 			    :pretty *save-proofs-pretty*)
 		     (when *save-proofs-pretty* (terpri out)))
 		 theory-proofs)
@@ -2120,7 +2122,8 @@ Note that the lists might not be the same length."
   (let ((tcc-proofs (mapcar #'(lambda (mprf)
 				(let ((pinfo (apply #'mk-tcc-proof-info
 					       (if (listp (car mprf)) (car mprf) mprf))))
-				  (setf (origin pinfo) (origin tcc))
+				  (when pinfo
+				    (setf (origin pinfo) (origin tcc)))
 				  pinfo))
 		      (cddr mproof)))
 	(fe (get-context-formula-entry tcc)))

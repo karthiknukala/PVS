@@ -2837,51 +2837,36 @@
 	(subtype-preds (range t1) (range t2))
       (when (or eq-inc ty)
 	(let* ((xid (make-new-variable '|x| (list t1 t2)))
-	       (domty (dep-binding-type (domain t2)))
+	       (domty (dep-binding-type (domain t1)))
 	       (xb (mk-bind-decl xid domty domty))
 	       (xvar (mk-name-expr xid nil nil
 				   (make-resolution xb
 				     (current-theory-name) domty)))
 	       (vid (make-new-variable '|f| (list t1 t2)))
-	       (vb (mk-bind-decl vid t2 t2))
+	       (vb (mk-bind-decl vid t1 t1))
 	       (var (mk-name-expr vid nil nil
-				  (make-resolution vb
-				    (current-theory-name) t2)))
-	       (rapps
-		(mapcar #'(lambda (pred)
-			    (let* ((rapp (make!-application pred
-					   (make!-application var xvar)))
-				   (dbdg2 (when (and (dep-binding? (domain t2))
-						     (member (domain t2) (freevars pred)
-							     :key #'declaration))
-					    (domain t2)))
-				   (dbdg1 (when (and (dep-binding?(domain t1))
-						     (not (eq (domain t1) (domain t2)))
-						     (member (domain t1) (freevars pred)
-							     :key #'declaration))
-					    (domain t1)))
-				   (dbdg (if dbdg2
-					     (if dbdg1
-						 (break "subtype-preds (funtype) problem")
-						 dbdg2)
-					     dbdg1)))
-			      (if dbdg
-				  (let* ((dvid (make-new-variable '|d| domty))
-					 (dvb (mk-bind-decl dvid domty domty))
-					 (dvar (mk-name-expr dvid nil nil
-							     (make-resolution dvb
-							       (current-theory-name) domty)))
-					 (drapp (substit rapp (acons dbdg dvar nil))))
-				    (make!-forall-expr (list dvb) drapp))
-				  rapp)))
-		  preds))
+				  (make-resolution vb (current-theory-name) t1)))
+	       (dbdg1 (when (dep-binding? (domain t1)) (domain t1)))
+	       (dbdg2 (when (dep-binding? (domain t2)) (domain t2)))
+	       (bindings (if dbdg1
+			     (acons dbdg1 xvar
+				    (when dbdg2
+				      (acons dbdg2 xvar nil)))
+			     (when dbdg2
+			       (acons dbdg2 xvar nil))))
+	       (npreds (substit preds bindings))
+	       (rapps (mapcar #'(lambda (npred)
+				  (let ((rapp (make!-application npred
+						(make!-application var xvar))))
+				    rapp))
+			npreds))
 	       (conj (make!-conjunction*
 		      (if eq-inc
 			  (cons eq-inc rapps)
 			  rapps)))
-	       (npred (make!-lambda-expr (list vb)
+	       (lpred (make!-lambda-expr (list vb)
 			(make!-forall-expr (list xb) conj))))
-	  (values t2 (cons npred incs)))))))
+	  (values t2 (cons lpred incs)))))))
 
 (defun extract-domain (ftype)
   (let ((dom (dep-binding-type (domain ftype))))
