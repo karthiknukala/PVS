@@ -1357,7 +1357,6 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (setf (ir-function-name (ir einfo)) (mk-ir-function (pvs2ir-unique-decl-id decl) decl));;not needed
     (setf (ir-defn (ir einfo)) (mk-ir-const-formal (pvs2ir-unique-decl-id decl)
 						   (pvs2ir-type (type decl))))
-    (break "pvs2ir-decl*")
     (id decl)))
 
 (defun pvs2ir-formals (irvars pvars bindings);irvars and pvars (pvsvars) are same length
