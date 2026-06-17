@@ -12,6 +12,8 @@
 #+:sbcl
 (require :sb-cltl2)
 #+:sbcl
+(require :sb-introspect)
+#+:sbcl
 (require :sb-aclrepl)
 
 (eval-when (:execute :load-toplevel)
