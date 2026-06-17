@@ -21,6 +21,39 @@
 
 (in-package :pvs)
 
+;;; SBCL has two main types of character: base-string and (vector character)
+;;; When *print-readably* is t, this causes "foo" of type base-string to print
+;;; as #A((3) BASE-CHAR . "foo"). The SBCL manual says that with Unicode
+;;; enabled (the default) strings are all of type (vector character). However,
+;;; symbol-name returns a base-string unless some character within it has code
+;;; above 127. Similarly, (format nil ...) also returns a base-string (same
+;;; conditions).
+
+;;; SBCL includes a setf-able "sb-ext:readtable-base-char-preference" function
+;;; that gives the preference for a specific readtable. This is set to nil for
+;;; *readtable* in the Makefile, to ensure all created symbols have a
+;;; symbol-name of type (vector character).
+
+;;; Unfortunately, format doesn't pay attention to this. To deal with that, we
+;;; redefine format to return the desired type, keeping the original
+;;; definition in 'orig-format.
+
+;;; Note that there may be other ways to generate base-strings, but these are
+;;; the two most common uses in PVS.
+
+#+sbcl
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (fboundp 'orig-format)
+    (setf (symbol-function 'orig-format) (symbol-function 'format))))
+
+#+sbcl
+(sb-ext:without-package-locks
+    (defun format (destination control-string &rest format-arguments)
+      "Redefinition of format to return (vector charater) when a string is returned.
+The original definition is in 'orig-format."
+      (let ((result (apply #'orig-format destination control-string format-arguments)))
+   	(if (typep result 'base-string) (coerce result '(vector character)) result))))
+
 (defmacro tcdebug (ctl &rest args)
   `(when *tcdebug*
      (if *to-emacs*
@@ -41,8 +74,6 @@
 (defmacro length= (l1 l2)
   `(= (length ,l1) (length ,l2)))
 
-(defmacro singleton? (obj)
-  `(and (consp ,obj) (null (cdr ,obj))))
 
 ;;; Like typep, but a little faster.
 ;;; Can only be used on instances of classes.
@@ -262,9 +293,10 @@ After exiting, all of these are reverted to their previous values."
 			 (assert (pvs-context *workspace-session*)
 				 () "Bad pvs-context")
 			 (unwind-protect 
-			      (prog1 (progn (set-working-directory ,truedir) ,@forms)
-				(when (pvs-context-changed *workspace-session*)
-				  (save-context nil t)))
+			      (progn (set-working-directory ,truedir)
+				     ,@forms)
+			   (when (pvs-context-changed *workspace-session*)
+			     (save-context nil t))
 			   (set-working-directory ,orig-dir))))))
 	     (t (error "Library ~a does not exist" (or ,lib-path ,lref)))))))
 
@@ -535,14 +567,12 @@ and all *all-workspace-sessions* applying fn to each theory."
        ;; We want to push new decl-formals into the current-declarations-hash
        ;; But there may already be some there (recursively)
        ;; We remove any clashing ones, and restore after executing body
-       (if (null ,gdecls)
-	   (progn ,@body)
-	   (unwind-protect
-		;; Might have a problem here, if there are decl-formals
-		;; already in the declarations hash
-		(progn (add-decl-formals-to-declarations-hash ,gdecls)
-		       ,@body)
-	     (remove-decl-formals-from-declarations-hash ,gdecls))))))
+       (unwind-protect
+	    ;; Might have a problem here, if there are decl-formals
+	    ;; already in the declarations hash
+	    (progn (add-decl-formals-to-declarations-hash ,gdecls)
+		   ,@body)
+	 (remove-decl-formals-from-declarations-hash ,gdecls)))))
 
 (defun remove-decl-formals-from-declarations-hash (dfmls)
   "Tries to remove the dfmls from the declarations-hash, returining the list
@@ -790,3 +820,16 @@ obj may be of type:
      (handler-case
 	 (progn ,@body)
        (sb-ext:timeout () ,@timeout-body))))
+
+;; (defmethod update-fetched ((obj mapping-with-formals))
+(defmacro undefmethod (name &rest args)
+  (multiple-value-bind (qualifiers lambda-list)
+      (sb-pcl::parse-defmethod args)
+    `(let ((meth (find-method (function ,name) ,qualifiers
+				 ,(cons 'list
+					(mapcar #'(lambda (x)
+						    `(find-class ',(if (consp x) (cadr x) t)))
+					  lambda-list))
+				 nil)))
+       (when meth
+	 (remove-method (function ,name) meth)))))

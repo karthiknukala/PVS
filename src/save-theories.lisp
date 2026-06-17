@@ -1,11 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; -*- Mode: Lisp -*- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; save-theories.lisp -- provides the facilities for saving PVS theories.
 ;; Author          : Carl Witty (with mods by Sam Owre)
-;; Created On      : Sun Aug 14 14:44:02 1994
-;; Last Modified By: Sam Owre
-;; Last Modified On: Fri Oct 30 11:36:10 1998
-;; Update Count    : 5
-;; Status          : Stable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; --------------------------------------------------------------------
@@ -20,6 +15,10 @@
 ;; --------------------------------------------------------------------
 
 (in-package :pvs)
+
+(eval-when (:compile-toplevel :load-toplevel)
+  (undefmethod update-fetched ((obj mapping-with-formals)))
+  (undefmethod restore-object* ((obj store-print-type))))
 
 (defvar *restore-objects-seen*)
 
@@ -36,11 +35,9 @@
 (defvar *restoring-declaration*)
 
 (defun save-theory (theory)
-  (cond ((< (expr-size theory) 50000)
-	 (pvs-log "~%Saving ~a" (binpath-id theory))
-	 (store-object-to-file (cons *binfile-version* theory)
-			       (make-binpath (binpath-id theory))))
-	(t (pvs-message "Theory ~a is too big, not saving" (id theory)))))
+  (pvs-log "~%Saving ~a" (binpath-id theory))
+  (store-object-to-file (cons *binfile-version* theory)
+			(make-binpath (binpath-id theory))))
 
 (defmethod get-theories-to-save (file)
   (mapcan #'get-theories-to-save (sort-theories (get-theories file))))
@@ -899,6 +896,13 @@ type-decls in classes-decl.lisp."
 	    (setf (formals-sans-usings obj)
 		  (remove-if #'(lambda (ff) (typep ff 'importing)) (formals obj)))
 	    (call-next-method)))))
+
+(defmethod restore-object* :around ((obj formula-decl))
+  (call-next-method)
+  (let* ((*generate-tccs* 'none)
+	 (cdef (ignore-errors (universal-closure (definition obj)))))
+    ;; If no cdef, definition was not ground anyway
+    (when cdef (setf (closed-definition obj) cdef))))
 
 (defmethod restore-object* :around ((obj recursive-type))
   (call-next-method)

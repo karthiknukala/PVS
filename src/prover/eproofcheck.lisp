@@ -498,8 +498,7 @@
 
 ;; Modified by MM to inclue auto-fix [February 19, 2020]
 (defun save-proof-info (decl init-real-time init-run-time)
-  (unless (and (current-session)
-	       (not (save? (current-session))))
+  (unless (and (current-session))
     (let* ((prinfo (let ((sess (current-session)))
 		     (if sess
 			 (make-prf-info decl nil (id sess) "")

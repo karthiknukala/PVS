@@ -26,7 +26,7 @@
 (defvar *preceding-prelude-theories* nil)
 (defvar *preceding-mono-theories* nil)
 (defvar *all-mono-theories* nil)
-(defvar *suppress-output* nil)
+(defvar *suppress-output* t)
 (defvar *update-lhs-vars* nil)
 (defvar *update-lhs-bindings* nil)
 (defvar *new-offset-bindings* nil)
