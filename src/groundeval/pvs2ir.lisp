@@ -5063,7 +5063,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	   (t (break "Not implemented yet."))))
     ((|__int128| |__uint128|) (break "Not implemented yet."))
     (|mpz| (let* ((mpq-return-var (gentemp "tmp"))
-		(mpq-instrs (ir2c-division-step mpq-return-var "mpq" arg1 arg1-c-type arg1 arg2-c-type)))
+		(mpq-instrs (ir2c-division-step mpq-return-var '|mpq| arg1 arg1-c-type arg1 arg2-c-type)))
 	   (cons (format nil "mpq_t ~a" mpq-return-var)
 		 (nconc mpq-instrs
 			(list (format nil "mpz_mk_set_q(~a, ~a)" return-var mpq-return-var)
