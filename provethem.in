@@ -956,7 +956,7 @@ if ($clearpath) {
 }
 
 if ($addpath) {
-    $pwd=getcwd;
+    $pwd=Cwd::getcwd();
     print "Adding $pwd to PVS_LIBRARY_PATH.\n";
     $pvslibrarypath = $ENV{'PVS_LIBRARY_PATH'};
     if ($pvslibrarypath) {

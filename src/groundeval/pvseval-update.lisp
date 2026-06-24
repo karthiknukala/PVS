@@ -1979,7 +1979,7 @@ theory formals."
 					  (or (internal (eval-info decl))
 					      (external (eval-info decl))))
 			       (progn
-				 (unless (eval-info decl)(make-c-eval-info decl))
+				 (make-c-eval-info decl)
 				 (or (external-lisp-function decl)
 				     (pvs2cl-external-lisp-function decl))
 				 (or (lisp-function decl)
@@ -2059,9 +2059,10 @@ theory formals."
 		    (rec-decl (declaration recognizer))
 		    (rec-id (makenewsym "~a" (id recognizer)))
 		    (rec-defn `(defun ,rec-id (x) (eql x ,pos))))
-	       (unless (eval-info decl) (make-c-eval-info decl))
+	       ;; Calling make-c-eval-info has no effect unless slots are missing
+	       (make-c-eval-info decl)
 	       (setf (in-name decl) pos)
-	       (unless (eval-info rec-decl)(make-c-eval-info rec-decl))
+	       (make-c-eval-info rec-decl)
 	       (setf (in-name rec-decl) rec-id)
 	       (setf (definition (in-defn rec-decl))
 		     rec-defn)
@@ -2075,8 +2076,9 @@ theory formals."
 		      (xvar (gentemp "x"))
 		      )
 ;;		 (break "pvs2cl-constructor")
-		 (unless (eval-info (declaration constructor))
-		   (make-c-eval-info (declaration constructor)))
+		 ;; make-c-eval-info ensures all defn slots are available
+		 (make-c-eval-info (declaration constructor))
+		 (assert (in-info (declaration constructor)))
 		 (setf (definition (in-defn-m (declaration constructor)))
 		       defn)
 		 (setf (in-name-m (declaration constructor))
@@ -2103,14 +2105,11 @@ theory formals."
 		     (eval udefn)
 		     (setf (in-name (declaration constructor))
 			   uname)))
-		 (unless (eval-info (declaration (recognizer constructor)))
-		   (make-c-eval-info (declaration (recognizer constructor))))
+		 (make-c-eval-info (declaration (recognizer constructor)))
 		 (setf (in-name (declaration (recognizer constructor)))
 		       (makesym "~a?" struct-id))
 		 (loop for x in accessors
-		    do (unless (and (eval-info (declaration x))
-				    (lisp-function (declaration x)))
-			 (make-c-eval-info (declaration x)))
+		    do (make-c-eval-info (declaration x))
 		    do (pvs2cl-accessor-defn*
 			      (declaration x) constructor
 			      struct-id all-structs
