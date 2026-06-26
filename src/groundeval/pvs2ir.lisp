@@ -1357,7 +1357,6 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
     (setf (ir-function-name (ir einfo)) (mk-ir-function (pvs2ir-unique-decl-id decl) decl));;not needed
     (setf (ir-defn (ir einfo)) (mk-ir-const-formal (pvs2ir-unique-decl-id decl)
 						   (pvs2ir-type (type decl))))
-    (break "pvs2ir-decl*")
     (id decl)))
 
 (defun pvs2ir-formals (irvars pvars bindings);irvars and pvars (pvsvars) are same length
@@ -5064,7 +5063,7 @@ PVS identifiers allow UTF-8, but C generally disallows them. Any char "
 	   (t (break "Not implemented yet."))))
     ((|__int128| |__uint128|) (break "Not implemented yet."))
     (|mpz| (let* ((mpq-return-var (gentemp "tmp"))
-		(mpq-instrs (ir2c-division-step mpq-return-var "mpq" arg1 arg1-c-type arg1 arg2-c-type)))
+		(mpq-instrs (ir2c-division-step mpq-return-var '|mpq| arg1 arg1-c-type arg1 arg2-c-type)))
 	   (cons (format nil "mpq_t ~a" mpq-return-var)
 		 (nconc mpq-instrs
 			(list (format nil "mpz_mk_set_q(~a, ~a)" return-var mpq-return-var)
