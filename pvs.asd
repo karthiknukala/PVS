@@ -333,7 +333,7 @@
 		  (:file "strategies")
 		  (:file "wish")
 		  (:file "translate-to-yices")
-		  (:file "yices2/api-loader")
+		  (:file "yices2/y2loader")
 		  (:file "translate-to-yices2"))
      :depends-on (typechecker))
    (:module bddlib
