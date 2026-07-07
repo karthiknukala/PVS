@@ -434,6 +434,7 @@ pvs-prover = src/prover/checker-macros.lisp \
 	 src/prover/freevars.lisp \
 	 src/prover/rewrites.lisp \
 	 src/prover/assert.lisp \
+	 src/prover/ics/ics-dpi.lisp \
 	 src/prover/beta-reduce.lisp \
 	 src/prover/replace.lisp \
 	 src/prover/expand.lisp \

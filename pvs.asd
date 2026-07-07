@@ -325,6 +325,7 @@
 		  (:file "freevars")
 		  (:file "rewrites")
 		  (:file "assert")
+		  (:file "ics/ics-dpi")
 		  (:file "beta-reduce")
 		  (:file "replace")
 		  (:file "expand")
