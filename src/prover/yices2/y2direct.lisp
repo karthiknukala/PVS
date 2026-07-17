@@ -114,12 +114,16 @@
 
 (defun y2direct-check-term (term control &rest args)
   (if (y2direct-null-term-p term)
-      (apply #'y2api-err control args)
+      (error 'y2api-error
+             :format-control control
+             :format-arguments args)
       term))
 
 (defun y2direct-check-type (type control &rest args)
   (if (y2direct-null-type-p type)
-      (apply #'y2api-err control args)
+      (error 'y2api-error
+             :format-control control
+             :format-arguments args)
       type))
 
 (defun y2direct-note-assertion (term)
@@ -721,11 +725,19 @@
         (list (y2direct-type sdom bindings)))))
 
 (defmethod y2direct-type ((ty funtype) bindings)
-  (with-slots (domain range) ty
-    (y2direct-function-type*
-     (y2direct-domain-types domain bindings)
-     (y2direct-type range bindings)
-     ty)))
+  ;; PVS bitvectors are represented by the function type
+  ;; [below(N) -> bool].  Recognize that encoding before treating an ordinary
+  ;; function as a Yices function; otherwise bitvector operators receive a
+  ;; function-typed argument and the C API returns NULL_TERM.
+  (if (y2direct-bitvector-type-p ty)
+      (progn
+        (setq *y2direct-has-bitvectors?* t)
+        (y2/bv-type (y2direct-bitvector-width ty)))
+      (with-slots (domain range) ty
+        (y2direct-function-type*
+         (y2direct-domain-types domain bindings)
+         (y2direct-type range bindings)
+         ty))))
 
 (defmethod y2direct-term :around ((obj expr) bindings)
   (if bindings

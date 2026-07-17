@@ -1,0 +1,65 @@
+(|y2_payload|)
+(|y2shostak|
+ (|nla_uf_transport| 0
+  (|nla_uf_transport-1| NIL 3992701634
+   ("" (SKEEP*) (("" (ASSERT) NIL NIL)) NIL)
+   ((|real_times_real_is_real| APPLICATION-JUDGEMENT "real" |reals| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (TRUE CONST-DECL "bool" |booleans| NIL))
+   SHOSTAK))
+ (|nla_nonconvex_arrangement| 0
+  (|nla_nonconvex_arrangement-1| NIL 3992701703
+   ("" (SKEEP*) (("" (ASSERT) NIL NIL)) NIL)
+   ((|real_times_real_is_real| APPLICATION-JUDGEMENT "real" |reals| NIL)
+    (NIL APPLICATION-JUDGEMENT "above(n)" |exp2| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (TRUE CONST-DECL "bool" |booleans| NIL))
+   Y2SHOSTAK))
+ (|nla_datatype_transport| 0
+  (|nla_datatype_transport-1| NIL 3992701726
+   ("" (SKEEP*) (("" (ASSERT) NIL NIL)) NIL)
+   ((|real_times_real_is_real| APPLICATION-JUDGEMENT "real" |reals| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (TRUE CONST-DECL "bool" |booleans| NIL))
+   Y2SHOSTAK))
+ (|bv_uf_transport| 0
+  (|bv_uf_transport-1| NIL 3992701744
+   ("" (ASSERT) (("" (SKEEP*) (("" (ASSERT) NIL NIL)) NIL)) NIL)
+   ((TRUE CONST-DECL "bool" |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL))
+   Y2SHOSTAK))
+ (|mixed_nla_bv_uf| 0
+  (|mixed_nla_bv_uf-1| NIL 3992701432 ("" (SKEEP*) (("" (ASSERT) NIL NIL)) NIL)
+   ((|real_times_real_is_real| APPLICATION-JUDGEMENT "real" |reals| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (TRUE CONST-DECL "bool" |booleans| NIL))
+   Y2SHOSTAK))
+ (|difference_uf_transport| 0
+  (|difference_uf_transport-1| NIL 3992701797
+   ("" (SKEEP*) (("" (POSTPONE) NIL NIL)) NIL)
+   ((|real_le_is_total_order| NAME-JUDGEMENT "(total_order?[real])"
+     |real_props| NIL)
+    (|real_plus_real_is_real| APPLICATION-JUDGEMENT "real" |reals| NIL)
+    (|minus_nzint_is_nzint| APPLICATION-JUDGEMENT "nzint" |integers| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (TRUE CONST-DECL "bool" |booleans| NIL))
+   Y2SHOSTAK))
+ (|readable_residual| 0
+  (|readable_residual-1| NIL 3992701856
+   ("" (SKEEP*) (("" (ASSERT) (("" (POSTPONE) NIL NIL)) NIL)) NIL) NIL
+   Y2SHOSTAK))
+ (|nla_false_with_model| 0
+  (|nla_false_with_model-1| NIL 3992701944
+   ("" (SKEEP*) (("" (ASSERT) (("" (POSTPONE) NIL NIL)) NIL)) NIL) NIL
+   Y2SHOSTAK))
+ (|bv_false_with_partial_model| 0
+  (|bv_false_with_partial_model-1| NIL 3992702019
+   ("" (SKEEP*) (("" (ASSERT) (("" (POSTPONE) NIL NIL)) NIL)) NIL) NIL
+   Y2SHOSTAK)))
+

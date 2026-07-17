@@ -1,0 +1,56 @@
+% Linear/monomial lifting examples for Y2CAD
+%
+% In the PVS Lisp listener:
+%
+%   (set-decision-procedure 'y2cad)
+%
+% Ordinary proof:
+%
+%   (then (skosimp*) (assert))
+%
+% Compact and white-box scheduler traces:
+%
+%   (then (y2cad-trace)  (skosimp*) (assert))
+%   (then (y2cad-trace$) (skosimp*) (assert))
+%
+% The status summary includes the number of exact MCSAT invocations. Purely
+% linear problems and contradictions visible in the lifted LRA relaxation use
+% zero. A genuinely nonlinear compatibility check normally uses one.
+
+y2cad: THEORY
+BEGIN
+
+  % The lifted problem has no nonlinear monomials. Simplex is exact, so the
+  % MCSAT compatibility controller is never started.
+  linear_zero_mcsat: THEOREM
+    FORALL (x, y: real):
+      x + y = 7 AND x - y = 1 IMPLIES x = 4
+
+  % Treating x^2 as an independent z-variable is already contradictory here.
+  % The LRA relaxation closes the branch with zero MCSAT calls.
+  relaxation_zero_mcsat: THEOREM
+    FORALL (x: real): x * x >= 2 AND x * x <= 1 IMPLIES x = 0
+
+  % The relaxation permits z_(x^2)=2 together with x>=2. Compatibility with
+  % z_(x^2)=x*x rules that region out, so this proof reaches one exact MCSAT
+  % checkpoint to establish the real-root ordering.
+  root_bound_one_mcsat: THEOREM
+    FORALL (x: real): x * x = 2 IMPLIES x < 2
+
+  % A two-variable real-algebraic compatibility problem. LRA admits negative
+  % lifted square variables; the monomial variety does not.
+  empty_real_circle_one_mcsat: THEOREM
+    FORALL (x, y: real): x * x + y * y = -1 IMPLIES x = y
+
+  % From xy=1 and x^2+y^2=2, real algebra forces (x-y)^2=0. The lifted linear
+  % region alone cannot relate z_(xy), z_(x^2), and z_(y^2).
+  coupled_products_one_mcsat: THEOREM
+    FORALL (x, y: real):
+      x * y = 1 AND x * x + y * y = 2 IMPLIES x = y
+
+  % Intentionally false. The positive square root is retained as an exact
+  % controller model projection and the ordinary PVS sequent stays open.
+  positive_root_counterexample: THEOREM
+    FORALL (x: real): x * x = 2 IMPLIES x < 0
+
+END y2cad

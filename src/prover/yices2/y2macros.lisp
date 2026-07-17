@@ -170,18 +170,6 @@ Examples:
 
 
 ;; --------------------------------------------------------------------
-;; Helpers for C arrays of terms
-
-(defmacro y2/%with-term-array ((ptr terms-form) &body body)
-  `(let* ((terms-list ,terms-form)
-          (n (length terms-list)))
-     (cffi:with-foreign-object (,ptr 'term_t n)
-       (loop for term in terms-list
-             for i from 0
-             do (setf (cffi:mem-aref ,ptr 'term_t i) term))
-       ,@body)))
-
-;; --------------------------------------------------------------------
 ;; Arithmetic
 
 (defun y2/+ (&rest terms)

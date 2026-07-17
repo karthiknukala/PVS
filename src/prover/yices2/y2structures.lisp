@@ -30,6 +30,18 @@
 (defvar *y2/manager* nil)
 (defvar *y2/stack* nil)
 
+;; This macro is needed by context operations in this file.  Keep it before
+;; those function definitions so source loading does not compile the calls as
+;; ordinary (and undefined) functions.  Y2MACROS builds on this primitive.
+(defmacro y2/%with-term-array ((ptr terms-form) &body body)
+  `(let* ((terms-list ,terms-form)
+          (n (length terms-list)))
+     (cffi:with-foreign-object (,ptr 'term_t n)
+       (loop for term in terms-list
+             for i from 0
+             do (setf (cffi:mem-aref ,ptr 'term_t i) term))
+       ,@body)))
+
 ;; These are the usual Yices smt_status_t enum values.
 ;; Verify once against your local yices_types.h.
 (defconstant +y2/status-idle+ 0)

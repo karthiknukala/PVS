@@ -1,0 +1,135 @@
+% Hybrid PVS/Shostak + Yices2 examples
+%
+% Select the decision procedure in the PVS Lisp listener (M-x pvs-lisp):
+%
+%   (set-decision-procedure 'y2shostak)
+%
+% Start or restart a proof after changing the decision procedure.  For each
+% theorem intended to close, use this prover command:
+%
+%   (then (skosimp*) (assert))
+%
+% ASSERT is important here: it is the ordinary PVS assertion/rewrite loop,
+% now backed by the Y2SHOSTAK whiteboard.  It therefore returns learned facts
+% to PVS and prints the simplified PVS sequent instead of replacing the proof
+% state with an opaque external-solver answer.
+%
+% On an intentionally false/open theorem, these read-only prover commands
+% explain what happened without changing the proof state:
+%
+%   (y2shostak-status)
+%   (y2shostak-model)
+%   (y2shostak-counterexample)
+%
+% For a compact routing/fixed-point trace, run this before ASSERT:
+%
+%   (y2shostak-trace)
+%
+% The white-box form additionally prints canonical whiteboard inputs,
+% purified Yices assertions, interface terms, and demand routing.  Equality
+% and disequality propagation is intentionally omitted.  It follows the same
+% naming convention as GRIND/GRIND$:
+%
+%   (y2shostak-trace$)
+%   (y2shostak-untrace)
+%
+% The last command prints the current residual PVS sequent first.  That
+% sequent is authoritative.  The model beneath it is explicitly a satellite
+% projection: predicates and datatype facts owned only by the whiteboard may
+% not occur in it.
+
+y2_payload: DATATYPE
+BEGIN
+  box(contents: real): box?
+END y2_payload
+
+y2shostak: THEORY
+BEGIN
+
+  IMPORTING y2_payload
+
+  Word4: TYPE = bvec[4]
+
+  % ASSERT submits the whole IFF to the hybrid procedure.  The nonzero
+  % subtype fact and the negated equivalence are enough for the base QF_NRA
+  % check, so no deeper type-predicate frontier is needed for the goal.
+  nonzero_division_cancel: THEOREM
+    FORALL (n0z: nonzero_real, x, y: real):
+      (x / n0z = y / n0z) IFF x = y
+
+  % MCSAT proves f(x) = 0 from the nonlinear premise.  The central
+  % Shostak congruence closure then transports the uninterpreted predicate.
+  % Baseline Shostak cannot derive the nonlinear equality; a standalone
+  % QF_NRA/MCSAT context cannot contain the predicate application.
+  nla_uf_transport: THEOREM
+    FORALL (f: [real -> real], p: [real -> bool], x: real):
+      f(x) * f(x) = 0 AND p(0) IMPLIES p(f(x))
+
+  % This consequence is non-convex: f(x)^2 = 1 gives f(x) = 1 OR f(x) = -1.
+  % Y2SHOSTAK exposes the needed equalities as ordinary PVS arrangement
+  % branches; both branches close through the whiteboard predicate facts.
+  nla_nonconvex_arrangement: THEOREM
+    FORALL (f: [real -> real], p: [real -> bool], x: real):
+      f(x) * f(x) = 1 AND p(1) AND p(-1) IMPLIES p(f(x))
+
+  % Constructor/accessor reduction is performed by baseline PVS/Shostak,
+  % while MCSAT supplies the nonlinear equality used by UF closure.
+  nla_datatype_transport: THEOREM
+    FORALL (f: [real -> real], p: [real -> bool], x: real):
+      contents(box(f(x))) * contents(box(f(x))) = 0 AND p(0)
+        IMPLIES p(contents(box(f(x))))
+
+  % The bitvector satellite learns that XOR(x,x) = XOR(y,y); baseline
+  % Shostak uses that equality under the uninterpreted predicate p.
+  bv_uf_transport: THEOREM
+    FORALL (p: [Word4 -> bool], x, y: Word4):
+      p(XOR(x, x)) IMPLIES p(XOR(y, y))
+
+  % This is the flagship cross-satellite example.  No single Yices context
+  % is asked to combine MCSAT nonlinear arithmetic with bitvectors.  The NRA
+  % and BV satellites independently publish f(r)=0 and XOR(x,x)=XOR(y,y) on
+  % the PVS whiteboard; UF congruence then joins those facts under bridge.
+  mixed_nla_bv_uf: THEOREM
+    FORALL (f: [real -> real],
+            bridge: [[real, Word4] -> bool],
+            r: real, x, y: Word4):
+      f(r) * f(r) = 0 AND bridge(0, XOR(x, x))
+        IMPLIES bridge(f(r), XOR(y, y))
+
+  % The RFW/Floyd-Warshall difference satellite can publish x = y + 3;
+  % the whiteboard then rewrites through the uninterpreted predicate.
+  difference_uf_transport: THEOREM
+    FORALL (p: [real -> bool], x, y: real):
+      x <= y + 3 AND y + 3 <= x AND p(x) IMPLIES p(y + 3)
+
+  % ------------------------------------------------------------------
+  % Intentionally open formulas for readable failures and model projection
+
+  % After (then (skosimp*) (assert)), baseline PVS eliminates the datatype
+  % constructor/accessor shell and Y2SHOSTAK learns f(x)=0 internally, but it
+  % cannot invent the missing relationship between guard and target.  The
+  % surviving obligation is displayed in ordinary PVS syntax.  Run
+  % (y2shostak-counterexample) to print that readable sequent again together
+  % with the satellite projection that shows f(x)=0.
+  readable_residual: THEOREM
+    FORALL (f: [real -> real], guard, target: [real -> bool], x: real):
+      contents(box(f(x))) * contents(box(f(x))) = 0
+        AND guard(contents(box(f(x))))
+          IMPLIES target(contents(box(f(x))))
+
+  % This theorem is false: x = sqrt(2) is a counterexample.  ASSERT leaves a
+  % readable PVS branch.  (y2shostak-model) shows the MCSAT value for x, and
+  % (y2shostak-counterexample) combines that projection with the residual
+  % sequent.  Algebraic values that are not small PVS rationals are labeled
+  % and printed as decimal approximations.
+  nla_false_with_model: THEOREM
+    FORALL (x: real): x * x = 2 IMPLIES x < 0
+
+  % A mixed false formula demonstrates why the word "projection" matters.
+  % The BV model can show x, but p is owned by the PVS whiteboard.  The PVS
+  % sequent, not the partial Yices assignment, records the missing p fact.
+  bv_false_with_partial_model: THEOREM
+    FORALL (p: [Word4 -> bool], x: Word4):
+      p(XOR(x, x)) IMPLIES p(x)
+
+END y2shostak

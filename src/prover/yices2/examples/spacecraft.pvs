@@ -1,0 +1,220 @@
+% Spacecraft command-firewall challenge for Y2SHOSTAK
+%
+% This theory deliberately mixes the specification features that are natural
+% in PVS but awkward to flatten into one solver problem: records, datatypes,
+% record updates, fixed-width command words, nonlinear physical constraints,
+% timing constraints, resource equations, and uninterpreted policy predicates.
+%
+% In the PVS Lisp listener, after typechecking this file:
+%
+%   (set-decision-procedure 'y2shostak)
+%
+% Start or restart a proof and use:
+%
+%   (then (skosimp*) (assert))
+%
+% Compact and white-box diagnostic runs are respectively:
+%
+%   (then (y2shostak-trace)  (skosimp*) (assert))
+%   (then (y2shostak-trace$) (skosimp*) (assert))
+%   (y2shostak-untrace)
+%
+% On BAD_BRAKING_ENVELOPE, leave the branch open and inspect it with:
+%
+%   (y2shostak-status)
+%   (y2shostak-model)
+%   (y2shostak-counterexample)
+
+spacecraft_mode: DATATYPE
+BEGIN
+  cruise_mode: cruise_mode?
+  hold_mode: hold_mode?
+  braking_mode: braking_mode?
+  safe_mode: safe_mode?
+END spacecraft_mode
+
+spacecraft_command: DATATYPE
+BEGIN
+  brake_request(requested_margin: real): brake_request?
+  hold_request: hold_request?
+END spacecraft_command
+
+spacecraft: THEORY
+BEGIN
+
+  IMPORTING spacecraft_mode, spacecraft_command
+
+  CommandWord: TYPE = bvec[8]
+
+  Telemetry: TYPE =
+    [# velocity: real,
+       deceleration: real,
+       clearance: real,
+       clock: int,
+       mode: spacecraft_mode #]
+
+  % A command commitment is the object signed by the flight-authorization
+  % policy.  Keeping it as a PVS record makes a failed proof show the actual
+  % operational fields instead of an encoded solver tuple.
+  Commitment: TYPE =
+    [# mode: spacecraft_mode,
+       primary: CommandWord,
+       backup: CommandWord,
+       margin: real,
+       execution_tick: int,
+       oxygen: real,
+       fuel: real #]
+
+  % ------------------------------------------------------------------
+  % Component obligations, each selecting a different specialist
+
+  % A command word is masked for transport and unmasked at the firewall.
+  % CDCL(T)/QF_UFBV proves the round trip; the PVS egraph transports the
+  % result through the uninterpreted ACCEPTED predicate.
+  redundant_mask_round_trip: THEOREM
+    FORALL (accepted: [CommandWord -> bool], frame, key: CommandWord):
+      accepted(frame)
+        IMPLIES accepted(XOR(XOR(frame, key), key))
+
+  % Integer difference logic establishes that two presentations of the
+  % five-tick deadline are equal.  This is routed to the IFW/Floyd-Warshall
+  % satellite, then propagated through the uninterpreted FRESH predicate.
+  deadline_freshness: THEOREM
+    FORALL (fresh: [int -> bool], now, sent: int):
+      now <= sent + 5 AND sent + 5 <= now AND fresh(sent + 5)
+        IMPLIES fresh(now)
+
+  % A sum constraint is not difference logic.  The Simplex satellite solves
+  % the coupled resource allocation and the whiteboard transports the solution
+  % through the two-argument BALANCED predicate.
+  simplex_resource_allocation: THEOREM
+    FORALL (balanced: [[real, real] -> bool], oxygen, fuel: real):
+      oxygen + fuel = 3 AND oxygen - fuel = 1
+        AND balanced(2, 1)
+          IMPLIES balanced(oxygen, fuel)
+
+  % MCSAT supplies a non-convex physical consequence.  Both possible signs
+  % of the normalized braking residual are authorized, so PVS explores the
+  % equality arrangements and closes both branches.
+  nonconvex_braking_residual: THEOREM
+    FORALL (permitted: [real -> bool], residual: real):
+      residual * residual = 1 AND permitted(1) AND permitted(-1)
+        IMPLIES permitted(residual)
+
+  % Baseline PVS/Shostak owns datatype constructor/accessor reduction and
+  % record-update canonization.  This is intentionally stated without an
+  % expansion lemma: ASSERT should expose the user-readable reductions.
+  datatype_record_firewall: THEOREM
+    FORALL (authorized: [[spacecraft_mode, real] -> bool],
+            state: Telemetry, margin: real):
+      authorized(braking_mode, margin)
+        IMPLIES
+          authorized((state WITH [`mode := braking_mode])`mode,
+                     requested_margin(brake_request(margin)))
+
+  % ------------------------------------------------------------------
+  % End-to-end heterogeneous challenge
+
+  % RESIDUAL is supplied by a separately verified monitor for the classical
+  % stopping-distance relation v^2 = 2*a*d.  Its component contract exposes the
+  % real-valued residual without forcing this command-firewall theorem to inline
+  % the monitor implementation. MCSAT infers residual = 0 from residual^2 = 0.
+  % Independently, the BV satellite proves that transport masking is reversible.
+  % Baseline Shostak reduces the record update and datatype accessor, and then
+  % its egraph joins all three equalities under the AUTHORIZED policy predicate.
+  % Neither baseline Shostak nor a single Yices MCSAT context proves this
+  % formulation on its own.
+  command_firewall_refinement: THEOREM
+    FORALL (authorized: [[spacecraft_mode, CommandWord, real] -> bool],
+            state: Telemetry, frame, key: CommandWord, residual: real):
+      residual * residual = 0
+        AND authorized(braking_mode, frame, 0)
+          IMPLIES
+            authorized((state WITH [`mode := braking_mode])`mode,
+                       XOR(XOR(frame, key), key),
+                       requested_margin(brake_request(residual)))
+
+  % The same cross-theory proof, now stated directly over spacecraft
+  % telemetry.  The PVS polynomial canonizer turns the nonlinear
+  % stopping-distance invariant v^2 = 2*a*d into a zero braking margin.
+  % That equality crosses the whiteboard before the datatype, record-update,
+  % bitvector, and UF portions close the authorization goal.
+  physical_command_firewall: THEOREM
+    FORALL (authorized: [[spacecraft_mode, CommandWord, real] -> bool],
+            state: Telemetry, frame, key: CommandWord):
+      state`velocity * state`velocity =
+        2 * state`deceleration * state`clearance
+        AND authorized(braking_mode, frame, 0)
+          IMPLIES
+            authorized((state WITH [`mode := braking_mode])`mode,
+                       XOR(XOR(frame, key), key),
+                       requested_margin(
+                         brake_request(
+                           state`velocity * state`velocity
+                             - 2 * state`deceleration * state`clearance)))
+
+  % A larger policy theorem adds an exact timestamp presentation.  Because
+  % the accumulated arithmetic problem is nonlinear, MCSAT handles both the
+  % nonlinear residual and the linear clock constraints, while the BV and
+  % whiteboard engines still operate independently around it.
+  accepted_command_is_safe: THEOREM
+    FORALL (safe: [[spacecraft_mode, CommandWord, real, int] -> bool],
+            state: Telemetry, frame, key: CommandWord,
+            residual: real, sent: int):
+      residual * residual = 0
+        AND state`clock <= sent + 5
+        AND sent + 5 <= state`clock
+        AND safe(braking_mode, frame, 0, sent + 5)
+          IMPLIES
+            safe((state WITH [`mode := braking_mode])`mode,
+                 XOR(XOR(frame, key), key),
+                 requested_margin(brake_request(residual)),
+                 state`clock)
+
+  % ------------------------------------------------------------------
+  % Mission-level challenge
+
+  % This is intentionally more than a bundle of independent lemmas.  APPROVED
+  % is the relational view of a Commitment used at the solver boundary, so
+  % every field remains visible as shared whiteboard vocabulary.  Every
+  % specialist must publish its equality before PVS congruence closure can
+  % identify the goal policy application with the approved one:
+  %
+  %   * MCSAT proves the sign-insensitive residual is zero;
+  %   * the arithmetic layer solves the coupled oxygen/fuel allocation
+  %     (the linear fragment is subsumed by MCSAT in this mixed obligation);
+  %   * integer difference constraints identify the execution deadline;
+  %   * two BV channels independently remove their transport masks;
+  %   * baseline Shostak reduces the mode update and datatype accessor, then
+  %     rebuilds the authorization application.
+  dual_channel_braking_commitment: THEOREM
+    FORALL (approved:
+              [[spacecraft_mode, CommandWord, CommandWord, real, int,
+                real, real] -> bool],
+            state: Telemetry,
+            primary, primary_key, backup, backup_key: CommandWord,
+            residual, oxygen, fuel: real, sent: int):
+      residual * residual = 0
+        AND oxygen + fuel = 3
+        AND oxygen - fuel = 1
+        AND state`clock <= sent + 5
+        AND sent + 5 <= state`clock
+        AND approved(braking_mode, primary, backup, 0, sent + 5, 2, 1)
+          IMPLIES
+            approved((state WITH [`mode := braking_mode])`mode,
+                     XOR(XOR(primary, primary_key), primary_key),
+                     XOR(XOR(backup, backup_key), backup_key),
+                     requested_margin(brake_request(residual)),
+                     state`clock, oxygen, fuel)
+
+  % ------------------------------------------------------------------
+  % Intentional failure for readable counterexample/model diagnostics
+
+  % The positive square root of two refutes this proposed braking policy.
+  % Y2SHOSTAK leaves the ordinary PVS sequent open and reports the MCSAT
+  % algebraic approximation as a satellite projection.
+  bad_braking_envelope: THEOREM
+    FORALL (residual: real):
+      residual * residual = 2 IMPLIES residual < 0
+
+END spacecraft

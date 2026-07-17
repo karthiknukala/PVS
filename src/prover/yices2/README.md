@@ -19,7 +19,167 @@ The folder is organized as follows:
  - `y2structures.lisp`: defines scoped Yices2 managers/stacks, context ownership, solver initialization/cleanup, push/pop scopes, configuration/parameter updates, and interpolation checks.
  - `y2macros.lisp`: given C bindings in `y2bindings.lisp`, `y2macros` defines a layer of Lisp macros that lets users manipulate term structure and invoke solvers safely.
  - `y2prover.lisp`: defines the PVS proof strategies, translates the sequent according to loaded theories from the `theories/` folder (or best-effort if none)
+ - `y2shostak.lisp`: registers the `y2shostak` whiteboard decision procedure.
+   Baseline PVS/Shostak receives every literal and owns shared canonization,
+   congruence closure, datatype/tuple/update rules, rewriting, and interface
+   equalities. Specialized Yices contexts receive purified theory projections
+   and publish only proved equalities, disequalities, or conflicts.
+ - `y2cad.lisp`: registers the `y2cad` QF_NRA decision procedure. It expands
+   polynomials into a linear system over monomial variables, uses Simplex as a
+   cheap relaxation gate, and invokes an exact MCSAT monomial-compatibility
+   controller only at nonlinear branch-closure checkpoints.
  - `api.spec`: Yices2 C API typedefs to be used by the `y2bindings.lisp` macro loaders
+
+To use the hybrid solver for ordinary PVS proof commands, select it as the
+decision procedure:
+
+```lisp
+(set-decision-procedure 'y2shostak)
+```
+
+Run that form in the PVS Lisp listener after opening/typechecking the target
+context, then start or restart the proof.  Within the prover, the usual PVS
+assertion loop invokes the whiteboard and its satellites:
+
+```lisp
+(then (skosimp*) (assert))
+```
+
+If a branch remains open, the following observational prover commands preserve
+the sequent while reporting the orchestrator state and its last satisfiable
+satellite projection:
+
+```lisp
+(y2shostak-status)
+(y2shostak-model)
+(y2shostak-counterexample)
+```
+
+Tracing follows the `grind`/`grind$` convention. Enable the compact,
+black-boxish event stream before invoking `assert` with:
+
+```lisp
+(y2shostak-trace)
+```
+
+It shows whiteboard routing, selected satellites and logics, fixed-point round
+results, type-predicate frontiers, conflicts, and arrangement splits. Equality
+and disequality propagation through the Shostak e-graph is intentionally omitted
+at both trace levels. The dollar form exposes the white-box details:
+
+```lisp
+(y2shostak-trace$)
+```
+
+In full mode, the trace additionally shows each input and baseline canonical
+form, every purified assertion sent to a satellite, the PVS-to-Yices interface
+vocabulary, and demand constraints routed to a satellite. Turn either mode off
+with:
+
+```lisp
+(y2shostak-untrace)
+```
+
+All three trace commands leave the current sequent unchanged. At the Lisp
+level, the corresponding setting is `*y2shostak-trace-level*`, whose supported
+values are `nil`, `:summary`, and `:full`; the older
+`*y2shostak-verbose* = t` setting remains an alias for compact tracing.
+
+The default satellite check is a bounded, demand-driven loop. It first checks
+only the accumulated base constraints and immediate interface terms. If that
+does not close the branch, it adds the type predicates of those terms and
+checks again; subsequent rounds expose the type predicates of one deeper layer
+of subterms at a time. `*y2shostak-max-typepred-depth*` bounds this expansion.
+Reaching the bound never turns the incomplete search into a proof.
+
+Before a constraint is inserted or translated for Yices, the Shostak
+whiteboard canonicalizes it. Canonically true and duplicate constraints do not
+enter a Yices context, and canonically equal value terms share one Yices term.
+Each routed constraint retains its pre-insertion whiteboard so it cannot rewrite
+itself while being translated.
+
+`y2shostak-counterexample` prints the residual PVS sequent first.  That sequent
+is the authoritative counterexample obligation and remains available for more
+interactive simplification.  The model is deliberately labeled a *satellite
+projection*: it can show arithmetic and bitvector interface values, but it may
+omit predicates, datatype structure, or other symbols owned only by the PVS
+whiteboard.  Model assignments are never learned as logical facts.
+
+[`examples/y2shostak.pvs`](examples/y2shostak.pvs) contains closing examples for
+NLA+UF, non-convex arrangements, NLA+datatypes, BV+UF, and a cross-satellite
+NLA+BV+UF obligation, plus intentionally open examples showing readable PVS
+sequents and projected countermodels.
+
+### Demand-driven linear/monomial NRA (`y2cad`)
+
+Select the lifted QF_NRA procedure with:
+
+```lisp
+(set-decision-procedure 'y2cad)
+```
+
+For every expanded monomial `x^alpha`, `y2cad` introduces a real variable
+`z_alpha`. Polynomial literals become linear constraints over the `z` terms.
+The LRA/Simplex relaxation receives these constraints and `z_0 = 1`. The exact
+controller additionally receives `z_ei = x_i` and recursively factored
+identities `z_(alpha+beta) = z_alpha * z_beta`; consequently its QF_NRA/MCSAT
+query is equisatisfiable with the original polynomial conjunction.
+
+The scheduler is intentionally demand-driven:
+
+- A purely linear problem uses no MCSAT context.
+- An inconsistent lifted relaxation closes in Simplex and uses no MCSAT
+  context.
+- Satisfiable nonlinear premises are accumulated without invoking MCSAT.
+- MCSAT is invoked at a nonlinear closure checkpoint, normally the negated
+  goal or final DPI validity query. Its result is cached by polynomial-
+  constraint generation, so repeated checks do not invoke it again.
+
+Thus MCSAT supplies exactly the real-algebraic compatibility information that
+the independent monomial variables omit; lifting is not presented as a
+replacement for that information. Quantifier elimination and arbitrary
+first-order RCF formulas are outside this interface. PVS first skolemizes and
+propositionally decomposes the goal, leaving the existential ground QF_NRA
+fragment supported by Yices MCSAT.
+
+Diagnostics follow the same convention:
+
+```lisp
+(y2cad-trace)       % scheduling, LRA status, deferred/exact checkpoints
+(y2cad-trace$)      % lifted assertions and every monomial bridge
+(y2cad-status)      % includes the exact MCSAT invocation count
+(y2cad-model)
+(y2cad-counterexample)
+(y2cad-untrace)
+```
+
+[`examples/y2cad.pvs`](examples/y2cad.pvs) includes zero-MCSAT linear and
+relaxation-conflict proofs, one-MCSAT real-root and coupled-product proofs, and
+an intentionally false positive-root formula with a projected algebraic model.
+
+The satellites are selected from the accumulated whiteboard problem:
+
+| Fragment | Satellite configuration |
+| --- | --- |
+| Integer difference logic | `QF_IDL`, IFW/Floyd-Warshall |
+| Real difference logic | `QF_RDL`, RFW/Floyd-Warshall |
+| Linear integer or real arithmetic | `QF_LIA`/`QF_LRA`, Simplex |
+| Nonlinear real arithmetic | `QF_NRA`, MCSAT |
+| Bitvectors | `QF_UFBV`, CDCL(T) |
+| Datatypes, UF, tuples, records, updates | Baseline PVS/Shostak whiteboard |
+
+Alien arithmetic- or bitvector-valued terms are replaced by shared interface
+variables in a satellite. The orchestrator repeatedly exchanges only entailed
+equalities and disequalities with the whiteboard. For non-convex combinations,
+undecided boundary equalities are returned as ordinary PVS proof branches, so
+the normal DPI branch-copy mechanism explores the finite arrangements.
+
+The DPI state contains only persistent Lisp objects. A fresh scoped Yices
+context is rebuilt for each satellite query, so copied proof branches do not
+share foreign state. `UNKNOWN` and translation failures remain unknown and are
+never treated as proofs. In particular, unrestricted nonlinear integer
+arithmetic is undecidable; the `QF_NIA` satellite can decide individual cases
+but cannot provide a general completeness guarantee.
 
 For the standalone `y2/` convenience layer, load `y2bindings.lisp`, then
 `y2structures.lisp`, then `y2macros.lisp`.  A manager owns named solver stacks:
