@@ -444,6 +444,8 @@ pvs-prover = src/prover/checker-macros.lisp \
          src/prover/wish.lisp \
 	 src/prover/translate-to-yices.lisp \
 	 src/prover/yices2/y2loader.lisp \
+	 src/prover/yices2/y2shostak.lisp \
+	 src/prover/yices2/y2cad.lisp \
 	 src/prover/translate-to-yices2.lisp
 
 bddlisp = src/BDD/bdd.lisp src/BDD/mu.lisp src/BDD/bdd-cffi.lisp

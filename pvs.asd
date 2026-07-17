@@ -335,6 +335,8 @@
 		  (:file "wish")
 		  (:file "translate-to-yices")
 		  (:file "yices2/y2loader")
+		  (:file "yices2/y2shostak")
+		  (:file "yices2/y2cad")
 		  (:file "translate-to-yices2"))
      :depends-on (typechecker))
    (:module bddlib
