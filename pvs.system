@@ -44,6 +44,7 @@
 (ql:quickload :websocket-driver)
 (ql:quickload :lparallel)
 (ql:quickload :anaphora)
+(ql:quickload :xmls)
 
 (unless (fboundp 'defconstant-if-unbound)
  (defmacro defconstant-if-unbound (name value &optional doc)
@@ -343,6 +344,14 @@
 			 :depends-on ("defcl"))
 		  (:file "classes-decl"
 			 :depends-on ("defcl"))
+		  (:file "sal/classes"
+			 :depends-on ("store-object" "defcl"))
+		  (:file "sal/xml-reader"
+			 :depends-on ("sal/classes"))
+		  (:file "sal/sal-pp"
+			 :depends-on ("sal/classes"))
+		  (:file "sal/sal-utils"
+			 :depends-on ("sal/classes" "sal/xml-reader" "sal/sal-pp"))
 		  (:file "prover/estructures"
 			 :depends-on ("defcl"))
 		  (:file "groundeval/pvs2c-utils" ; has macros

@@ -59,7 +59,7 @@
   :entry-point "pvs::startup-pvs"
   ;;:defsystem-depends-on (#:asdf-shared-library)
   :depends-on (#:babel #:clack #:clack-handler-hunchentoot #:websocket-driver
-		       #:hunchentoot #:anaphora #:lparallel #:cl-json #:cffi)
+		       #:hunchentoot #:anaphora #:lparallel #:cl-json #:cffi #:xmls)
   :serial t
   :perform (asdf:load-op :after (op cmp)
 			 (funcall (intern (string :finally-do) :pvs)))
@@ -201,6 +201,11 @@
 		  (:file "classes-expr" :depends-on ("defcl"))
 		  (:file "pvs-threads" :depends-on ("defcl"))
 		  (:file "classes-decl" :depends-on ("defcl"))
+		  (:file "sal/classes" :depends-on ("store-object" "defcl"))
+		  (:file "sal/xml-reader" :depends-on ("sal/classes"))
+		  (:file "sal/sal-pp" :depends-on ("sal/classes"))
+		  (:file "sal/sal-utils"
+		   :depends-on ("sal/classes" "sal/xml-reader" "sal/sal-pp"))
 		  (:file "prover/estructures" :depends-on ("defcl"))
 		  (:file "groundeval/pvs2ir-classes" :depends-on ("defcl"))
 		  (:file "groundeval/pvs2c-utils" :depends-on ("defcl"))

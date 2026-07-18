@@ -39,6 +39,8 @@
     (ql:quickload :anaphora))
   (unless (find-package :cffi)
     (ql:quickload :cffi))
+  (unless (find-package :xmls)
+    (ql:quickload :xmls))
   ;; Causes problems with closer-mop-packages
   #-sbcl
   (unless (find-package :trivial-timer)
