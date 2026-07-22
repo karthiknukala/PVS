@@ -52,8 +52,18 @@ satellite projection:
 ```lisp
 (y2shostak-status)
 (y2shostak-model)
+(y2shostak-dump)
 (y2shostak-counterexample)
 ```
+
+`y2shostak-dump` prints the complete persistent state: asserted background
+constraints, routed arithmetic and bitvector entries with canonical forms,
+exchanged equality/disequality facts, pending arrangements, root/interface
+frontiers, deferred type predicates, solver selection and last-result data,
+and the raw Shostak `DPINFO` alists. Y2SHOSTAK does not retain a live Yices
+context between queries, and the dump reports that explicitly. From Lisp, the
+corresponding function is `(y2shostak-dump-state)`. It accepts an optional
+Y2SHOSTAK state (or proof state) and output stream.
 
 Tracing follows the `grind`/`grind$` convention. Enable the compact,
 black-boxish event stream before invoking `assert` with:

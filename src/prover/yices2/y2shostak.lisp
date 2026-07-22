@@ -1961,6 +1961,170 @@ Yices context, and canonically duplicate routed constraints share one entry."
 ;; --------------------------------------------------------------------
 ;; Read-only prover diagnostics
 
+(defun y2shostak-dump-state-value (&optional state)
+  "Resolve STATE for a diagnostic dump without creating or changing one."
+  (cond ((y2shostak-state-p state) state)
+        ((typep state 'proofstate)
+         (let ((dp-state (dp-state state)))
+           (if (y2shostak-state-p dp-state)
+               dp-state
+               (error "The proof state does not contain a Y2SHOSTAK state."))))
+        ((and (null state)
+              (boundp '*dp-state*)
+              (y2shostak-state-p *dp-state*))
+         *dp-state*)
+        (t
+         (error "No current Y2SHOSTAK state. Pass a state explicitly or use (y2shostak-dump) inside the prover."))))
+
+(defun y2shostak-dump-count (object)
+  (handler-case
+      (length object)
+    (error () :unknown)))
+
+(defun y2shostak-dump-bound-value (symbol &optional (otherwise :unavailable))
+  (if (boundp symbol) (symbol-value symbol) otherwise))
+
+(defun y2shostak-state-dump-string (&optional state)
+  "Return a complete, read-only textual dump of a Y2SHOSTAK STATE.
+
+When STATE is omitted, use the dynamically current `*DP-STATE*'.  STATE may
+also be a PROOFSTATE.  The dump includes asserted constraints, routed entries,
+exchanged facts, demand frontiers, the raw Shostak DPINFO alists, and current
+and last-used solver information.  No Yices context is created by this
+function."
+  (let* ((state (y2shostak-dump-state-value state))
+         (whiteboard (y2shostak-state-whiteboard state))
+         (arithmetic
+           (y2shostak-distinct-entries
+            (y2shostak-state-arithmetic state)))
+         (bitvectors
+           (y2shostak-distinct-entries
+            (y2shostak-state-bitvectors state))))
+    (with-output-to-string (stream)
+      (let ((*print-circle* t)
+            (*print-pretty* t)
+            (*print-level* nil)
+            (*print-length* nil)
+            (*print-right-margin* 100))
+        (labels
+            ((dump-expressions (title expressions)
+               (format stream "~%~a (~d)~%" title (length expressions))
+               (if expressions
+                   (loop for expression in expressions
+                         for index from 0
+                         do (format stream "  [~d] ~a~%" index
+                                    (y2shostak-display expression)))
+                   (format stream "  <none>~%")))
+             (dump-entries (title entries)
+               (format stream "~%~a (~d)~%" title (length entries))
+               (if entries
+                   (loop for entry in entries
+                         for index from 0
+                         do (format stream "  [~d] ~a~%      source: ~a~%      canonical: ~s~%"
+                                    index
+                                    (y2shostak-entry-description entry)
+                                    (y2shostak-display
+                                     (y2shostak-entry-source entry))
+                                    (y2shostak-entry-canonical entry)))
+                   (format stream "  <none>~%")))
+             (dump-facts (facts)
+               (format stream "~%EXCHANGED SHOSTAK FACTS (~d)~%"
+                       (length facts))
+               (if facts
+                   (loop for fact in facts
+                         for index from 0
+                         do (format stream "  [~d] ~a~%" index
+                                    (y2shostak-fact-string fact)))
+                   (format stream "  <none>~%")))
+             (dump-pending (pairs)
+               (format stream "~%PENDING ARRANGEMENTS (~d)~%"
+                       (length pairs))
+               (if pairs
+                   (loop for pair in pairs
+                         for index from 0
+                         do (format stream "  [~d] ~a = ~a~%" index
+                                    (y2shostak-display
+                                     (y2shostak-pair-left pair))
+                                    (y2shostak-display
+                                     (y2shostak-pair-right pair))))
+                   (format stream "  <none>~%")))
+             (dump-raw (title object)
+               (format stream "~%  ~a (~a)~%"
+                       title (y2shostak-dump-count object))
+               (if object
+                   (progn (write object :stream stream :pretty t :escape t)
+                          (terpri stream))
+                   (format stream "    <none>~%")))
+             (dump-spec (title spec)
+               (format stream "  ~a: ~a; logic ~a; MCSAT ~:[no~;yes~]"
+                       title (getf spec :name) (getf spec :logic)
+                       (getf spec :mcsat))
+               (when (getf spec :configs)
+                 (format stream "; configuration ~s" (getf spec :configs)))
+               (terpri stream)))
+          (format stream "Y2SHOSTAK STATE DUMP~%====================~%")
+          (format stream "generation: ~d~%" (y2shostak-state-generation state))
+          (format stream "decision procedure: ~a~%"
+                  (y2shostak-dump-bound-value
+                   '*current-decision-procedure*))
+          (format stream "limits: ~d type-predicate frontiers; ~d exchange rounds~%"
+                  *y2shostak-max-typepred-depth* *y2shostak-max-rounds*)
+          (format stream "arrangement splitting: ~:[disabled~;enabled~]~%"
+                  *y2shostak-arrangement-splits*)
+
+          (format stream "~%SOLVER INFORMATION~%")
+          (format stream "  Yices version: ~a; architecture: ~a; mode: ~a; MCSAT available: ~a~%"
+                  (y2shostak-dump-bound-value '+y2api/version-string+)
+                  (y2shostak-dump-bound-value '+y2api/build-arch+)
+                  (y2shostak-dump-bound-value '+y2api/build-mode+)
+                  (y2shostak-dump-bound-value '+y2api/mcsat-enabled?+))
+          (format stream "  persistent Yices context: none (contexts are rebuilt per query)~%")
+          (format stream "  last status: ~a~%"
+                  (or *y2shostak-last-status* :none))
+          (format stream "  last satellite: ~a~%"
+                  (or *y2shostak-last-satellite* :none))
+          (when arithmetic
+            (dump-spec "current arithmetic route"
+                       (y2shostak-arithmetic-spec arithmetic)))
+          (when bitvectors
+            (dump-spec "current bitvector route"
+                       (list :name :bitvector-cdclt :logic "QF_UFBV"
+                             :mcsat nil
+                             :configs '(("solver-type" . "dpllt")))))
+          (format stream "  last error: ~a~%"
+                  (or *y2shostak-last-error* :none))
+          (format stream "  last model projection:~%    ~a~%"
+                  (or *y2shostak-last-model* :none))
+
+          (dump-expressions "ASSERTED BACKGROUND CONSTRAINTS"
+                            (y2shostak-state-background state))
+          (dump-entries "ROUTED ARITHMETIC CONSTRAINTS" arithmetic)
+          (dump-entries "ROUTED BITVECTOR CONSTRAINTS" bitvectors)
+          (dump-facts (y2shostak-state-facts state))
+          (dump-pending (y2shostak-state-pending state))
+          (dump-expressions "ROOT TERMS"
+                            (y2shostak-state-roots state))
+          (dump-expressions "ACTIVE INTERFACE TERMS"
+                            (y2shostak-state-interface-terms state))
+          (dump-expressions "DEFERRED TYPE PREDICATES"
+                            (y2shostak-state-deferred-typepreds state))
+
+          (format stream "~%SHOSTAK WHITEBOARD (DPINFO)~%")
+          (dump-raw "SIGALIST" (dpinfo-sigalist whiteboard))
+          (dump-raw "FINDALIST" (dpinfo-findalist whiteboard))
+          (dump-raw "USEALIST" (dpinfo-usealist whiteboard)))))))
+
+(defun y2shostak-dump-state (&optional state (stream *standard-output*))
+  "Print a complete read-only dump of the current Y2SHOSTAK state.
+
+STATE and STREAM are optional.  With no STATE, this uses `*DP-STATE*'.  The
+function returns no values, which keeps an interactive Lisp invocation from
+printing the dump a second time."
+  (write-string (y2shostak-state-dump-string state) stream)
+  (terpri stream)
+  (finish-output stream)
+  (values))
+
 (defun y2shostak-set-trace-rule (level)
   #'(lambda (proofstate)
       (declare (ignore proofstate))
@@ -1984,6 +2148,10 @@ Yices context, and canonically duplicate routed constraints share one entry."
       (ecase kind
         (:status (y2shostak-show-last-status))
         (:model (y2shostak-show-last-model))
+        (:dump
+         (format-if "~%~a"
+                    (y2shostak-state-dump-string
+                     (dp-state proofstate))))
         (:counterexample
          (y2shostak-show-last-counterexample proofstate)))
       ;; The report is observational: preserve the current proof state just as
@@ -1997,6 +2165,10 @@ Yices context, and canonically duplicate routed constraints share one entry."
 (addrule 'y2shostak-model nil nil
   (y2shostak-report-rule :model)
   "Prints the most recent satisfiable satellite model projection. This is diagnostic, not a complete model of whiteboard-only atoms.")
+
+(addrule 'y2shostak-dump nil nil
+  (y2shostak-report-rule :dump)
+  "Prints the complete current Y2SHOSTAK state, including asserted constraints, routed entries, exchanged facts, demand frontiers, solver diagnostics, and raw Shostak whiteboard alists. The proof state is unchanged.")
 
 (addrule 'y2shostak-counterexample nil nil
   (y2shostak-report-rule :counterexample)

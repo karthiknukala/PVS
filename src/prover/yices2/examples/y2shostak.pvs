@@ -19,6 +19,7 @@
 %
 %   (y2shostak-status)
 %   (y2shostak-model)
+%   (y2shostak-dump)
 %   (y2shostak-counterexample)
 %
 % For a compact routing/fixed-point trace, run this before ASSERT:
