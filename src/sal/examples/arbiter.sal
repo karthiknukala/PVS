@@ -1,0 +1,66 @@
+arbiter: CONTEXT =
+BEGIN
+  Owner: TYPE = {nobody, client1, client2};
+  FAIRNESS_WINDOW: NATURAL = 3 + 5;
+
+  requester1: MODULE =
+    BEGIN
+      INPUT release1: BOOLEAN
+      OUTPUT request1: BOOLEAN
+
+      INITIALIZATION request1 = FALSE
+
+      TRANSITION
+        [
+          NOT request1 --> request1' = TRUE
+        []
+          request1 AND release1 --> request1' = FALSE
+        []
+          ELSE --> request1' = request1
+        ]
+    END;
+
+  requester2: MODULE =
+    BEGIN
+      INPUT release2: BOOLEAN
+      OUTPUT request2: BOOLEAN
+
+      INITIALIZATION request2 = FALSE
+
+      TRANSITION
+        [
+          NOT request2 --> request2' = TRUE
+        []
+          request2 AND release2 --> request2' = FALSE
+        []
+          ELSE --> request2' = request2
+        ]
+    END;
+
+  arbiter_core: MODULE =
+    BEGIN
+      INPUT request1: BOOLEAN
+      INPUT request2: BOOLEAN
+      OUTPUT owner: Owner
+
+      INITIALIZATION owner = nobody
+
+      TRANSITION
+        [
+          owner = nobody AND request1 --> owner' = client1
+        []
+          owner = nobody AND NOT request1 AND request2 --> owner' = client2
+        []
+          owner = client1 AND NOT request1 --> owner' = nobody
+        []
+          owner = client2 AND NOT request2 --> owner' = nobody
+        []
+          ELSE --> owner' = owner
+        ]
+    END;
+
+  system: MODULE = requester1 || requester2 || arbiter_core;
+
+  mutual_exclusion: THEOREM system |-
+    G(NOT(owner = client1 AND owner = client2));
+END

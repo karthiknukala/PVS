@@ -109,8 +109,12 @@ of SAL 3.3's sal-ast/for-each-children protocol."))
 SLOT-VALUES is an alist.  Effective slots are copied directly so this remains
 usable while the generated PVS COPY methods are not yet loaded."
   (let ((copy (make-instance (class-of ast))))
-    (dolist (slot (sb-mop:class-slots (class-of ast)))
-      (let ((name (sb-mop:slot-definition-name slot)))
+    (dolist (slot (#+allegro mop:class-slots
+                   #+sbcl sb-mop:class-slots
+                   (class-of ast)))
+      (let ((name (#+allegro mop:slot-definition-name
+                   #+sbcl sb-mop:slot-definition-name
+                   slot)))
         (when (slot-boundp ast name)
           (setf (slot-value copy name) (slot-value ast name)))))
     (dolist (entry slot-values copy)

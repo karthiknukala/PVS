@@ -1,0 +1,44 @@
+bounded_counter: CONTEXT =
+BEGIN
+  % Deliberately constant expressions: the optimizer example folds these.
+  LIMIT: NATURAL = 2 + 6;
+  UNUSED_BUDGET: NATURAL = 40 + 2;
+
+  Phase: TYPE = {idle, counting, done};
+
+  counter: MODULE =
+    BEGIN
+      INPUT start: BOOLEAN
+      INPUT reset: BOOLEAN
+      OUTPUT count: [0..LIMIT]
+      OUTPUT phase: Phase
+
+      INITIALIZATION
+        count = 0;
+        phase = idle
+
+      TRANSITION
+        [
+          reset -->
+            count' = 0;
+            phase' = idle
+        []
+          phase = idle AND start -->
+            phase' = counting
+        []
+          phase = counting AND count < LIMIT -->
+            count' = count + 1
+        []
+          phase = counting AND count = LIMIT -->
+            phase' = done
+        []
+          ELSE -->
+            count' = count;
+            phase' = phase
+        ]
+    END;
+
+  bounded: THEOREM counter |- G(count <= LIMIT);
+  stable_when_done: THEOREM counter |-
+    G(phase = done AND NOT reset => X(phase = done));
+END

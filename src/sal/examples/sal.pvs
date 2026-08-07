@@ -1,0 +1,54 @@
+
+
+sal  % [ parameters ]
+		: THEORY
+
+  BEGIN
+
+  % ASSUMING
+   % assuming declarations
+  % ENDASSUMING
+
+
+  I, O, G, L: TYPE
+  Vars: TYPE = [I, O, G, L]
+
+  Module[State: TYPE]: TYPE = [#
+    Invariants: setof[PRED[Vars]],
+    Init: PRED[Vars],
+    Trans: PRED[[Vars, Vars]]
+  #]
+
+  finite?(n: nat): bool = EXISTS (m : nat): n <= m
+
+  END sal
+
+
+MOD[Ψ: TYPE]: THEORY
+BEGIN
+
+  IMPORTING sal
+
+  Modinputs:  [Ψ -> I]
+  Modoutputs: [Ψ -> O]
+  Modglobals: [Ψ -> G]
+  Modlocals:  [Ψ -> L]
+
+END MOD
+
+IMOD[Ψ: TYPE, (IMPORTING sal) i: (finite?)]: THEORY
+BEGIN
+
+END IMOD
+
+COMPOSE[Ψ: TYPE, M1: THEORY MOD[Ψ], M2: THEORY MOD[Ψ]]: THEORY
+BEGIN
+
+END COMPOSE
+
+NCOMPOSE[Ψ: TYPE, (IMPORTING sal) N: (finite?),
+         imod: THEORY IMOD[Ψ, N]]: THEORY
+BEGIN
+
+END NCOMPOSE
+         
