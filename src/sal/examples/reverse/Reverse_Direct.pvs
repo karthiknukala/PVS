@@ -1,0 +1,9 @@
+% Direct parameterization of the canonical semantics is also an interpretation
+% boundary: no locally named facade is required to extract the invariant.
+Reverse_Direct: THEORY
+BEGIN
+  IMPORTING Reverse_Counter_Library[1] AS lib
+  IMPORTING SAL_Transition_System[lib.State, lib.initial, lib.step] AS native
+
+  safe: THEOREM native.invariant(lib.safe)
+END Reverse_Direct

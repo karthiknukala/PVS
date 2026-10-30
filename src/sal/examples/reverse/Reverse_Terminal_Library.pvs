@@ -1,0 +1,10 @@
+% Relational PVS behavior: either keep running or finish after observing input.
+% A finished state has no successor.  No stuttering transition is added.
+Reverse_Terminal_Library: THEORY
+BEGIN
+  State: TYPE = [# done: bool, seen: bool #]
+  initial(s: State): bool = NOT s`done AND NOT s`seen
+  step(s, t: State): bool = NOT s`done AND t`seen
+  safe(s: State): bool = s`done IMPLIES s`seen
+  unfinished(s: State): bool = NOT s`done
+END Reverse_Terminal_Library

@@ -1,0 +1,17 @@
+parameter_instances: CONTEXT =
+BEGIN
+  small: CONTEXT = parameter_leaf{BOOLEAN, 2};
+  large: CONTEXT = parameter_leaf{BOOLEAN, 4};
+
+  system: MODULE =
+    BEGIN
+      OUTPUT small_count: small!Count
+      OUTPUT large_count: large!Count
+      INITIALIZATION small_count = 0; large_count = 0
+      TRANSITION
+        small_count' = small!increment(small_count);
+        large_count' = large!increment(large_count)
+    END;
+
+  bounded: THEOREM system |- G(small_count <= 2 AND large_count <= 4);
+END

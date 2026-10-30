@@ -1,0 +1,12 @@
+% Interpretation interface for existing PVS developments.  The semantics are
+% the same finite-prefix reachability used by the SAL frontend.
+SAL_Transition_View: THEORY
+BEGIN
+  S: TYPE
+  initial: [S -> bool]
+  step: [S, S -> bool]
+
+  IMPORTING SAL_Transition_System[S, initial, step] AS system
+
+  invariant(p: [S -> bool]): bool = system.invariant(p)
+END SAL_Transition_View

@@ -1,0 +1,6 @@
+parameter_leaf{T: TYPE, Limit: NATURAL}: CONTEXT =
+BEGIN
+  Count: TYPE = [0..Limit];
+  identity(x: T): T = x;
+  increment(x: Count): Count = IF x < Limit THEN x + 1 ELSE 0 ENDIF;
+END

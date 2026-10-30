@@ -1,0 +1,26 @@
+% Shared shallow semantics.  State machines need not be deterministic or total.
+SAL_Transition_System[S: TYPE,
+                      initial: [S -> bool],
+                      step: [S, S -> bool]]: THEORY
+BEGIN
+  % Finite prefixes preserve reachable terminal states, unlike infinite traces.
+  reachable(s: S): bool =
+    EXISTS (n: nat, prefix: [below(n + 1) -> S]):
+      initial(prefix(0)) AND prefix(n) = s AND
+      (FORALL (k: below(n)): step(prefix(k), prefix(k + 1)))
+
+  invariant(p: [S -> bool]): bool =
+    FORALL (s: S): reachable(s) IMPLIES p(s)
+
+  initialized: bool = EXISTS (s: S): initial(s)
+  deadlock_free: bool =
+    FORALL (s: S): reachable(s) IMPLIES EXISTS (t: S): step(s, t)
+
+  path: TYPE = [nat -> S]
+  path?(p: path): bool =
+    initial(p(0)) AND (FORALL (n: nat): step(p(n), p(n + 1)))
+
+  % General LTL uses infinite paths; the backend checks seriality separately.
+  satisfies(phi: [path, nat -> bool]): bool =
+    FORALL (p: path): path?(p) IMPLIES phi(p, 0)
+END SAL_Transition_System

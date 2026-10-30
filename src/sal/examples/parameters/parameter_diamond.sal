@@ -1,0 +1,18 @@
+parameter_diamond: CONTEXT =
+BEGIN
+  left: CONTEXT = parameter_left{BOOLEAN, 2};
+  right: CONTEXT = parameter_right{BOOLEAN, 2};
+  Count: TYPE = left!Count;
+
+  system: MODULE =
+    BEGIN
+      OUTPUT count: Count
+      OUTPUT payload: BOOLEAN
+      INITIALIZATION count = 0; payload = FALSE
+      TRANSITION
+        count' = right!advance(left!advance(count));
+        payload' = left!preserve(right!preserve(payload))
+    END;
+
+  bounded: THEOREM system |- G(count <= 2);
+END

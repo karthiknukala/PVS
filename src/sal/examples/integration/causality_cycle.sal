@@ -1,0 +1,13 @@
+causality_cycle: CONTEXT =
+BEGIN
+  % These equations have two Boolean fixed points, but no structural schedule.
+  system: MODULE =
+    BEGIN
+      OUTPUT x: BOOLEAN
+      OUTPUT y: BOOLEAN
+      DEFINITION
+        x = y;
+        y = x
+    END;
+  agrees: THEOREM system |- G(x = y);
+END

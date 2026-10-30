@@ -1,0 +1,64 @@
+% A PVS-origin development and an explicit finite SAL adapter.
+% Generate library_counter.sal's machine into the same context, then copy this
+% file there. The native library below is independent of the generated theory.
+% This example does not claim automatic extraction from arbitrary PVS theories.
+
+PVS_Transition_View: THEORY
+BEGIN
+  S: TYPE
+  initial: [S -> bool]
+  step: [S, S -> bool]
+  IMPORTING SAL_Transition_System[S, initial, step] AS system
+  reachable(s: S): bool = system.reachable(s)
+END PVS_Transition_View
+
+PVS_Counter_Library: THEORY
+BEGIN
+  Count: TYPE = {n: int | 0 <= n AND n <= 3}
+  State: TYPE = [# count: Count, started: bool #]
+
+  advance(n: Count): Count = IF n < 3 THEN n + 1 ELSE n ENDIF
+  next(s: State): State =
+    (# count := advance(s`count),
+       started := IF s`count < 3 THEN TRUE ELSE s`started ENDIF #)
+  initial(s: State): bool = s`count = 0 AND NOT s`started
+  step(s, t: State): bool = t = next(s)
+  safe(s: State): bool = s`count = 0 OR s`started
+END PVS_Counter_Library
+
+PVS_Library_Adapter: THEORY
+BEGIN
+  IMPORTING PVS_Counter_Library AS lib
+  IMPORTING SAL_sal_library_x5F_counter_sal_machine AS translated
+
+  % The same transition-system vocabulary is interpreted over native PVS
+  % definitions. There are no assumed axioms in this interpretation.
+  native: THEORY = PVS_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+  IMPORTING SAL_Transition_System[translated.State,
+                                 translated.initial,
+                                 translated.step] AS sal_system
+
+  encode(s: lib.State): translated.State =
+    (# sal_count := s`count, sal_started := s`started #)
+  decode(s: translated.State): lib.State =
+    (# count := s`sal_count, started := s`sal_started #)
+
+  decode_encode: THEOREM FORALL (s: lib.State): decode(encode(s)) = s
+  encode_decode: THEOREM FORALL (s: translated.State): encode(decode(s)) = s
+
+  % These are the concrete admission obligations for this explicit adapter.
+  initial_commutes: THEOREM
+    FORALL (s: lib.State):
+      native.initial(s) IFF translated.initial(encode(s))
+  step_commutes: THEOREM
+    FORALL (s, t: lib.State):
+      native.step(s, t) IFF translated.step(encode(s), encode(t))
+
+  % The SAL-generated theorem is reused by an ordinary PVS lemma step. The
+  % sal-check rule cannot be applied directly to this unrelated declaration.
+  % A native reachability theorem additionally needs finite-path transport
+  % through encode/decode; that generic transport library is future work.
+  sal_proof_reused: THEOREM
+    sal_system.invariant(LAMBDA (s: translated.State): lib.safe(decode(s)))
+END PVS_Library_Adapter

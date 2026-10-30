@@ -1,0 +1,14 @@
+builtin_shadow: CONTEXT =
+BEGIN
+  % A qualified source definition must keep its identity despite this spelling.
+  max(x: INTEGER, y: INTEGER): INTEGER = x + y;
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: [0..2]
+      INITIALIZATION value = 0
+      TRANSITION
+        [ value < 2 --> value' = max(value, 1)
+        [] ELSE --> value' = 0 ]
+    END;
+  bounded: THEOREM machine |- G(value <= 2);
+END

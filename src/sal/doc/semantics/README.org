@@ -1,0 +1,488 @@
+#+TITLE: Predicate subtyping for the SAL/PVS bridge
+#+SUBTITLE: Source semantics, exact verification conditions, and the implementation boundary
+#+DATE: October 2026
+#+OPTIONS: toc:2 num:t
+
+* What is established
+
+The shallow representation can carry arbitrary predicate refinements supported
+by the translated pure language. It recovers PVS-style proof obligations for
+those refinements; it does not turn predicate subtyping into a decidable
+algorithm. Nor does a successful frontend corpus run prove that every SAL
+typing occurrence survives elaboration.
+
+This note distinguishes three results:
+
+1. A mathematical soundness and relative-completeness result for semantic
+   subtyping and a specified, syntax-directed SAL core VC system.
+2. Small machine-checked semantic laws about guarded updates and composition
+   in =Typing_Core.pvs=. They permit an arbitrary refinement predicate.
+3. Conditional soundness of the implemented frontend: it additionally needs
+   occurrence preservation, correct primitive meanings and faithful native TCC
+   generation. These are explicit implementation proof obligations, not
+   conclusions of the PVS semantics report or the small checked theory.
+
+The core is a reference semantics for source typing. It is not a second runtime
+interpreter: generated models still use ordinary PVS types, functions, records
+and relations. The detailed argument here is a mathematical proof; only the
+laws in =Typing_Core.pvs= are mechanically proved.
+
+* Reference and scope
+
+The reference is Sam Owre and Natarajan Shankar, /The Formal Semantics of PVS/,
+CSL-97-2R, August 1997, revised March 1999, supplied as
+=~/Documents/semantics.pdf=. Page numbers below are printed report pages;
+the PDF page number is five larger.
+
+| Report location | Fact used here |
+|-----------------+----------------|
+| Definition 10, p. 21 | Maximal supertype construction; function domains stay fixed |
+| Definition 12, p. 23 | Characteristic subtype predicate pi |
+| Definitions 13 and 16, pp. 24-26 | Compatibility, application and subtype obligations |
+| Definition 17, p. 27 | Set interpretation of predicate subtypes |
+| Proposition 3.9, pp. 27-28 | Type equals maximal carrier restricted by pi |
+| Theorems 4-5, p. 28 | Type and term soundness |
+| Section 3.1, p. 29 | Type correctness and compatibility are undecidable |
+| Chapter 6, pp. 49-52 | Contextual typing of Boolean expressions and conditionals |
+| Theorem 9, p. 60 | Joint type, term and proof soundness |
+
+The report does not prove completeness for standard set models. Its p. 4
+footnote explicitly observes incompleteness of higher-order logic in that
+semantics. It also abstracts from arithmetic, recursive definitions and
+datatypes (pp. 2-3), and does not cover all modern parameter assumptions or
+theory interpretations (p. 48). Thus arithmetic correspondences and modern
+module mechanisms cannot be silently inferred from Theorem 9.
+
+Our source core consists of resolved, acyclic declarations, fixed base
+carriers, products/records, exact-domain functions/arrays, predicate subtypes,
+nonrecursive pure expressions and guarded commands. Expressions include
+variables, constants, application, lambda, tuples/projections, point updates,
+LET, IF, contextual Boolean connectives and quantification. Primitive
+operations have explicitly matched source and target meanings. Finite enums
+can be treated as fixed carriers with a bijection of constructors.
+
+Matched base carriers belong to the report's universe U, and the matched
+primitive context has a satisfying PVS interpretation. Parameters range over
+environments satisfying their declared predicates.
+Parameter-dependent refinements such as =[1..N]= are allowed. General
+recursive definitions, arbitrary dependent type constructors, unadapted SAL
+=NUMBER= and =STRING=, temporal operators and model-checker abstractions are
+outside this theorem. Modern theory interpretations require a separate
+substitution/interpretation-preservation argument, including mapped axioms.
+
+* Independent SAL denotations
+
+Let eta map names to values. Define satisfaction of a context recursively in
+declaration order: a variable or free constant has a value in its declared
+set; a definition c:T=e additionally has value eval(e) in that prefix
+environment; a type alias denotes its defining set; and any declared
+assumption must hold. Check a declaration in its prefix context, before
+extending the environment with that declaration. Assume all type predicates
+below are well formed and defined on their stated domains. Define source
+types as sets:
+
+\[
+\begin{aligned}
+ \lbrack\!\lbrack{}b\rbrack\!\rbrack{}_\eta &= B_b,\\
+ \lbrack\!\lbrack{}T_1\mathbin\times T_2\rbrack\!\rbrack{}_\eta
+   &= \lbrack\!\lbrack{}T_1\rbrack\!\rbrack{}_\eta\mathbin\times\lbrack\!\lbrack{}T_2\rbrack\!\rbrack{}_\eta,\\
+ \lbrack\!\lbrack{}\{x:T\mid p\}\rbrack\!\rbrack{}_\eta
+   &= \{v\in\lbrack\!\lbrack{}T\rbrack\!\rbrack{}_\eta\mid
+                  \lbrack\!\lbrack{}p\rbrack\!\rbrack{}_{\eta[x\mapsto v]}=\mathrm{true}\},\\
+ \lbrack\!\lbrack{}[A\to B]\rbrack\!\rbrack{}_\eta
+   &= \{f\mid\operatorname{dom}(f)=\lbrack\!\lbrack{}A\rbrack\!\rbrack{}_\eta
+           \ \land\ \forall a\in\lbrack\!\lbrack{}A\rbrack\!\rbrack{}_\eta.
+                         f(a)\in\lbrack\!\lbrack{}B\rbrack\!\rbrack{}_\eta\}.
+\end{aligned}
+\]
+
+Records are labelled products. SAL arrays use the same exact-domain function
+space, not an unbounded map with a conventional range of valid indexes.
+An empty subtype is a legitimate set. Introducing a free constant c:T
+requires a nonemptiness obligation in the /prefix/ context, before adding c.
+For a definition c:T=e, definedness and membership of e provide the witness.
+A binder x:T or an arbitrary subtype declaration does not itself promise a
+witness. Empty state spaces can make safety vacuous. Checking nonemptiness
+only after adjoining a nonexistent constant would be incorrectly vacuous.
+
+Expression evaluation is defined independently by the usual environment and
+function semantics, with undefinedness outside an application domain.
+=IF g THEN a ELSE b= first evaluates g and evaluates the selected branch.
+=a AND b= needs b only under a; =a OR b= needs b only under NOT a; implication
+needs its consequent only under its antecedent. Quantifier/lambda bodies
+must be defined for every value of their domain. LET evaluates its bindings
+and then its body in the extended environment. A point update needs its
+address in the exact function domain and its replacement in the range.
+
+These contextual rules follow the report's Chapter 6. They are part of this
+source typing semantics, not a claim that a SAL backend evaluates Boolean
+expressions procedurally. Well-typed expressions have their usual Boolean
+denotations. A nondeterministic command choice, written =[]= in SAL, has a
+different typing rule: each arm is checked independently.
+
+* Semantic subtyping is exactly a validity question
+
+Define maximal carrier mu and characteristic predicate pi by the same
+structural equations as the report. For a base type, mu(b)=b and pi(b)=TRUE.
+For products use componentwise mu and conjunction of the component pi's.
+For refinements and function types:
+
+\[
+\begin{aligned}
+ \mu(\{x:T\mid p\}) &= \mu(T), &
+ \pi_{\{x:T\mid p\}}(v) &= \pi_T(v)\land p[v/x],\\
+ \mu([A\to B]) &= [A\to\mu(B)], &
+ \pi_{[A\to B]}(f) &= \forall a:A.\ \pi_B(f(a)).
+\end{aligned}
+\]
+
+The first conjunct guards the subtype predicate at its proper domain.
+Function domains are unchanged. Identifying all refined function domains
+with a common erased domain would change the denoted sets and invalidate
+the theorem. Compatibility of different domain presentations includes the
+type-equivalence obligations of the report; it is not automatic coercion.
+
+** Carrier lemma
+
+For every well-formed core type T,
+
+\[
+ \lbrack\!\lbrack{}T\rbrack\!\rbrack{}_\eta
+ = \{v\in\lbrack\!\lbrack{}\mu(T)\rbrack\!\rbrack{}_\eta\mid\pi_T(v)\}.
+\]
+
+Proof by induction on T. The base case is restriction by TRUE. The
+refinement case intersects the induction-hypothesis set with the defining
+predicate. The product case applies each component hypothesis. In the
+function case the domain is identical on both sides, while the induction
+hypothesis on the range converts every result-membership condition into
+pi_B. This is the source analogue of Proposition 3.9. No decision procedure
+for the predicates is assumed.
+
+** Subtyping exactness theorem
+
+For well-formed S and T with the same denoted maximal carrier,
+
+\[
+ \lbrack\!\lbrack{}S\rbrack\!\rbrack{}_\eta\subseteq\lbrack\!\lbrack{}T\rbrack\!\rbrack{}_\eta
+ \quad\Longleftrightarrow\quad
+ \models_\eta\ \forall v:\mu(S).\ \pi_S(v)\Rightarrow\pi_T(v).
+\]
+
+Proof. For the forward direction, pi_S(v) puts v in S by the carrier lemma;
+inclusion puts v in T, hence pi_T(v). For the reverse direction, take v in S,
+use the carrier lemma to obtain pi_S(v), apply the valid implication and use
+the lemma again for T. This proves soundness and completeness of the
+subtyping /condition/, relative to a validity oracle and compatibility.
+It proves neither that PVS can prove every valid implication nor that an
+automated strategy decides it.
+
+For a nonidentity representation isomorphism i between maximal carriers,
+the corresponding statement is i[[S]] subseteq [[T]] iff
+FORALL v:mu(S), pi_S(v) => pi_T(i(v)). Literal set inclusion is not appropriate
+when source and target have different representations. Native PVS
+type-equivalence obligations must also be retained when different type
+presentations denote the same carrier.
+
+* Source commands and local type safety
+
+For a flat store s, an atomic deterministic command =g --> x' = e= denotes
+the guarded update relation on the underlying carriers:
+
+\[
+ R_{g,x,e}(s,t)\ \equiv\ \lbrack\!\lbrack{}g\rbrack\!\rbrack{}_s=\mathrm{true}
+       \ \land\ t=s[x\mapsto\lbrack\!\lbrack{}e\rbrack\!\rbrack{}_s].
+\]
+
+Here the displayed equation applies where the guard and selected RHS are
+defined. Source local type safety additionally requires that they be
+defined under their lexical path conditions and that the result inhabit the
+declared target type. This separate definedness requirement prevents an
+undefined command from appearing safe merely because it has no transitions.
+Simultaneous assignments evaluate all RHSs in their declared current/next
+environment and require each RHS to be safe independently. Other assignment
+equations are not typing assumptions. Constraints involving next-state
+variables are checked for every typed current/next valuation; proving that
+their equations have a solution is a separate causality/progress question.
+
+Command choice denotes union, synchronous composition denotes conjunction
+of lifted relations, and indexed synchronous composition universally
+quantifies the component relation. Asynchronous composition existentially
+selects a stepping component and frames the others. Disjoint ownership and
+compatible shared interfaces are formation conditions, not consequences of
+subtyping. The source-local typing contract checks every component for
+every index, even when a peer could block the joint step.
+
+For =x' IN {y:A | p}= the allowed values are
+
+\[
+ \lbrack\!\lbrack{}T_x\rbrack\!\rbrack{}\ \cap\ \{v\in\lbrack\!\lbrack{}A\rbrack\!\rbrack{}\mid\lbrack\!\lbrack{}p\rbrack\!\rbrack{}_{y\mapsto v}\}.
+\]
+
+The predicate itself must be defined on its domain. This command does not
+promise that all candidates in A inhabit T_x or that their intersection is
+nonempty. A deterministic assignment has a stronger RHS-membership condition.
+
+Define LocalSafe(C) using this independent evaluation and these requirements
+at every declaration, predicate formation, argument, guard, assignment,
+address and parameter-actual occurrence, in every valid environment under
+the occurrence's lexical path. It quantifies over all typed states, not just
+reachable ones. Compatible maximal types and well-formed interfaces are
+separate premises.
+
+* A reference syntax-directed VC system
+
+Let H be the lexical path condition; U_H(phi) is its universal closure over
+the typed parameters, states and local binders: FORALL eta, H => phi.
+The following are recursive generation rules, not calls to a model checker.
+Expression values in these rules are guarded metanotation: child
+definedness/domain obligations precede their use. No undefined expression
+is interpreted by inventing a value.
+
+| Syntax/site | Generated obligations and recursive context |
+|-------------+----------------------------------------------|
+| Variable or literal | Declared membership; no additional obligation |
+| Primitive application | Operand checks and its explicitly specified domain contract |
+| f(a), f:[A -> B] | Checks for f and a; U_H(a belongs to A) |
+| Tuple/record, projection | Component checks; structural field/index validity |
+| Lambda or quantifier over A | Body checks universally for a:A |
+| LET x=e IN b | e checks and declared membership; b under x=e |
+| IF g THEN a ELSE b | g under H; a under H AND g; b under H AND NOT g |
+| a AND b / a OR b | a under H; b under H AND a / H AND NOT a |
+| a IMPLIES b | a under H; b under H AND a |
+| Predicate type {x:T | p} | T formation; p:Boolean for every x:T |
+| Expected type T | Compatibility plus U_H(pi_T(value)) |
+| Point update a[i]:=e | a,i checks; i in domain; e checks and range membership |
+| Guard g --> assignments | g checks under H; each assignment under H AND g |
+| Choice c1 [] c2 | Both VC sets under H, independently |
+| N-ary component c(i) | FORALL i:I, VC(c(i)) |
+| Free constant c:T | In prefix Gamma: T formation and EXISTS x:T, TRUE |
+| Definition c:T=e | In prefix Gamma: e defined and belongs to T; then extend by c=e |
+
+Checks for nondeterministic IN use its intersected membership predicate;
+they do not add a universal candidate-in-target condition. Ordinary
+Boolean OR retains contextual typing; nondeterministic command choice does
+not assume preceding arms failed. Guards are not allowed to assume their
+own truth to justify their definedness.
+
+** VC exactness theorem
+
+For a structurally admissible core C with well-formed environments and the
+matched primitive contracts,
+
+\[
+ \operatorname{LocalSafe}(C)
+ \quad\Longleftrightarrow\quad
+ \models_S\ \bigwedge\operatorname{VC}_S(C).
+\]
+
+Proof by mutual structural induction over types, expressions, declarations
+and commands, ordered by the acyclic declaration dependencies.
+
+- Variables and constants use the environment hypothesis. For primitives,
+  the stipulated domain contract is exactly the domain of their independent
+  evaluation, so the generated condition is necessary and sufficient.
+- An application denotes exactly when its function and argument denote and
+  the argument belongs to the function's exact domain. The child induction
+  hypotheses handle the first two conditions; the carrier lemma handles the
+  last. A range refinement follows from function membership. The same
+  reasoning handles the address and value of a point update.
+- Products and projections use component membership. For lambda and
+  quantifiers, function/body definedness is universal over the fixed domain;
+  applying the induction hypothesis under that binder gives the generated
+  universally quantified obligations. LET substitutes the denoting binding;
+  capture-avoiding substitution gives the body case.
+- For IF, evaluate its test and split on its Boolean value. Exactly one
+  branch's obligations are needed in each valuation. AND, OR and implication
+  are the same case split with their respective path assumptions. Thus the
+  rules are sufficient and necessary, rather than checking both branches
+  unconditionally.
+- A type predicate is formed precisely when it is defined and Boolean at
+  every member of its base type. Expected-type membership reduces exactly to
+  pi by the carrier lemma. A fresh free constant can extend the prefix
+  environment exactly when its declared set is nonempty. A definition
+  supplies its witness by the already checked RHS; neither case assumes
+  the declaration itself while checking its existence.
+- For an atomic assignment, the expression cases give definedness and the
+  carrier lemma gives target membership under H AND g. Every deterministic
+  assignment is checked independently. For IN the independent denotation is
+  already an intersection, so only formation/definedness and the offered
+  relation's own typing sites remain; nonemptiness is not needed.
+- Each command-choice arm is a distinct source occurrence, hence all its
+  local obligations are required. Composition takes the conjunction of
+  component-local conditions, universally over an indexed family. Applying
+  the induction hypothesis componentwise proves both directions.
+- Acyclic declarations extend the valid environment in dependency order.
+  Parameter instances substitute a valid actual environment; universal
+  closure proves the claim for every such instance.
+
+The converse is about /local source typing/, not arbitrary global relation
+preservation. In particular, synchronous deadlock can hide a bad local
+update from the global transition relation. The theorem deliberately does
+not identify the two properties.
+
+* Shallow preservation and the PVS connection
+
+Let E rename resolved identifiers injectively, preserve binders without
+capture, and translate the constructors above to their native PVS forms.
+Let rho be identity on matched base carriers, the induced field-renaming
+map on records, and graph lifting on exact-domain functions. Interpret the
+source environment eta by its corresponding target environment rho(eta).
+Using direct image for sets and ordinary application for values:
+
+\[
+ \begin{aligned}
+ \rho_T\bigl[\lbrack\!\lbrack{}T\rbrack\!\rbrack{}_{S,\eta}\bigr]
+      &=M_{P,E(\Gamma),\rho(\eta)}(E(T)),\\
+ \rho_T(\lbrack\!\lbrack{}e\rbrack\!\rbrack{}_{S,\eta})
+      &=M_{P,E(\Gamma),\rho(\eta)}(E(e)).
+ \end{aligned}
+\]
+
+for well-formed types and locally safe expressions. The proof is mutual
+structural induction: the predicate case uses preservation of its Boolean
+body, product/function cases use their induced bijections, application
+uses exact-domain preservation, and contextual cases split on the same
+Boolean value. Primitive cases are the explicit correspondence premises.
+This induction also preserves the VC formulas, so
+
+\[
+ \operatorname{LocalSafe}(C)
+ \quad\Longleftrightarrow\quad
+ \models_P E(\operatorname{VC}_S(C)).
+\]
+
+This is the advertised soundness and semantic relative completeness for the
+specified reference core. The compiled machine relation is preserved as
+well: union/conjunction/index quantification and frame equations commute
+with the representation maps. It remains a shallow translation.
+
+The integration intends native TCCs to realize these reference conditions.
+PVS may split, simplify, subsume or automatically prove obligations, so a
+TCC count is not a count of source conditions. To apply the result to our
+actual frontend, one must establish:
+
+1. SAL resolution/export/normalization preserves the intended relation and
+   every source typing occurrence with its lexical assumptions.
+2. The Lisp renderer implements E, including carriers, primitives, binders,
+   parameters, imports and source origin association.
+3. The conjunction of emitted native TCCs (including discharged/trivial ones)
+   is equivalent to the reference obligations under the formation premises.
+4. All those obligations are proved with sound rules, and any extra PVS
+   semantic extensions used by the model satisfy their own justification.
+
+Under these premises, Theorem 9 supplies the proof-soundness step and the
+equivalence above supplies LocalSafe(C). The report does not prove premises
+1-3 for this compiler. Nor should the experimental trusted SAL rule be used
+to justify its own translation correctness: the semantic-core proofs use
+ordinary PVS proof commands, without SAL proof closure or added axioms.
+
+* Mechanically checked semantic laws
+
+=Typing_Core.pvs= uses unrestricted stores [I -> V] and a separate arbitrary
+predicate ok(i,v). Its transition relation does not filter successors by
+their declared refinements. Thus a bad update is visible to preservation,
+rather than being removed from the relation by construction.
+
+| Declaration | Established statement |
+|-------------+-----------------------|
+| typed_update | From a typed store, an update is typed iff its value satisfies ok |
+| atom_exact | Guarded-update preservation iff its universally closed local VC |
+| choice_exact | Preservation of binary union iff preservation of both relations |
+| indexed_preservation | Preservation of indexed choice iff every component preserves |
+| indexed_choice_exact | Preservation of indexed choice iff every indexed local VC |
+| simultaneous_sound | All coordinate-local VCs imply simultaneous-update preservation |
+
+There is no synchronous converse. Guards and RHSs are total functions in
+this abstract theory; source definedness, compatibility and occurrence
+preservation remain external premises when applying it to source syntax.
+The six results are the mechanized portion of this note, not a mechanization
+of the entire source syntax, the paper, or the compiler.
+
+With the same environment as the tutorial launcher:
+
+#+begin_src sh
+src/sal/doc/semantics/run-typing-core.sh
+#+end_src
+
+The runner proves in one fresh context, copies the theory and saved proof
+to another fresh context, and replays in a second PVS process. All six
+declarations are proved-complete; all proof chains are complete; the theory
+generates zero TCCs and contains no AXIOM or ASSUMING declarations. Proofs
+use ordinary PVS commands, without SAL closure. Saved artifacts:
+
+- =Typing_Core.prf=: the replayed proof scripts.
+- =typing-core-evidence.txt=: environment, commands, counts and limitations.
+- =typing-core-proofchain.txt=: the native proof-chain status.
+- =typing-core-prove.log= and =typing-core-replay.log=:
+  full local transcripts, regenerated by the runner.
+
+* Reproducible boundary audit
+
+=audit_guard.sal= contains a universally enabled nondeterministic Boolean
+assignment followed by a guard =positive(arg)=, where =positive= requires a
+strictly positive argument but =arg= is any integer. Before the repair, the
+shallow operational OR formula was true after its first arm, and contextual
+PVS typing made the later guard's domain obligation trivial. The source
+report showed zero obligations. This is a counterexample to an unqualified
+claim that the pre-repair implementation recovered every source subtype
+check.
+
+The repair retains an independent Boolean check for potentially partial
+normalized command-choice arms. Its interior Boolean expressions keep their contextual typing;
+only the nondeterministic arm boundary loses the inappropriate assumption
+that a preceding arm is false. The operational relation is unchanged.
+Arms classified total by the existing syntactic analysis omit the redundant
+helper; correctness of that classification is another implementation premise.
+
+=audit_index.sal= tests a similar overlapping choice with =bits'[idx]=.
+The existing assignment helper already retains the required index-domain
+condition because the normalized RHS contains the array update. It is a
+positive control, not a second confirmed defect.
+
+In a session started by =../run-demo.sh=:
+
+#+begin_src lisp
+(load (merge-pathnames "semantics/audit.lisp" *sal-doc-directory*))
+#+end_src
+
+The diagnostic intentionally leaves the false TCCs open. The source-level
+regression for the repair also checks that ordinary guarded IF/AND/OR
+expressions do not acquire spurious obligations. Neither these tests nor
+the 372-target corpus result prove the complete occurrence-preservation
+premise above.
+
+The diagnostic writes the current source reports to =audit-results.txt=.
+The bridge regression completed with 102 passing assertions and its fresh
+replay with 40. A final focused run checks the guard repair, partial
+assignments and the 65-LET semantic example (17 passing assertions),
+including omission of redundant checks on syntactically total arms.
+Retained local transcripts are
+=../../.work/tests/guard-full.dr0Yg4/output.log=,
+=../../.work/tests/guard-full.dr0Yg4/replay.log= and
+=../../.work/tests/guard-final.WvMQrG/output.log=.
+These assertion counts include proof-status and integration checks; they
+are not additional semantic theorems.
+
+* What completeness cannot mean
+
+- Proof search: arbitrary predicate validity is undecidable, and validity in
+  the report's standard set semantics is stronger than provability.
+- Reachable safety: with x:[0..2], initialize x=0, keep x=0, and include
+  =x=2 --> x'=3=. Every reachable state can be safe while local typing fails
+  at the typed but unreachable state x=2.
+- Relation-only safety: =INITIALIZATION x=3= with x:[0..2] denotes an empty
+  typed initial relation but violates deterministic initialization typing.
+- Synchronous converse: a component that never steps can make a composite
+  relation empty, masking another component's ill-typed assignment.
+- Whole-language coverage: unsupported carriers, recursive termination
+  heuristics, source-occurrence coverage, modern interpretations and
+  primitive correspondences need their own treatment.
+- Progress: type safety implies neither an initial state nor a successor,
+  nor existence/uniqueness of solutions to algebraic loops. Keep initialization
+  feasibility, deadlock freedom and causality contracts separate.
+
+An open native TCC means the associated typing assurance is unfinished.
+Being admitted by a model checker also requires a supported concrete fragment;
+predicate-subtype support by itself does not make an infinite state space
+finite or executable.

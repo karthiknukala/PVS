@@ -1,0 +1,8 @@
+Reverse_Array: THEORY
+BEGIN
+  IMPORTING Reverse_Array_Library AS lib
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+
+  mark_zero_first: THEOREM native.invariant(lib.ordered)
+END Reverse_Array

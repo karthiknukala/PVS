@@ -1,0 +1,34 @@
+% Shallow CTL over the actual relation, including terminal states.
+% Operators follow sal-smc-core.scm's preimage/least/greatest fixed points.
+% There is no syntax datatype, evaluator, stutter completion, or assumed axiom.
+% At a terminal state AX(FALSE) and AF(FALSE) hold, while EX(TRUE) and
+% EG(TRUE) do not. Native command-line temporal simplifications assume a
+% deadlock-free model; backend admission must establish that obligation.
+SAL_CTL[S: TYPE, step: [S, S -> bool]]: THEORY
+BEGIN
+  Pred: TYPE = [S -> bool]
+  Transformer: TYPE = [Pred -> Pred]
+  included(p, q: Pred): bool = FORALL (s: S): p(s) IMPLIES q(s)
+  least(f: Transformer)(s: S): bool =
+    FORALL (q: Pred): included(f(q), q) IMPLIES q(s)
+  greatest(f: Transformer)(s: S): bool =
+    EXISTS (q: Pred): q(s) AND included(q, f(q))
+  next_exists(p: Pred)(s: S): bool = EXISTS (t: S): step(s, t) AND p(t)
+  next_all(p: Pred)(s: S): bool = FORALL (t: S): step(s, t) IMPLIES p(t)
+  until_exists(p, q: Pred): Pred =
+    least(LAMBDA (z: Pred): LAMBDA (s: S): q(s) OR (p(s) AND next_exists(z)(s)))
+  until_all(p, q: Pred): Pred =
+    least(LAMBDA (z: Pred): LAMBDA (s: S): q(s) OR (p(s) AND next_all(z)(s)))
+  eventually_exists(p: Pred): Pred =
+    least(LAMBDA (z: Pred): LAMBDA (s: S): p(s) OR next_exists(z)(s))
+  eventually_all(p: Pred): Pred =
+    least(LAMBDA (z: Pred): LAMBDA (s: S): p(s) OR next_all(z)(s))
+  globally_exists(p: Pred): Pred =
+    greatest(LAMBDA (z: Pred): LAMBDA (s: S): p(s) AND next_exists(z)(s))
+  globally_all(p: Pred): Pred =
+    greatest(LAMBDA (z: Pred): LAMBDA (s: S): p(s) AND next_all(z)(s))
+  release_exists(p, q: Pred): Pred =
+    greatest(LAMBDA (z: Pred): LAMBDA (s: S): q(s) AND (p(s) OR next_exists(z)(s)))
+  release_all(p, q: Pred): Pred =
+    greatest(LAMBDA (z: Pred): LAMBDA (s: S): q(s) AND (p(s) OR next_all(z)(s)))
+END SAL_CTL

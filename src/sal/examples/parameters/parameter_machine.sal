@@ -1,0 +1,17 @@
+parameter_machine{T: TYPE, Limit: NATURAL}: CONTEXT =
+BEGIN
+  Count: TYPE = [0..Limit];
+  identity(x: T): T = x;
+
+  cell[seed: T, initial_count: Count]: MODULE =
+    BEGIN
+      OUTPUT payload: T
+      OUTPUT count: Count
+      INITIALIZATION
+        payload = identity(seed);
+        count = initial_count
+      TRANSITION
+        [count < Limit --> count' = count + 1
+         [] count = Limit --> count' = 0]
+    END;
+END

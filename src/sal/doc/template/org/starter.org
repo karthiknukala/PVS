@@ -1,0 +1,103 @@
+#+TITLE: Presentation title
+#+AUTHOR: Author name
+#+DATE: Presentation date
+#+STARTUP: beamer
+#+LATEX_CLASS: beamer
+#+LATEX_CLASS_OPTIONS: [aspectratio=169,11pt]
+#+BEAMER_FONT_THEME: serif
+#+LATEX_HEADER: \usepackage[mono]{inconsolata}
+#+LATEX_HEADER: \AtBeginDocument{\tcbset{every box/.style={opacityback=0,opacityframe=0}}}
+#+OPTIONS: H:1 toc:nil num:nil ^:{}
+#+LATEX_HEADER: \newcounter{slideblockdepth}
+#+LATEX_HEADER: \AddToHook{env/block/begin}{\stepcounter{slideblockdepth}%
+#+LATEX_HEADER: \setbeamerfont{block title}{size=\ifcase\value{slideblockdepth}\or\large\or\normalsize\else\small\fi,series=\ifnum\value{slideblockdepth}<3\bfseries\else\mdseries\fi,shape=\ifnum\value{slideblockdepth}<3\upshape\else\itshape\fi}%
+#+LATEX_HEADER: \ifnum\value{slideblockdepth}=1\setbeamercolor{block title}{fg=structure.fg}\else\setbeamercolor{block title}{fg=black}\fi}
+#+LATEX_HEADER: \AddToHook{env/block/after}{\addtocounter{slideblockdepth}{-1}}
+#+LATEX_HEADER: \institute{Affiliation \\ Presentation location}
+#+LATEX_HEADER: \setbeamertemplate{navigation symbols}{}
+
+# Optional title artwork: uncomment the next line and change the path.
+# #+LATEX_HEADER: \titlegraphic{\includegraphics[height=10mm]{assets/logo.pdf}}
+
+* Slide title
+
+Write the main point here.
+
+- First point
+- Second point
+
+* Nested headings
+
+** Main topic
+
+Text belonging to the main topic.
+
+*** Subtopic
+
+Text belonging to the subtopic.
+
+**** Detail
+
+Text belonging to the detail.
+
+** Next topic
+
+Another topic at the same level as the first.
+
+* Image and text
+
+** Text
+:PROPERTIES:
+:BEAMER_COL: 0.40
+:BEAMER_ENV: column
+:BEAMER_OPT: T
+:END:
+
+The function $f(x) = e^{-x}$ decreases from $1$ toward $0$.
+
+** Figure
+:PROPERTIES:
+:BEAMER_COL: 0.56
+:BEAMER_ENV: column
+:BEAMER_OPT: T
+:END:
+
+#+ATTR_LATEX: :width \linewidth :height 0.62\textheight :options keepaspectratio
+[[file:assets/decay.pdf]]
+
+* PVS
+
+#+begin_src pvs
+counter: THEORY
+BEGIN
+  state: TYPE = [# value: nat, ready?: bool #]
+
+  step(s: state): state =
+    s WITH [value := s`value + 1]
+
+  % Each step increases the value.
+  grows: LEMMA
+    FORALL (s: state): step(s)`value > s`value
+END counter
+#+end_src
+
+* SAL
+
+#+begin_src sal
+toggle: CONTEXT =
+BEGIN
+  system: MODULE =
+  BEGIN
+    OUTPUT on: BOOLEAN
+    INITIALIZATION on = FALSE
+    TRANSITION
+      [ flip: TRUE --> on' = NOT on ]
+  END;
+
+  % The next state reverses the output.
+END
+#+end_src
+
+# Local Variables:
+# org-latex-src-block-backend: engraved
+# End:

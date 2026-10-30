@@ -1,0 +1,7 @@
+frontend_zero_divisor: CONTEXT =
+BEGIN
+  % Native source accepts these expressions; PVS must expose their undefined
+  % arithmetic as unprovable source obligations rather than totalize them.
+  zero_quotient(x: INTEGER): INTEGER = x DIV 0;
+  zero_residue(x: INTEGER): INTEGER = x MOD 0;
+END

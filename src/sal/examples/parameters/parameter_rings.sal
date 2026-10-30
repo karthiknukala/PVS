@@ -1,0 +1,4 @@
+parameter_rings{n: NATURAL}: CONTEXT =
+BEGIN
+  R: TYPE = RINGSET(n);
+END

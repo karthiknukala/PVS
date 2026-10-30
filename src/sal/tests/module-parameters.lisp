@@ -1,0 +1,52 @@
+;;; Preserve parameter-domain obligations that native flattening can erase.
+(in-package :pvs)
+
+(defun sal-test-unused-module-actuals ()
+  (let* ((view (sal-parameter-open "parameter_module_domains" "system" "module-domains"))
+         (checks (sal-transition-view-module-checks view))
+         (obligations
+          (remove-if-not (lambda (obligation)
+                           (search "check_module" (sal-source-obligation-name obligation)
+                                   :test #'char-equal))
+                         (sal-transition-view-tccs view))))
+    (sal-parameter-theory view)
+    (sal-test (= 3 (length checks)) "nested module applications retain three domain checks")
+    (sal-test (every (lambda (check) (string= "context" (sal-module-check-scope check))) checks)
+              "source module applications are checked in their declaring context")
+    (sal-test (some (lambda (check)
+                     (and (string= "family" (sal-module-check-name check))
+                          (typep (sal-module-check-expression check) 'sal-for-all-expr))) checks)
+              "indexed module actual checks retain the native index quantifier")
+    (sal-test (some (lambda (obligation)
+                        (and (= 3 (sal-source-place-initial-line
+                                     (sal-source-obligation-place obligation)))
+                             (not (proved? (sal-source-obligation-declaration obligation)))))
+                      obligations)
+                "unused module actual retains source TCC at line 3"))
+  ;; Separate invalid contexts avoid PVS subsuming later FALSE obligations
+  ;; after one deliberately invalid module application in the same theory.
+  (dolist (name '("parameter_module_bad_context" "parameter_module_family"))
+    (let ((view (sal-parameter-open name "system" name)))
+      (sal-parameter-theory view)
+      (sal-test (some (lambda (obligation)
+                       (and (search "check_module" (sal-source-obligation-name obligation)
+                                    :test #'char-equal)
+                            (= 3 (sal-source-place-initial-line
+                                  (sal-source-obligation-place obligation)))
+                            (not (proved? (sal-source-obligation-declaration obligation)))))
+                     (sal-transition-view-tccs view))
+                (format nil "~a retains its native module/context argument TCC" name))))
+  (let* ((view (sal-parameter-open
+                "parameter_module_library" "cell" "module-selector-domain"
+                :selector "parameter_module_library{2}!cell[0]"))
+         (checks (sal-transition-view-module-checks view)))
+    (sal-test (null (formals (sal-parameter-theory view)))
+              "explicit module selection remains a closed shallow theory")
+    (sal-test (some (lambda (check) (string= "view" (sal-module-check-scope check))) checks)
+              "explicit selector module actual has a view-level domain check")
+    (sal-test (some (lambda (obligation)
+                     (and (search "check_module" (sal-source-obligation-name obligation)
+                                  :test #'char-equal)
+                          (not (proved? (sal-source-obligation-declaration obligation)))))
+                   (sal-transition-view-tccs view))
+              "explicit unused seed zero does not evade its positive subtype TCC")))

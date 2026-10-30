@@ -1,0 +1,12 @@
+% SAL context record_array; source /Users/e35480/git/kn-pvs/src/sal/examples/integration/record_array.sal.
+SALCTX_sal_record_x5F_array: THEORY
+BEGIN
+
+
+  sal_Index: TYPE = subrange(0, 1)
+
+  sal_Small: TYPE = subrange(0, 2)
+
+  sal_Cell: TYPE = [# sal_enabled: bool, sal_value: sal_Small #]
+
+END SALCTX_sal_record_x5F_array

@@ -1,0 +1,12 @@
+terminal_deadlock: CONTEXT =
+BEGIN
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: [0..2]
+      INITIALIZATION value = 0
+      % No ELSE or idle transition: value = 2 is a reachable deadlock.
+      TRANSITION [ advance: value < 2 --> value' = value + 1 ]
+    END;
+
+  bounded: THEOREM machine |- G(value <= 2);
+END

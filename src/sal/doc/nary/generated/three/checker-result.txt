@@ -1,0 +1,4 @@
+SAL SMC: /Users/e35480/git/kn-pvs/src/sal/doc/nary/nary.sal (aligned), PROVED
+Selected instance: nary{3}!sync
+Source fnv1a64:7ABC1890862453E7; backend 3.3
+proved.

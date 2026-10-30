@@ -1,0 +1,14 @@
+audit_index: CONTEXT =
+BEGIN
+  Index: TYPE = [0..1];
+  Bits: TYPE = ARRAY Index OF BOOLEAN;
+  machine: MODULE =
+    BEGIN
+      INPUT idx: INTEGER
+      OUTPUT bits: Bits
+      INITIALIZATION bits = [[i: Index] FALSE]
+      TRANSITION
+        [ free: TRUE --> bits' IN {v: Bits | TRUE}
+        [] indexed: TRUE --> bits'[idx] = FALSE ]
+    END;
+END

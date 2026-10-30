@@ -1,0 +1,104 @@
+% Negative admission examples.  Their mathematical PVS meanings remain valid;
+% they are deliberately outside the exact finite extraction fragment.
+
+Reverse_Unbounded: THEORY
+BEGIN
+  State: TYPE = int
+  initial(s: State): bool = s = 0
+  step(s, t: State): bool = t = s + 1
+  safe(s: State): bool = 0 <= s
+  native: THEORY = SAL_Transition_View{{
+    S := State, initial := initial, step := step }}
+  candidate: THEOREM native.invariant(safe)
+END Reverse_Unbounded
+
+Reverse_Opaque: THEORY
+BEGIN
+  State: TYPE = bool
+  allowed(s: State): bool
+  initial(s: State): bool = NOT s
+  step(s, t: State): bool = allowed(s) AND t
+  safe(s: State): bool = TRUE
+  native: THEORY = SAL_Transition_View{{
+    S := State, initial := initial, step := step }}
+  candidate: THEOREM native.invariant(safe)
+END Reverse_Opaque
+
+Reverse_Recursive: THEORY
+BEGIN
+  Count: TYPE = {n: int | 0 <= n AND n <= 3}
+  State: TYPE = Count
+  countdown(n: Count): RECURSIVE Count =
+    IF n = 0 THEN 0 ELSE countdown(n - 1) ENDIF
+    MEASURE n
+  initial(s: State): bool = s = 3
+  step(s, t: State): bool = t = countdown(s)
+  safe(s: State): bool = s <= 3
+  native: THEORY = SAL_Transition_View{{
+    S := State, initial := initial, step := step }}
+  candidate: THEOREM native.invariant(safe)
+END Reverse_Recursive
+
+% This TCC is false at the upper bound.  Typechecking alone must never make
+% the ill-typed successor admissible to a proof-closing model-checker rule.
+Reverse_Unproved_TCC: THEORY
+BEGIN
+  State: TYPE = {n: int | 0 <= n AND n <= 3}
+  initial(s: State): bool = s = 0
+  next(s: State): State = s + 1
+  step(s, t: State): bool = t = next(s)
+  safe(s: State): bool = s <= 3
+  native: THEORY = SAL_Transition_View{{
+    S := State, initial := initial, step := step }}
+  candidate: THEOREM native.invariant(safe)
+END Reverse_Unproved_TCC
+
+% A similarly named function is not the canonical reachability operator.
+Reverse_Fake_View: THEORY
+BEGIN
+  S: TYPE = bool
+  initial(s: S): bool = NOT s
+  step(s, t: S): bool = t
+  invariant(p: [S -> bool]): bool = p(TRUE)
+END Reverse_Fake_View
+
+Reverse_Fake_Invariant: THEORY
+BEGIN
+  IMPORTING Reverse_Fake_View AS native
+  safe(s: bool): bool = s
+  candidate: THEOREM native.invariant(safe)
+END Reverse_Fake_Invariant
+
+Reverse_Not_An_Invariant: THEORY
+BEGIN
+  candidate: THEOREM TRUE
+END Reverse_Not_An_Invariant
+
+Reverse_Generic[limit: posnat]: THEORY
+BEGIN
+  IMPORTING Reverse_Counter_Library[limit] AS lib
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+  candidate: THEOREM native.invariant(lib.safe)
+END Reverse_Generic
+
+% Abstract requirements become native mapped-axiom TCCs when interpreted.
+% The counter intentionally violates this requirement: its first step changes
+% the state.  A separate true safety property must not bypass that obligation.
+Reverse_Stuttering_Contract: THEORY
+BEGIN
+  S: TYPE
+  initial: [S -> bool]
+  step: [S, S -> bool]
+  preserves_state: AXIOM FORALL (s, t: S): step(s, t) IMPLIES s = t
+END Reverse_Stuttering_Contract
+
+Reverse_Mapped_TCC: THEORY
+BEGIN
+  IMPORTING Reverse_Counter_Library[1] AS lib
+  contract: THEORY = Reverse_Stuttering_Contract{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+  candidate: THEOREM native.invariant(lib.safe)
+END Reverse_Mapped_TCC

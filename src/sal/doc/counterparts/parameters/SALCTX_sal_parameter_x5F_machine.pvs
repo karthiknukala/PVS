@@ -1,0 +1,10 @@
+% SAL context parameter_machine; source /Users/e35480/git/kn-pvs/src/sal/examples/parameters/parameter_machine.sal.
+SALCTX_sal_parameter_x5F_machine[sal_T: TYPE, sal_Limit: nat]: THEORY
+BEGIN
+
+
+  sal_Count: TYPE = subrange(0, sal_Limit)
+
+  sal_identity: [sal_T -> sal_T] = (LAMBDA (bridge_local_1_sal_x: sal_T): bridge_local_1_sal_x)
+
+END SALCTX_sal_parameter_x5F_machine

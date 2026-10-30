@@ -1,0 +1,9 @@
+parameter_selector: CONTEXT =
+BEGIN
+  % This context is used only in the selector's actual arguments. It imports
+  % the generic root being selected, so its source must follow that root.
+  base: CONTEXT = parameter_machine{BOOLEAN, 2};
+  Value: TYPE = base!Count;
+  limit: NATURAL = 3;
+  seed: Value = 1;
+END

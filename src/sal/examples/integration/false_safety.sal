@@ -1,0 +1,10 @@
+false_safety: CONTEXT =
+BEGIN
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: [0..1]
+      INITIALIZATION value = 0
+      TRANSITION [ TRUE --> value' = 1 ]
+    END;
+  stays_zero: THEOREM machine |- G(value = 0);
+END

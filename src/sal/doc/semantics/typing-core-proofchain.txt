@@ -1,0 +1,65 @@
+
+Typing_Core.typed_update has been PROVED.
+
+  The proof chain for typed_update is COMPLETE.
+
+  typed_update depends on the following definitions:
+    Typing_Core.typed
+
+
+Typing_Core.atom_exact has been PROVED.
+
+  The proof chain for atom_exact is COMPLETE.
+
+  atom_exact depends on the following definitions:
+    Typing_Core.atom
+    Typing_Core.preserves
+    Typing_Core.typed
+    Typing_Core.vc
+
+
+Typing_Core.choice_exact has been PROVED.
+
+  The proof chain for choice_exact is COMPLETE.
+
+  choice_exact depends on the following definitions:
+    Typing_Core.choice
+    Typing_Core.preserves
+    Typing_Core.typed
+
+
+Typing_Core.indexed_preservation has been PROVED.
+
+  The proof chain for indexed_preservation is COMPLETE.
+
+  indexed_preservation depends on the following definitions:
+    Typing_Core.atom
+    Typing_Core.indexed_choice
+    Typing_Core.preserves
+    Typing_Core.typed
+
+
+Typing_Core.indexed_choice_exact has been PROVED.
+
+  The proof chain for indexed_choice_exact is COMPLETE.
+
+  indexed_choice_exact depends on the following definitions:
+    Typing_Core.atom
+    Typing_Core.indexed_choice
+    Typing_Core.indexed_vc
+    Typing_Core.preserves
+    Typing_Core.typed
+    Typing_Core.vc
+
+
+Typing_Core.simultaneous_sound has been PROVED.
+
+  The proof chain for simultaneous_sound is COMPLETE.
+
+  simultaneous_sound depends on the following definitions:
+    Typing_Core.indexed_vc
+    Typing_Core.preserves
+    Typing_Core.simultaneous
+    Typing_Core.typed
+    Typing_Core.vc
+

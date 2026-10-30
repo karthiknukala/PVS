@@ -1,0 +1,25 @@
+SAL SMC: /Users/e35480/git/kn-pvs/src/sal/doc/nary/nary.sal (async_aligned), COUNTEREXAMPLE
+Selected instance: nary{3}!async
+Source fnv1a64:7ABC1890862453E7; backend 3.3
+Counterexample:
+========================
+Path
+========================
+Step 0:
+--- System Variables (assignments) ---
+values[1] = 0
+values[2] = 0
+values[3] = 0
+------------------------
+Transition Information: 
+(module instance at [Context: nary, line(24), column(25)]
+  (with i = 1 at [Context: nary, line(20), column(6)]
+    (module instance at [Context: nary, line(20), column(51)]
+      (label increment
+        transition at [Context: nary, line(10), column(21)]))))
+------------------------
+Step 1:
+--- System Variables (assignments) ---
+values[1] = 1
+values[2] = 0
+values[3] = 0

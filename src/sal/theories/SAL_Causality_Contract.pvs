@@ -1,0 +1,11 @@
+% This optional structural contract supplies a scheduling obligation.
+% Interpret it over the source dependency graph to obtain a mapped-axiom TCC.
+% It says nothing about existence or uniqueness of relational fixed points.
+SAL_Causality_Contract: THEORY
+BEGIN
+  Node: TYPE
+  dependency: [Node, Node -> bool]
+  structural_acyclic: AXIOM
+    EXISTS (rank: [Node -> nat]):
+      FORALL (x, y: Node): dependency(x, y) IMPLIES rank(y) < rank(x)
+END SAL_Causality_Contract

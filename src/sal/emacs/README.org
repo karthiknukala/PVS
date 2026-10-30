@@ -1,0 +1,223 @@
+#+TITLE: Experimental SAL buffers and proofs in PVS
+
+This optional frontend keeps the SAL source buffer as the entry point. Native
+SAL checks well-formedness first; the bridge then exports and translates the
+selected machine, and PVS typechecks the shallow definitions and generates TCCs.
+The ordinary PVS prover owns goals, strategies, proof files and replay.
+
+* Installation
+
+For an isolated demo from a terminal, set =SAL_XMLS_SOURCE= and run
+=src/sal/tools/start-editor.sh=. It selects this checkout's PVS executable and
+the sibling =kn-sal= installation; =PVS_BIN= and =SAL_HOME= can override them.
+The launcher uses =-q=, clears =PVS_LIBRARY_PATH= for this process, loads the
+Lisp bridge and Emacs modes, and opens =bounded_counter.sal=. Press =C-c C-t=
+and choose =counter=. It leaves startup files and library installations untouched;
+temporary files, caches and the initial context stay under =src/sal/.work=.
+
+For an already running, normally initialized session:
+
+Start a working PVS Emacs session with =SAL_HOME= pointing to SAL and
+=SAL_XMLS_SOURCE= pointing to an existing =xmls.lisp=, unless XMLS is already
+loaded in that PVS image. This checkout's optional bridge need not be built into
+the image. Set these environment variables before starting PVS.
+
+Evaluate the following in that Emacs session, substituting your paths:
+
+#+begin_src emacs-lisp
+(load "/path/to/kn-sal/etc/sal-mode.el")
+(load "/path/to/kn-pvs/src/sal/emacs/sal-pvs-mode.el")
+(add-to-list 'auto-mode-alist '("\\.sal\\'" . sal-mode))
+(add-hook 'sal-mode-hook #'sal-pvs-mode)
+#+end_src
+
+For an already open SAL buffer, run =M-x sal-mode= and =M-x sal-pvs-mode=.
+The minor mode adds PVS commands to SAL's existing editing mode. It loads the
+Lisp bridge into the existing PVS process on first use. It does not start a
+second prover or change the installed PVS or SAL files.
+
+* Recovery from startup/debugger errors
+
+An =EXTRA-LOAD-PVSLIBS= failure in =nasalib/.pvs.lisp= happens during PVS
+initialization, before the SAL bridge. A prompt such as =0]= or =0[2]= means
+the process is still in the SBCL debugger. Subsequent evaluations there do not
+establish that PVS completed initialization. Start a fresh demo using the
+launcher above, which bypasses that external library startup for this session.
+
+Older kn-pvs images already contain the four-coordinate =SAL-SOURCE-PLACE=
+structure. The bridge now keeps its layout intact and carries the source filename
+in a subtype. Loading does not require SBCL's incompatible-structure restarts.
+If a previous load already changed the structure in the debugger, restart with
+the corrected loader rather than using =RECKLESSLY-CONTINUE= or repeated
+=exit-debugger= calls. No PVS rebuild is needed for this compatibility fix.
+
+* Tutorial: bounded counter
+
+Visit [[file:../examples/bounded_counter.sal][bounded_counter.sal]], enable the mode, and use:
+
+| Key         | Command                  | Effect                                      |
+|-------------+--------------------------+---------------------------------------------|
+| =C-c C-t=   | =sal-pvs-typecheck=       | Save, run sal-wfc, translate and typecheck   |
+| =C-u C-c C-t= | =sal-pvs-typecheck=     | Select a different module before checking   |
+| =C-c C-q=   | =sal-pvs-show-tccs=       | Show TCCs, statuses and SAL source links     |
+| =C-c C-p=   | =sal-pvs-prove=           | Prove the SAL formula at point, or choose it |
+| =C-c C-v=   | =sal-pvs-toggle-view=     | Switch SAL source / generated PVS file      |
+| =C-c C-s=   | =sal-pvs-toggle-syntax=   | Toggle SAL/PVS presentation for this session |
+
+1. Typecheck, choosing =counter=. A native =sal-wfc= failure opens
+   =*SAL/PVS Diagnostics*= and prevents export/translation. Successful WFC does
+   not discharge predicate subtype TCCs. The checker searches for dependencies
+   beside the source first, followed by =SALCONTEXTPATH=, matching the exporter.
+2. View the TCCs. Each theorem name is a proof button; its source link visits
+   the SAL declaration or assignment that generated the obligation. For example,
+   the =count' = count + 1= check is displayed with SAL field selections,
+   =FORALL=, =AND= and =STATE_TYPE(bounded_counter!counter)=. It retains the
+   guard =count < LIMIT= and the bound =LIMIT= from the current PVS formula.
+3. Activate =check_step_5_TCC1= in the TCC list. In the native prover, try
+   =(skosimp*)=, then =(grind)=. The sequent follows the actual transformed goal.
+   SAL formulas have left-hand labels such as =SAL/{1}= and =SAL/[-1]=,
+   preserving the native formula numbers, user labels and change markers.
+   There is no experimental-display banner. PVS fallback formulas keep the
+   ordinary labels. A display name such as =pvs_s_x21_1= has a legend giving its PVS name =s!1=.
+   Use the PVS name in expression arguments to proof commands.
+4. Move to the SAL declaration =bounded: THEOREM counter |- G(count <= LIMIT)=
+   and press =C-c C-p=. Its recognized shallow invariant is displayed as
+   =(bounded_counter!counter |- G((count <= bounded_counter!LIMIT)))=.
+   Existing bridge strategies such as =(sal-source)= and =(sal-check)= remain
+   available, subject to their usual admission and TCC requirements.
+5. Inside the proof, =(sal-syntax nil)= restores the native PVS sequent and
+   =(sal-syntax t)= prints it in SAL syntax again. =(sal-syntax)= toggles.
+   The editor key toggles subsequent output; reopen the TCC list to refresh it.
+
+The TCC buffer follows the usual PVS listing style: a clickable
+=name: OBLIGATION= and the full formula, with source links, proof status and
+the originating SAL expression in =%= comment lines above it. Quantifiers and
+implications are indented, and logical expressions wrap across lines. There is
+no introductory banner, prose summary or hidden formula. For example:
+
+#+begin_src text
+% bounded_counter.sal:30
+% SAL_sal_bounded_x5F_counter_sal_counter.check_step_5_TCC1 [UNFINISHED]
+% count' = count + 1
+check_step_5_TCC1: OBLIGATION
+  FORALL (s: STATE_TYPE(bounded_counter!counter),
+          next: STATE_TYPE(bounded_counter!counter)):
+    (s.phase = bounded_counter!counting AND s.count < bounded_counter!LIMIT)
+      => (0 <= (s.count + 1) AND (s.count + 1) <= bounded_counter!LIMIT);
+#+end_src
+
+Formatting preserves the actual formula, including unused binders and context
+qualification. It does not simplify the obligation or change the proof target.
+To pick up the formatter in an already running session, evaluate this with
+=M-:=, substituting your checkout path, then press =C-c C-q= in the SAL buffer:
+
+#+begin_src emacs-lisp
+(progn
+  (pvs-send-and-wait
+   "(progn (load \"/path/to/kn-pvs/src/sal/sal-display.lisp\")
+           (load \"/path/to/kn-pvs/src/sal/editor.lisp\") t)" nil nil)
+  (load "/path/to/kn-pvs/src/sal/emacs/sal-pvs-mode.el"))
+#+end_src
+
+Native PVS proof saving and replay apply to the generated theory in =src/sal/.work=.
+The bridge must be loaded when replaying scripts that contain =sal-syntax=.
+Proof entry uses the native interactive Emacs transport, so the initial sequent
+and =Rule?= prompt appear immediately in =*pvs*=. No interrupt/restore cycle is
+needed. Save and exit proofs with the ordinary PVS interface. Source navigation returns
+to the corresponding SAL declaration after leaving the proof.
+
+To inspect the actual shallow translation, use =C-c C-v= or
+=M-x sal-pvs-toggle-view=. On first use it typechecks as needed and asks for the
+module if none is selected. It opens that view's generated =.pvs= file read-only,
+with normal PVS editing-mode display. Press =C-c C-v= again to return to SAL.
+Each buffer retains its position. Edit the SAL source and typecheck again to
+regenerate the translation; the command refreshes an unchanged PVS buffer from
+disk, but refuses to discard unsaved PVS edits. The existing =C-c C-s= command
+continues to control prover/TCC syntax independently.
+
+To add this command to an already running session, evaluate the following with
+=M-:= (substitute your checkout path). No Lisp bridge reload is needed:
+
+#+begin_src emacs-lisp
+(load "/path/to/kn-pvs/src/sal/emacs/sal-pvs-mode.el")
+#+end_src
+
+The [[file:../examples/integration/][integration examples]] include deliberately
+unprovable obligations. Typechecking success means that obligations were
+generated; it does not mean they were proved. Default editor checking includes
+the bridge's progress obligations as well as typing TCCs.
+
+* Parameters, imports and proof targets
+
+The module chooser works on one selected machine at a time. Imported source
+TCCs appear with their own filenames. Choose =--context= for a library context
+without a machine. Generic context/module parameters use the existing shallow
+parameter elaboration; explicit actuals can be supplied through the Lisp
+=sal-open= API. The editor does not yet provide an actual-parameter dialog.
+Only formula declarations supported and associated with that selected view
+are offered as proof targets. Other temporal formulas are not silently replaced
+by invariants; the translator's existing coverage boundary still applies.
+
+Unsaved changes, edited source dependencies, changed generated contexts and
+obsolete proof buttons prevent starting a stale proof. Typecheck again and
+refresh the TCC list. A failed typecheck clears the buffer's cached proof targets.
+Typechecking is disabled while a proof is active; the display toggle works
+during a proof.
+
+* Experimental display boundary
+
+SAL syntax is enabled by default in this minor mode. The standalone Lisp bridge
+defaults to native PVS display. From Lisp:
+
+#+begin_src lisp
+(sal-set-syntax-mode t)
+(sal-show-obligations view)
+(sal-set-syntax-mode nil)
+#+end_src
+
+The switch applies only to registered SAL-origin declarations, identified by
+their generated source files. Ordinary PVS proofs keep their usual display.
+The formatter reads typed PVS expressions and restores SAL identifiers,
+qualification, binders, record selections, logical operators and supported
+types. It preserves sequent numbering, labels and distinct state variables.
+It never substitutes the original SAL theorem for a transformed proof goal.
+
+This is a display layer, not a SAL proof-command parser or a general PVS-to-SAL
+exporter. Commands and expression arguments remain PVS; rewrite diagnostics and
+other native prover messages may also use PVS. Auxiliary definitions can remain
+visible by their generated names. Strings, dependent function types, theory
+mappings, parallel/nested updates and ambiguous array/function representations
+use an explicit =[PVS fallback: reason]= with the whole original formula.
+Those goals remain available to the ordinary prover. No kernel, proof admission,
+model-checker trust or proof evidence policy changes with the switch.
+
+* Implementation and regression checks
+
+- [[file:../wfc.lisp][wfc.lisp]]: prerequisite native checker and diagnostics.
+- [[file:../sal-display.lisp][sal-display.lisp]]: optional sequent printer and display rule.
+- [[file:../editor.lisp][editor.lisp]]: data-only requests, source locations and native proof entry.
+- [[file:sal-pvs-mode.el][sal-pvs-mode.el]]: editor commands and proof/source buttons.
+
+#+begin_src sh
+emacs -Q --batch -l src/sal/tests/editor-ert.el
+PVS_BIN=/path/to/pvs/pvs \
+SAL_HOME=/path/to/kn-sal \
+SAL_XMLS_SOURCE=/path/to/xmls/xmls.lisp \
+  src/sal/tools/run-editor-tests.sh
+SAL_XMLS_SOURCE=/path/to/xmls/xmls.lisp \
+  src/sal/tools/start-editor.sh -batch \
+  -l /absolute/path/to/kn-pvs/src/sal/tests/editor-startup.el
+#+end_src
+
+The editor tests exercise command transport quoting, target selection, distinct
+buttons, failure invalidation and toggling during proofs. Native integration
+tests generate real TCCs, check a printed TCC with SAL, run proofs with the
+display toggled, save and replay in a fresh PVS process, exercise native proof
+entry, reject stale targets and check that ordinary PVS proofs remain unaffected.
+Logs and generated proof contexts stay under =src/sal/.work/tests/editor.*=.
+The startup smoke test uses the real PVS/Emacs transport to typecheck the counter,
+receive its formulas/TCCs, switch to its PVS translation and back, and display
+the TCC buffer. It also enters a TCC proof and a source theorem proof through
+the real interactive transport, checks that their initial sequents are visible
+without interruption, steps the TCC, and toggles SAL/PVS labels. Success is recorded in
+=src/sal/.work/tests/editor-startup.result=.

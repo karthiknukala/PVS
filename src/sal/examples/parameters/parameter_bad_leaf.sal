@@ -1,0 +1,7 @@
+parameter_bad_leaf{Limit: NATURAL}: CONTEXT =
+BEGIN
+  Count: TYPE = [0..Limit];
+  % Deliberately partial at x = Limit: native SAL accepts this declaration,
+  % but the translated function must retain its PVS range TCC.
+  overflow(x: Count): Count = x + 1;
+END

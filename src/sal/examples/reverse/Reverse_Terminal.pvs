@@ -1,0 +1,9 @@
+Reverse_Terminal: THEORY
+BEGIN
+  IMPORTING Reverse_Terminal_Library AS lib
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+
+  observed_before_finish: THEOREM native.invariant(lib.safe)
+  never_finishes: THEOREM native.invariant(lib.unfinished)
+END Reverse_Terminal

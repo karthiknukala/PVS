@@ -1,0 +1,3 @@
+/Users/e35480/git/kn-pvs/src/sal/doc/nary/nary.sal:10 check_step_1_TCC1 [SUBTYPE; NIL]
+  SAL: values'[i_2] = values[i_2] + 1
+  PVS: FORALL (s, next: State, bridge_local_3_sal_i_x5F_2: sal_Index[3]): ((s`sal_values)(bridge_local_3_sal_i_x5F_2) < 2) IMPLIES 0 <= ((s`sal_values)(bridge_local_3_sal_i_x5F_2) + 1) AND ((s`sal_values)(bridge_local_3_sal_i_x5F_2) + 1) <= 2

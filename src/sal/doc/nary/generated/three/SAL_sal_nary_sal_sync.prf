@@ -1,0 +1,42 @@
+(|SAL_sal_nary_sal_sync|
+ (|check_step_1_TCC1| 0
+  (|check_step_1_TCC1-1| NIL 4001959438 ("" (GRIND) NIL NIL)
+   ((|posint_plus_nnint_is_posint| APPLICATION-JUDGEMENT "posint" |integers|
+     NIL)
+    (|minus_nzint_is_nzint| APPLICATION-JUDGEMENT "nzint" |integers| NIL)
+    (|real_lt_is_strict_total_order| NAME-JUDGEMENT
+     "(strict_total_order?[real])" |real_props| NIL)
+    (|real_le_is_total_order| NAME-JUDGEMENT "(total_order?[real])"
+     |real_props| NIL)
+    (|sal_Index| TYPE-EQ-DECL NIL |SALCTX_sal_nary| NIL)
+    (AND CONST-DECL "[[bool, bool] -> bool]" |booleans| NIL)
+    (|int| NONEMPTY-TYPE-EQ-DECL NIL |integers| NIL)
+    (|integer_pred| CONST-DECL "[rational -> boolean]" |integers| NIL)
+    (|rational| NONEMPTY-TYPE-FROM-DECL NIL |rationals| NIL)
+    (|rational_pred| CONST-DECL "[real -> boolean]" |rationals| NIL)
+    (<= CONST-DECL "[[real, real] -> bool]" |reals| NIL)
+    (|real| NONEMPTY-TYPE-FROM-DECL NIL |reals| NIL)
+    (|real_pred| CONST-DECL "[number_field -> boolean]" |reals| NIL)
+    (|number_field| NONEMPTY-TYPE-FROM-DECL NIL |number_fields| NIL)
+    (|number_field_pred| CONST-DECL "[number -> boolean]" |number_fields| NIL)
+    (|number| NONEMPTY-TYPE-DECL NIL |numbers| NIL)
+    (NOT CONST-DECL "[bool -> bool]" |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL))
+   SHOSTAK
+   (|check_step_1| SUBTYPE
+    "((number_fields.+)(((SAL_sal_nary_sal_sync.s)`sal_values)(SAL_sal_nary_sal_sync.bridge_local_3_sal_i_x5F_2), 1))"
+    "subrange(0, 2)" (29 109 29 157))))
+ (|sal_aligned| 0
+  (|sal_aligned-1| NIL 4001959440
+   (""
+    (THEN (SAL-SOURCE)
+     (SAL-CHECK #A((29) BASE-CHAR . "SAL_sal_nary_sal_sync.aligned")))
+    NIL NIL)
+   ((|check_step_1_TCC1| SUBTYPE-TCC NIL |SAL_sal_nary_sal_sync| NIL)
+    (|reachable_TCC1| SUBTYPE-TCC NIL |SAL_Transition_System| NIL)
+    (|reachable_TCC2| SUBTYPE-TCC NIL |SAL_Transition_System| NIL)
+    (|reachable_TCC3| SUBTYPE-TCC NIL |SAL_Transition_System| NIL)
+    (|reachable_TCC4| SUBTYPE-TCC NIL |SAL_Transition_System| NIL))
+   SHOSTAK)))
+

@@ -1,0 +1,6 @@
+frontend_nonterminating: CONTEXT =
+BEGIN
+  % The bridge must retain an impossible termination obligation for this
+  % accepted SAL source definition rather than silently dropping the function.
+  loop(p: BOOLEAN): BOOLEAN = loop(p);
+END

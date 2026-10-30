@@ -1,0 +1,16 @@
+% An ordinary parameterized PVS library.  It does not import the SAL bridge.
+Reverse_Counter_Library[limit: posnat]: THEORY
+BEGIN
+  Count: TYPE = {n: int | 0 <= n AND n <= limit}
+  State: TYPE = [# count: Count, started: bool #]
+
+  advance(n: Count): Count = IF n < limit THEN n + 1 ELSE n ENDIF
+  next(s: State): State =
+    (# count := advance(s`count),
+       started := IF s`count < limit THEN TRUE ELSE s`started ENDIF #)
+
+  initial(s: State): bool = s`count = 0 AND NOT s`started
+  step(s, t: State): bool = t = next(s)
+  safe(s: State): bool = s`count = 0 OR s`started
+  zero(s: State): bool = s`count = 0
+END Reverse_Counter_Library

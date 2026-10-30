@@ -1,0 +1,14 @@
+parameter_bad_parent: CONTEXT =
+BEGIN
+  bad: CONTEXT = parameter_bad_leaf{2};
+  Count: TYPE = bad!Count;
+
+  system: MODULE =
+    BEGIN
+      OUTPUT count: Count
+      INITIALIZATION count = 0
+      TRANSITION count' = bad!overflow(count)
+    END;
+
+  bounded: THEOREM system |- G(count <= 2);
+END

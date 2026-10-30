@@ -1,0 +1,7 @@
+frontend_unused_temporal: CONTEXT =
+BEGIN
+  % X(p) and G(p) must remain independent in the typing abstraction.
+  independent(p: BOOLEAN): BOOLEAN =
+    IF X(p) AND NOT G(p) THEN 1 / 0 > 0 ELSE FALSE ENDIF;
+  bad(n: NATURAL): BOOLEAN = G(n / 0 > 0);
+END

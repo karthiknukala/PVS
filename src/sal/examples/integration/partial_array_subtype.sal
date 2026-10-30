@@ -1,0 +1,15 @@
+partial_array_subtype: CONTEXT =
+BEGIN
+  Index: TYPE = [0..1];
+  Small: TYPE = [0..2];
+  machine: MODULE =
+    BEGIN
+      OUTPUT values: ARRAY Index OF Small
+      INITIALIZATION values = [[i: Index] 0]
+      TRANSITION
+        [ safe: TRUE --> values'[0] = 0
+        [] overflow: TRUE --> values'[0] = values[0] + 1 ]
+    END;
+
+  bounded: THEOREM machine |- G(FORALL(i: Index): values[i] <= 2);
+END

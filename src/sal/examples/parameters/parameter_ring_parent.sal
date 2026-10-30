@@ -1,0 +1,15 @@
+parameter_ring_parent: CONTEXT =
+BEGIN
+  % Deliberately differs from the imported actual; generic alias bodies must
+  % not capture this same-spelled constant when computing ring bounds.
+  n: NATURAL = 9;
+  R: TYPE = parameter_rings{3}!R;
+
+  system: MODULE =
+    BEGIN
+      OUTPUT r: R
+      TRANSITION r' = rsucc(r)
+    END;
+
+  bounded: THEOREM system |- G(rsucc(rsucc(rsucc(r))) = r AND rpred(rsucc(r)) = r);
+END

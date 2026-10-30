@@ -1,0 +1,13 @@
+% Choose an existing PVS library instance, then interpret the transition view.
+% The library's definitions are the only implementation of the machine.
+Reverse_Counter: THEORY
+BEGIN
+  IMPORTING Reverse_Counter_Library[3] AS lib
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+
+  safe: THEOREM native.invariant(lib.safe)
+  stays_zero: THEOREM native.invariant(lib.zero)
+  safe_statement: bool = native.invariant(lib.safe)
+  safe_alias: THEOREM safe_statement
+END Reverse_Counter

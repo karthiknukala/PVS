@@ -1,0 +1,12 @@
+nondeterministic_selection: CONTEXT =
+BEGIN
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: [0..7]
+      % SAL's IN semantics retains both the predicate and its domain.
+      INITIALIZATION value IN {n: [2..4] | TRUE}
+      TRANSITION [ choose: TRUE --> value' IN {n: [2..4] | n /= value} ]
+    END;
+
+  restricted: THEOREM machine |- G(2 <= value AND value <= 4);
+END

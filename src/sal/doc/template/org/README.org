@@ -1,0 +1,40 @@
+#+TITLE: Org slides
+
+Copy =starter.org=, open it in Emacs, and use =C-c C-e l P= to export
+Beamer PDF, or =C-c C-e l O= to export and open it. Restart Emacs once
+to pick up the installed PVS/SAL mode autoloads. Use capital =P= or =O=;
+lowercase =p= or =o= selects ordinary LaTeX export and loses Beamer layouts.
+
+The file uses ordinary Org and Beamer, with Computer Modern serif text
+and Inconsolata code. Code has no background fill or border. These settings
+are ordinary LaTeX header lines at the top of the Org file.
+Edit the title, author, date, and institute lines at the top. The institute
+contains the affiliation and presentation location. Uncomment the
+=titlegraphic= line to add a logo or other title image.
+
+Each top-level heading is a slide. Copy the two-column example to place
+text and images side by side; edit =BEAMER_COL= for widths. Replace either
+column's content with text, an image link, or code. An image link outside
+the columns fills a normal slide; =ATTR_LATEX= controls its size.
+
+Use =#+begin_src pvs= or =#+begin_src sal= for highlighted code.
+Org's built-in =engraved= backend uses the actual PVS and SAL Emacs modes
+through the standard GNU ELPA package =engrave-faces= (already installed).
+Keep the Local Variables block at the end of each deck to enable it.
+Other source languages work through their Emacs modes too.
+
+There are no build scripts, custom exporters, themes, or language lexers.
+The sample image is =assets/decay.pdf=; copy it with the starter or replace
+its link with your own image. PDF, PNG, and JPEG work with normal export.
+
+Nested headings have different typography as well as size. See the
+"Nested headings" slide in =starter.org=:
+
+- =*= is the slide title.
+- =**= is large, bold, and uses the Beamer heading color.
+- =***= is normal size, bold, and black.
+- =****= and deeper are small, italic, and black.
+
+The =slideblockdepth= LaTeX header lines control the sizes, weight, shape,
+and color. The hierarchy follows nested titled blocks; column labels stay
+hidden. Keep =H:1= so top-level headings remain individual slides.

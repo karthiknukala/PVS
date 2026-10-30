@@ -1,0 +1,14 @@
+Source typing audit; intentionally false obligations remain open.
+
+audit_guard
+/Users/e35480/git/kn-pvs/src/sal/doc/semantics/audit_guard.sal:12 check_choice_step_2_TCC1 [SUBTYPE; NIL]
+  SAL: TRUE AND audit_guard!positive(arg) AND (flag' = FALSE)
+  PVS: FORALL (s: State): (s`sal_arg > 0)
+Source obligation count: 1
+
+audit_index
+/Users/e35480/git/kn-pvs/src/sal/doc/semantics/audit_index.sal:8 check_step_1_TCC1 [SUBTYPE; NIL]
+  SAL: bits' = bits WITH [idx] := FALSE
+  PVS: FORALL (s: State): 0 <= s`sal_idx AND s`sal_idx <= 1
+Source obligation count: 1
+

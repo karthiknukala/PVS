@@ -1,0 +1,4 @@
+parameter_alias_library{Bound: {n: NATURAL | n > 0}}: CONTEXT =
+BEGIN
+  value: NATURAL = Bound;
+END

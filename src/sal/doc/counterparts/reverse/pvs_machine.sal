@@ -1,0 +1,16 @@
+%% Generated from typechecked PVS definitions; finite, relational translation.
+pvs_machine: CONTEXT =
+BEGIN
+  State: TYPE = [# pvs_count: {pvs_subtype_1: [0..3] | ((0 <= pvs_subtype_1) AND (pvs_subtype_1 <= 3))}, pvs_started: BOOLEAN #];
+
+  machine: MODULE =
+  BEGIN
+    LOCAL state: State
+    INITIALIZATION
+      state IN {candidate: State | (((candidate).pvs_count = 0) AND (NOT (candidate).pvs_started))}
+    TRANSITION
+      state' IN {candidate: State | (candidate = (# pvs_count := (IF ((state).pvs_count < 3) THEN ((state).pvs_count + 1) ELSE (state).pvs_count ENDIF), pvs_started := (IF ((state).pvs_count < 3) THEN TRUE ELSE (state).pvs_started ENDIF) #))}
+  END;
+
+  safety: THEOREM machine |- G((((state).pvs_count = 0) OR (state).pvs_started));
+END

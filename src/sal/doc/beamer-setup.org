@@ -1,0 +1,20 @@
+#+STARTUP: beamer
+#+LATEX_CLASS: beamer
+#+LATEX_CLASS_OPTIONS: [aspectratio=169,11pt]
+#+BEAMER_FONT_THEME: serif
+#+LATEX_HEADER: \usepackage[mono]{inconsolata}
+#+LATEX_HEADER: \AtBeginDocument{\tcbset{every box/.style={opacityback=0,opacityframe=0}}}
+#+OPTIONS: H:1 toc:nil num:nil ^:{} author:nil
+#+LATEX_HEADER: \newcounter{slideblockdepth}
+#+LATEX_HEADER: \AddToHook{env/block/begin}{\stepcounter{slideblockdepth}%
+#+LATEX_HEADER: \setbeamerfont{block title}{size=\ifcase\value{slideblockdepth}\or\large\or\normalsize\else\small\fi,series=\ifnum\value{slideblockdepth}<3\bfseries\else\mdseries\fi,shape=\ifnum\value{slideblockdepth}<3\upshape\else\itshape\fi}%
+#+LATEX_HEADER: \ifnum\value{slideblockdepth}=1\setbeamercolor{block title}{fg=structure.fg}\else\setbeamercolor{block title}{fg=black}\fi}
+#+LATEX_HEADER: \AddToHook{env/block/after}{\addtocounter{slideblockdepth}{-1}}
+#+LATEX_HEADER: \institute{Experimental integration \quad | \quad src/sal}
+#+LATEX_HEADER: \setbeamertemplate{navigation symbols}{}
+#+LATEX_HEADER: \setbeamertemplate{footline}{\hfill\usebeamerfont{page number in head/foot}\insertframenumber\,/\,\inserttotalframenumber\hspace{5mm}\vspace{3mm}}
+#+LATEX_HEADER: \setbeamersize{text margin left=8mm,text margin right=8mm}
+#+LATEX_HEADER: \setbeamercolor{structure}{fg=blue!55!black}
+#+LATEX_HEADER: \usepackage{tikz}
+#+LATEX_HEADER: \usetikzlibrary{arrows.meta,positioning}
+#+LATEX_HEADER: \newcommand{\democaption}[1]{\par\vspace{1mm}{\scriptsize\color{gray}#1}\par}

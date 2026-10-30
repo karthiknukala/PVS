@@ -1,0 +1,5 @@
+parameter_alias_checks: CONTEXT =
+BEGIN
+  good: CONTEXT = parameter_alias_library{2};
+  bad: CONTEXT = parameter_alias_library{0};
+END

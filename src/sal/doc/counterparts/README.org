@@ -1,0 +1,61 @@
+#+TITLE: Complete SAL/PVS pairs used by the tutorial
+
+These are source snapshots and actual generated counterparts, not hand-written
+substitutes for the translator's output. The slides show selected declarations
+with explicit readability edits. Generated files here retain their complete
+expressions, name encoding and separate typing checks.
+
+| Folder | Original example under src/sal/examples | Direction |
+|--------+----------------------------------------+-----------|
+| counter | integration/library_counter.sal | SAL to PVS |
+| terminal | integration/terminal_deadlock.sal | SAL to PVS |
+| record-array | integration/record_array.sal | SAL to PVS |
+| parameters | parameters/parameter_machine.sal | SAL to PVS, generic |
+| reverse | reverse/Reverse_Counter.pvs and its library | PVS to SAL, bound 3 |
+
+Each forward folder contains the original =.sal= file, generated =SALCTX_...=
+context theory, generated =SAL_...= machine theory, and shared
+=SAL_Transition_System.pvs= semantics. The reverse folder contains the original
+PVS library, its interpretation and semantic imports, and extracted
+=pvs_machine.sal=. Files copied from the implementation are unchanged.
+
+The forward examples were freshly elaborated through SAL's native export and
+typechecked in PVS. Reverse extraction used the typechecked native PVS theorem
+and passed the extractor's SAL frontend check. These operations generate or
+inspect TCCs; they do not prove them or certify the safety theorems. The deck's
+proof strategy results refer to the separately recorded regression runs.
+
+* Reproduce
+
+Configure =PVS_BIN=, =SAL_HOME= and =SAL_XMLS_SOURCE= as described in
+=../README.org=. From the repository root:
+
+#+begin_src sh
+src/sal/doc/run-demo.sh <<'LISP'
+(load (merge-pathnames "refresh-counterparts.lisp" *sal-doc-directory*))
+(uiop:quit)
+LISP
+#+end_src
+
+This regenerates the pairs under =doc/counterparts/=, using writable contexts
+under =doc/.demo/=. It also refreshes the native demonstration context; save any
+manual edits to that context before running it. Original examples remain under
+=src/sal/examples/=. The final marker is =SAL-TUTORIAL-COUNTERPARTS-EXPORTED=.
+
+The copied theories can be inspected directly. For interactive typechecking,
+copy a pair into a fresh directory under =doc/.demo/= so generated proof/context
+files remain separate from these reference snapshots.
+
+* Reading the paired slides
+
+- The counter, terminal and record-array formulas drop =defined= where its definition is
+  =TRUE=, neutral =TRUE= conjuncts, and redundant parentheses. Complete =step=
+  relations and generated typing checks remain in these snapshots.
+- The record-array slides combine declarations from the context and module
+  theories. The short index =i= alpha-renames a generated local binder.
+- Parameterized context signatures retain the context formals. The complete
+  machine theory additionally includes its dependent module formals.
+- Reverse excerpts drop redundant parentheses only. The concrete subtype,
+  relational assignment, inlined definitions and invariant match the output.
+- The terminal model's exported =idle= relation is separate from =step=;
+  exporting it does not insert a transition at the terminal state.

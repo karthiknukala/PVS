@@ -1,0 +1,21 @@
+;; Exercise the native CTL relational kernel without the command-line
+;; simplifier, whose temporal identities assume deadlock freedom.
+;; Usage: salenv native-ctl-terminal.scm frontend_semantics.sal
+(let* ((environment (make-sal-env))
+       (context (sal-env/context-from-file environment (car *arguments*)))
+       (declaration (sal-context/module-declaration context 'terminal))
+       (module (slot-value (slot-value declaration :parametric-module) :module))
+       (flat (make-boolean-flat-module module))
+       (fsm (sal-flat-module->sal-bdd-fsm flat))
+       (manager (sal-bdd-fsm/manager fsm))
+       (yes (bdd/true manager))
+       (no (bdd/false manager))
+       (reachable (sal-bdd-fsm/reachable-states fsm)))
+  (define (check label condition)
+    (unless condition (sign-error "Native CTL regression failed" label))
+    (print "PASS " label))
+  (check "terminal reachable" (not (bdd/false? reachable)))
+  (check "AX false vacuous" (bdd/eq? reachable (sal-bdd-fsm/AX fsm no reachable)))
+  (check "AF false vacuous" (bdd/eq? reachable (sal-bdd-fsm/AF fsm no reachable)))
+  (check "EG true excludes terminal" (bdd/false? (sal-bdd-fsm/EG fsm yes reachable)))
+  (check "EX true excludes terminal" (bdd/false? (sal-bdd-fsm/EX fsm yes reachable))))

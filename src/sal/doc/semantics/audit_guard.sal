@@ -1,0 +1,14 @@
+audit_guard: CONTEXT =
+BEGIN
+  Positive: TYPE = {n: INTEGER | n > 0};
+  positive(p: Positive): BOOLEAN = p > 0;
+  machine: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT flag: BOOLEAN
+      INITIALIZATION flag = FALSE
+      TRANSITION
+        [ free: TRUE --> flag' IN {b: BOOLEAN | TRUE}
+        [] guarded: positive(arg) --> flag' = FALSE ]
+    END;
+END

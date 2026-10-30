@@ -1,0 +1,11 @@
+% An enumeration and a tuple carrier, with a terminal phase.
+Reverse_Phase_Library: THEORY
+BEGIN
+  Phase: TYPE = {idle, active, done}
+  State: TYPE = [Phase, bool]
+  initial(s: State): bool = s`1 = idle AND NOT s`2
+  step(s, t: State): bool =
+    (s`1 = idle AND t = (active, TRUE)) OR
+    (s`1 = active AND t = (done, s`2))
+  safe(s: State): bool = s`1 = done IMPLIES s`2
+END Reverse_Phase_Library

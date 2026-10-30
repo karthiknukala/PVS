@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "observed_source_count": 216,
+  "native_rejections": [
+    {
+      "source": "BSubSpor/BSubSpor78.sal",
+      "sha256": "dba42e18a1f006fc881350f2f3389280f0277a4303f5f89aabe7981b5d42d044",
+      "native_status": "error",
+      "error_contains": "Unexpected token \"INVARIANT\"",
+      "reason": "Legacy module INVARIANT/INITFORMULA dialect is rejected by the installed native SAL 3.3 parser."
+    },
+    {
+      "source": "lsal/bakery/bakery.xml",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "native_status": "error",
+      "error_contains": "not an XML document",
+      "reason": "Empty legacy XML artifact: no source specification exists in this file."
+    },
+    {
+      "source": "lsal/bakery-with-bug2.xml",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "native_status": "error",
+      "error_contains": "not an XML document",
+      "reason": "Empty legacy XML artifact: no source specification exists in this file."
+    },
+    {
+      "source": "lsal/bakery.xml",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "native_status": "error",
+      "error_contains": "not an XML document",
+      "reason": "Empty legacy XML artifact: no source specification exists in this file."
+    },
+    {
+      "source": "tta-startup/faulty-hub/startup-faulty-guardian.sal",
+      "sha256": "ce5d1d2a0520edff9e73a9c40596b62e447ddf2ce8191d3602ff2d664ed22c68",
+      "native_status": "error",
+      "error_contains": "Unexpected token \"par_filename\"",
+      "reason": "Source template requiring run.sh parameter substitution; not a standalone SAL context."
+    },
+    {
+      "source": "tta-startup/faulty-node/startup-skel.sal",
+      "sha256": "08ff48c303cdfc364c7febdd98ef99e042a49f61d14f272844a2dacab2ed66fd",
+      "native_status": "error",
+      "error_contains": "Unexpected token \"par_filename\"",
+      "reason": "Source template requiring run.sh parameter substitution; not a standalone SAL context."
+    }
+  ]
+}

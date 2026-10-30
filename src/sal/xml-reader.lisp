@@ -30,13 +30,30 @@
 When NIL, the reader checks SAL_TO_XML, SAL_HOME/tools/sal-to-xml.sh, PATH,
 and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
 
-(defstruct (sal-source-place
-             (:constructor make-sal-source-place
-                 (initial-line initial-column final-line final-column)))
-  initial-line
-  initial-column
-  final-line
-  final-column)
+;; Released SAL images already contain this structure. Never change an existing
+;; DEFSTRUCT layout when loading the optional bridge into a running PVS image.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-class 'sal-source-place nil)
+    (defstruct (sal-source-place
+                 (:constructor make-sal-source-place
+                     (initial-line initial-column final-line final-column)))
+      initial-line
+      initial-column
+      final-line
+      final-column)))
+
+;; Dependency provenance belongs to a subtype: old compiled accessors and old
+;; instances remain valid. A distinct slot name also accommodates images built
+;; with the earlier experimental SOURCE-FILE slot in the base structure.
+(defstruct (sal-located-source-place
+             (:include sal-source-place)
+             (:constructor make-sal-located-source-place
+                 (initial-line initial-column final-line final-column origin-file)))
+  origin-file)
+
+(defun sal-source-place-source-file (place)
+  (when (sal-located-source-place-p place)
+    (sal-located-source-place-origin-file place)))
 
 (define-condition sal-xml-error (error)
   ((message :initarg :message :reader sal-xml-error-message)
@@ -155,7 +172,8 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
                                                 :separator '(#\Space #\Tab)))))
         (unless (= (length numbers) 4)
           (sal-xml-fail node "Invalid PLACE attribute ~s" place))
-        (apply #'make-sal-source-place numbers)))))
+        (apply #'make-sal-located-source-place
+               (append numbers (list (sal-xml-attribute node "SOURCEFILE"))))))))
 
 (defun sal-node (class state xml &rest initargs)
   (apply #'make-instance class
@@ -289,9 +307,9 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
 (defun sal-builtin-type-class (name)
   (cdr (assoc name *sal-builtin-type-classes* :test #'string-equal)))
 
-(defun sal-name-expression-class (name declaration qualifiedp)
-  (cond ((string-equal name "TRUE") 'sal-true)
-        ((string-equal name "FALSE") 'sal-false)
+(defun sal-name-expression-class (name declaration qualifiedp &optional builtinp)
+  (cond ((and builtinp (string-equal name "TRUE")) 'sal-true)
+        ((and builtinp (string-equal name "FALSE")) 'sal-false)
         ((typep declaration 'sal-var-param-decl)
          'sal-var-param-name-expr)
         ((typep declaration 'sal-scalar-element-decl) 'sal-scalar)
@@ -339,15 +357,32 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
       (sal-convert-type state node)
       (sal-convert-expression state node)))
 
+(defun sal-xml-builtin-declaration (state name node &optional class)
+  "Resolve an explicitly exported prelude name independently of source scope."
+  (let* ((key (list :builtin :value name))
+         (table (sal-xml-state-external-declarations state)))
+    (or (gethash key table)
+        (setf (gethash key table)
+              (sal-node (or class 'sal-constant-decl) state node
+                        :id (sal-node 'sal-identifier state node
+                                      :name (make-symbol name)))))))
+
 (defun sal-convert-name-expression (state node)
   (let* ((name (sal-xml-text node))
+         (builtinp (or (equal (sal-xml-attribute node "BUILTIN") "true")
+                       (not (sal-state-lookup state :value name))))
          (declaration
-           (sal-external-declaration
-            state :value name node
-            (when (or (string-equal name "TRUE")
-                      (string-equal name "FALSE"))
-              'sal-scalar-element-decl))))
-    (sal-node (sal-name-expression-class name declaration nil)
+           (if (equal (sal-xml-attribute node "BUILTIN") "true")
+               (sal-xml-builtin-declaration
+                state name node
+                (when (or (string-equal name "TRUE") (string-equal name "FALSE"))
+                  'sal-scalar-element-decl))
+               (sal-external-declaration
+                state :value name node
+                (when (or (string-equal name "TRUE")
+                          (string-equal name "FALSE"))
+                  'sal-scalar-element-decl)))))
+    (sal-node (sal-name-expression-class name declaration nil builtinp)
               state node :decl declaration)))
 
 (defun sal-convert-qualified-name-expression (state node)
@@ -355,7 +390,10 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
       (sal-qualified-parts state node)
     (let ((declaration
             (sal-qualified-declaration state context-ref :value name node)))
-      (sal-node (sal-name-expression-class name declaration t)
+      (sal-node (sal-name-expression-class
+                 name declaration t
+                 (and context-ref
+                      (string= (sal-declaration-name context-ref) "prelude")))
                 state node
                 :decl declaration :context-ref context-ref :actuals actuals))))
 
@@ -463,12 +501,19 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
          (arg (sal-convert-application-argument state (second elements)))
          (name (when (typep fun 'sal-name-expr)
                  (sal-declaration-name (decl fun))))
-         (class (or (and name (sal-builtin-application-class name))
+         (builtinp
+           (and name
+                (or (equal (sal-xml-attribute (first elements) "BUILTIN") "true")
+                    ;; Compatibility with unannotated native SAL XML. A source
+                    ;; declaration or lexical binder always wins over spelling.
+                    (and (string-equal (xmls:node-name (first elements)) "NAMEEXPR")
+                         (not (sal-state-lookup state :value name))))))
+         (class (or (and builtinp (sal-builtin-application-class name))
                     'sal-application)))
     (sal-node class state node :fun fun :arg arg)))
 
 (defun sal-make-builtin-application (state node name arguments)
-  (let* ((declaration (sal-external-declaration state :value name node))
+  (let* ((declaration (sal-xml-builtin-declaration state name node))
          (fun (sal-node 'sal-name-expr state node :decl declaration))
          (arg (sal-node 'sal-arg-tuple-literal state node :exprs arguments)))
     (sal-node (or (sal-builtin-application-class name) 'sal-application)
@@ -522,6 +567,62 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
           (t (sal-xml-fail selection-node "Invalid update selection")))))
 
 (defun sal-convert-expression (state node)
+  "Decode source expressions and the bridge's lossless compiler annotations."
+  (cond
+    ((string-equal (xmls:node-name node) "BRIDGERINGAPPLICATION")
+     (let* ((operator (sal-xml-attribute node "OPERATOR"))
+            (operand-nodes (sal-xml-elements (sal-xml-child node "OPERAND" t)))
+            (type-nodes (sal-xml-elements (sal-xml-child node "OPERANDTYPE" t))))
+       (unless (and (member operator '("RPRED" "RSUCC") :test #'string=)
+                    (= (length operand-nodes) 1) (= (length type-nodes) 1))
+         (sal-xml-fail node "Malformed native ring operation metadata"))
+       (let ((operand (sal-convert-expression state (first operand-nodes)))
+             (operand-type (sal-convert-type state (first type-nodes))))
+         (unless (typep operand-type 'sal-bounded-subtype)
+           (sal-xml-fail node "Native ring operand must have an instantiated bounded type"))
+         (setf (type operand) operand-type)
+         (sal-make-builtin-application state node operator (list operand)))))
+    ((string-equal (xmls:node-name node) "BRIDGEASSIGNMENT")
+     (let* ((lhs (sal-convert-expression
+                  state (first (sal-xml-elements (sal-xml-child node "LHS" t)))))
+            (rhs (sal-convert-expression
+                  state (first (sal-xml-elements (sal-xml-child node "RHS" t)))))
+            (target-type (sal-convert-type
+                          state (first (sal-xml-elements
+                                        (sal-xml-child node "TARGETTYPE" t))))))
+       (setf (type lhs) target-type)
+       (sal-node 'sal-assignment state node
+                 :fun (sal-node 'sal-name-expr state node
+                                :decl (sal-xml-builtin-declaration state "=" node))
+                 :arg (sal-node 'sal-arg-tuple-literal state node :exprs (list lhs rhs)))))
+    ((string-equal (xmls:node-name node) "BRIDGEDEFINITION")
+      (let ((elements (sal-xml-elements node)))
+        (unless (and (= (length elements) 2)
+                     (string-equal (xmls:node-name (first elements)) "LHS")
+                     (sal-xml-elements (first elements)))
+          (sal-xml-fail node "Malformed normalized definition metadata"))
+        (sal-node 'sal-definition-expression state node
+                  :lhs-list (mapcar (lambda (child)
+                                      (sal-convert-expression state child))
+                                    (sal-xml-elements (first elements)))
+                  :expr (sal-convert-expression state (second elements)))))
+    (t (let* ((result (sal-convert-expression-core state node))
+             (kind (sal-xml-attribute node "BRIDGEKIND")))
+        (when kind
+          (cond ((and (string= kind "assignment") (typep result 'sal-eq))
+                 (change-class result 'sal-assignment))
+                ((and (string= kind "choice") (typep result 'sal-or))
+                 (change-class result 'sal-choice))
+                ((and (string= kind "multi-choice")
+                      (typep result 'sal-exists-expr))
+                 (change-class result 'sal-multi-choice-expr))
+                ((and (string= kind "membership")
+                      (typep result 'sal-application))
+                 (change-class result 'sal-in))
+                (t (sal-xml-fail node "Invalid bridge expression kind ~s" kind))))
+        result))))
+
+(defun sal-convert-expression-core (state node)
   (let ((tag (xmls:node-name node))
         (elements (sal-xml-elements node)))
     (cond
@@ -1279,7 +1380,7 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
                                      (second (sal-xml-elements node)))))
   declarations)
 
-(defun sal-convert-context (root file-name)
+(defun sal-convert-context (root file-name &key contexts)
   (unless (string-equal (xmls:node-name root) "CONTEXT")
     (sal-xml-fail root "The XML document root must be CONTEXT"))
   (let* ((elements (sal-xml-elements root))
@@ -1299,11 +1400,15 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
                      :context-name-declarations (make-hash-table :test #'equal)
                      :importers nil :internal-actuals nil
                      :file-name file-name))
-         (state (%make-sal-xml-state :context context))
+         (state (%make-sal-xml-state
+                 :context context
+                 :external-contexts (or contexts (make-hash-table :test #'equal))))
          (parameter-nodes (sal-xml-elements parameters-node))
          (declaration-nodes (sal-xml-elements body-node)))
     (setf (context context) context
           (context (id context)) context)
+    (when contexts
+      (setf (gethash (sal-declaration-name context) contexts) context))
     (multiple-value-bind (parameters parameter-scope)
         (sal-predeclare-context-parameters state parameter-nodes)
       (setf (sal-xml-state-scopes state) (list parameter-scope))

@@ -1,0 +1,7 @@
+parameter_right{T: TYPE, Limit: NATURAL}: CONTEXT =
+BEGIN
+  shared: CONTEXT = parameter_leaf{T, Limit};
+  Count: TYPE = shared!Count;
+  advance(x: Count): Count = shared!increment(x);
+  preserve(x: T): T = shared!identity(x);
+END

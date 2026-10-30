@@ -1,0 +1,171 @@
+#+TITLE: SAL/PVS Beamer tutorial
+
+* Read or rebuild
+
+=sal-pvs-tutorial.org= is the editable slide source; =sal-pvs-tutorial.pdf=
+is the exported Beamer deck. Run from the repository root:
+
+#+begin_src sh
+src/sal/doc/build.sh
+#+end_src
+
+This uses standard Org Beamer export, not a generated PDF masquerading as an
+Org export. =export.el= loads the real PVS and SAL Emacs modes and the installed
+=engrave-faces= package. It disables Babel execution and user initialization.
+The generated TeX is retained beside the deck; auxiliary files and the export
+log stay in =.build/=. No package installation is performed.
+
+The local build needs Emacs with Org/ox-beamer, engrave-faces, latexmk,
+pdflatex, Beamer, Inconsolata, fvextra and tcolorbox. Override =EMACS=,
+=PVS_EMACS_DIR= or =SAL_EMACS_DIR= for another installation. Defaults use this
+checkout's =emacs/= directory and the sibling =kn-sal/etc/= directory.
+
+For interactive export, open the Org source in Emacs with those modes and
+engrave-faces available. Use =C-c C-e l P= (capital P) for Beamer PDF.
+Lowercase =p= selects ordinary LaTeX export. The file-local =engraved= setting
+matches the imported starter.
+
+* Imported slide setup
+
+=template/org/= is an unchanged copy of the starter, README, reference PDF and
+sample image from =~/Documents/slides/org/=. The tutorial's =beamer-setup.org=
+reuses its 16:9 Beamer layout, Computer Modern serif text, Inconsolata code,
+unboxed highlighting, nested-heading styles and disabled navigation symbols.
+It adds frame numbers, a restrained structure color and native TikZ diagrams.
+The original Documents directory is never edited or used as a build directory.
+
+* SAL/PVS counterparts
+
+The deck places SAL and PVS excerpts side by side for a counter, a terminal
+machine, an array of records, a parameterized context, and the reverse
+extraction of a native PVS counter. =counterparts/= contains the complete
+source/output pairs and their semantic imports; see its =README.org= for
+provenance and regeneration instructions.
+
+The slides explicitly label readability edits. The files in =counterparts/=
+retain the actual generated names, predicates and per-assignment typing checks.
+
+* Worked N-ary composition
+
+=nary/nary.sal= is a parameterized family of synchronous and asynchronous
+wrapping counters. The tutorial follows its SAL source, generic PVS theories,
+source-associated increment TCC, concrete =N = 3= safety proof through
+=sal-check=, and the corresponding asynchronous counterexample.
+
+With the same tool environment as =run-demo.sh=, run:
+
+#+begin_src sh
+src/sal/doc/nary/run.sh
+#+end_src
+
+This is an executable demonstration and a focused regression. It generates in
+a fresh =doc/.demo/nary-run.*/= context, saves the proof, and replays it in a
+second PVS process. Transcripts are =.build/nary-prove.log= and
+=.build/nary-replay.log=. Complete PVS snapshots, source TCC reports, saved
+proofs and checker results are under =nary/generated/=. See =nary/README.org=.
+
+In an interactive tutorial session, =(sal-doc-nary)= opens the generic family;
+=(sal-doc-nary :n 3)= selects =nary{3}!sync=. Use =:module "async"= for
+interleaving. These helpers typecheck and register admissible concrete goals;
+they do not discharge TCCs. Optional progress companion theories are omitted
+in this demonstration to focus on typing and invariant checking.
+
+* Predicate-subtyping semantics and checked laws
+
+The additional semantics slides define source SAL denotations, derive an
+exact subtype condition and source-local verification conditions, and relate
+them to Owre and Shankar's /The Formal Semantics of PVS/ supplied in
+=~/Documents/semantics.pdf=. =semantics/README.org= gives the detailed rules,
+proofs and implementation premises.
+
+=semantics/Typing_Core.pvs= mechanizes six guarded-update and composition
+laws for arbitrary refinement predicates. Run:
+
+#+begin_src sh
+src/sal/doc/semantics/run-typing-core.sh
+#+end_src
+
+The runner proves and freshly replays saved proofs in separate local contexts.
+The retained evidence reports six proved-complete declarations and complete
+proof chains, with zero TCCs and no added axioms. These laws are a semantic
+core, not a verified frontend. The source-core exactness argument is a
+mathematical derivation; full occurrence and primitive preservation remain
+explicit compiler obligations.
+
+The semantics directory also contains a reproducible audit of a repaired
+guard-TCC loss under overlapping command choices and an array-index positive
+control. The intentionally false audit TCCs stay open.
+
+* Run the demonstration
+
+Set these to existing tools. In this workspace, the working PVS executable is
+=~/git/PVS/pvs= and SAL is =~/git/kn-sal=. Set =SAL_XMLS_SOURCE= to the installed
+=xmls.lisp= file; the bridge neither downloads nor installs it.
+
+#+begin_src sh
+export PVS_BIN="$HOME/git/PVS/pvs"
+export SAL_HOME="$HOME/git/kn-sal"
+# Set SAL_XMLS_SOURCE to your existing XMLS source file.
+src/sal/doc/run-demo.sh
+#+end_src
+
+The raw PVS session has already loaded =demo.lisp=:
+
+#+begin_src lisp
+(defparameter v
+  (sal-doc-open "integration/overlapping_subtype.sal"
+                "machine" "overflow"))
+(sal-show-obligations v)
+(sal-show-source v "check_step_2_TCC1")
+
+(sal-doc-native "Reverse_Counter")
+(defparameter extracted (sal-extract-pvs "Reverse_Counter" "safe"))
+(sal-show-pvs-extraction extracted)
+#+end_src
+
+=sal-doc-open= takes an existing example file, its module, and a fresh output
+tag. All generated theories go under =doc/.demo/=. =sal-doc-native= copies the
+native examples and semantic libraries there before typechecking; it does not
+edit the originals or discharge TCCs. Avoid two PVS processes using the same
+demo context simultaneously.
+
+For the final editing exercises, edit the copied files in =doc/.demo/native/=
+and typecheck them there. Do not call =sal-doc-native= again after editing a
+copy: that helper deliberately refreshes the examples from the originals.
+
+To continue in the normal PVS interface, visit =doc/.demo/native/=, load the
+extension in that PVS process, typecheck, inspect the TCCs and prove them. In
+these positive fixtures the native TCCs are discharged by =grind=. Re-extract
+the desired theorem in that same process, then start its proof:
+
+#+begin_src lisp
+(sal-check-pvs "Reverse_Counter.safe")
+#| Alternatively: |#
+(sal-check-pvs "Reverse_Counter.safe" :backend :bmc :depth 4)
+#+end_src
+
+These are prover commands, whereas =sal-extract-pvs= and =sal-doc-native= are
+Lisp APIs. The automated regression runners in the slides perform the full
+proof-save/fresh-replay workflow, retaining their transcripts under =src/sal/.work/=.
+Do not attempt to prove the intentionally false overflow or mapped-axiom TCCs.
+
+* Reading the evidence and limits
+
+Examples and API names are taken from the checked-in implementation under
+=src/sal=. Slides label excerpted declarations and display simplifications explicitly.
+Recorded results are backed by the existing validation indexed at
+=../.work/reverse/validation.json=; counts are test assertions, not theorem counts.
+The corpus claim is the earlier frontend coverage result documented in
+=../tests/corpus.md=, not a fresh corpus proof run for this deck.
+
+The reverse path is a finite invariant fragment. Native TCC completion, exact
+source/goal matching and semantic backend results guard the proof strategy.
+The compiler and SAL checker are still trusted: no SAL proof evidence is
+reconstructed in PVS. Before first extraction, source freshness inherits PVS's
+native timestamp checks when its stored digest is unavailable; after
+registration, the bridge uses exact content snapshots.
+
+Deadlock checking is diagnostic; progress contracts are separate PVS goals.
+Structural causality checks do not decide general fixed-point existence or
+uniqueness. =sal-source= shows origins, not a full backtranslation of arbitrary
+transformed prover sequents.

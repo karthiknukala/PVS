@@ -1,0 +1,6 @@
+% SAL context library_counter; source /Users/e35480/git/kn-pvs/src/sal/examples/integration/library_counter.sal.
+SALCTX_sal_library_x5F_counter: THEORY
+BEGIN
+
+
+END SALCTX_sal_library_x5F_counter

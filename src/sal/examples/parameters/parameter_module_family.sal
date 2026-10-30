@@ -1,0 +1,4 @@
+parameter_module_family: CONTEXT =
+BEGIN
+  system: MODULE = ([] (i: [0..2]): parameter_module_library{2}!cell[i]);
+END

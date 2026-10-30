@@ -1,0 +1,16 @@
+PVS 8.1: fresh-process replay of Typing_Core.prf
+Replay context: /Users/e35480/git/kn-pvs/src/sal/doc/.demo/semantics-core.replay.vXu042/
+Six proof declarations; zero TCCs; no AXIOM or ASSUMING declarations.
+
+Typing_Core.typed_update: proved - complete
+Typing_Core.atom_exact: proved - complete
+Typing_Core.choice_exact: proved - complete
+Typing_Core.indexed_preservation: proved - complete
+Typing_Core.indexed_choice_exact: proved - complete
+Typing_Core.simultaneous_sound: proved - complete
+
+Run: sh src/sal/doc/semantics/run-typing-core.sh
+Requires PVS_BIN, SAL_HOME, SAL_XMLS_SOURCE, as for doc/run-demo.sh.
+Scope: total expressions/guards, unrestricted stores, independent membership predicate,
+single-coordinate updates, choice, indexed choice, simultaneous independent ownership.
+This is metatheory, not a proof of the implemented compiler or all SAL typing.

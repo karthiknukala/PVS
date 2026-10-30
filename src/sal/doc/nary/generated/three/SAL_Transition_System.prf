@@ -1,0 +1,17 @@
+(|SAL_Transition_System|
+ (|reachable_TCC1| 0
+  (|reachable_TCC1-1| NIL 4001959439 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|reachable| SUBTYPE "0"
+    "below((number_fields.+)(1, SAL_Transition_System.n))" (9 21 9 22))))
+ (|reachable_TCC2| 0
+  (|reachable_TCC2-1| NIL 4001959439 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|reachable| SUBTYPE "SAL_Transition_System.n"
+    "below((number_fields.+)(1, SAL_Transition_System.n))" (9 36 9 37))))
+ (|reachable_TCC3| 0
+  (|reachable_TCC3-1| NIL 4001959439 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|reachable| SUBTYPE "SAL_Transition_System.k"
+    "below((number_fields.+)(1, SAL_Transition_System.n))" (10 41 10 42))))
+ (|reachable_TCC4| 0
+  (|reachable_TCC4-1| NIL 4001959440 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|reachable| SUBTYPE "(number_fields.+)(SAL_Transition_System.k, 1)"
+    "below((number_fields.+)(1, SAL_Transition_System.n))" (10 52 10 57)))))

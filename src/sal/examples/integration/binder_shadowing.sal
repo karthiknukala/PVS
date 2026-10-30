@@ -1,0 +1,14 @@
+binder_shadowing: CONTEXT =
+BEGIN
+  n: INTEGER = 2;
+  add_context(n: INTEGER): INTEGER = n + binder_shadowing!n;
+
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: [0..4]
+      INITIALIZATION value = add_context(0)
+      TRANSITION [ TRUE --> value' = add_context(1) ]
+    END;
+
+  preserves_context_reference: THEOREM machine |- G(value >= 2);
+END

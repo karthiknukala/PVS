@@ -1,0 +1,41 @@
+% Generated from /Users/e35480/git/kn-pvs/src/sal/examples/parameters/parameter_machine.sal, module cell.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_parameter_x5F_machine_sal_cell[sal_T: TYPE, sal_Limit: nat, (IMPORTING SALCTX_sal_parameter_x5F_machine) sal_seed: sal_T, sal_initial_x5F_count: SALCTX_sal_parameter_x5F_machine[sal_T, sal_Limit].sal_Count]: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_parameter_x5F_machine[sal_T, sal_Limit]
+
+  State: TYPE = [# sal_payload: sal_T, sal_count: sal_Count #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = TRUE
+
+  initial(s: State): bool = defined(s) AND (((s)`sal_payload = (sal_identity)(sal_seed)) AND ((s)`sal_count = sal_initial_x5F_count) AND TRUE)
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND ((TRUE AND ((s)`sal_count < sal_Limit) AND ((next)`sal_count = ((s)`sal_count + 1)) AND ((next)`sal_payload = (s)`sal_payload)) OR (TRUE AND ((s)`sal_count = sal_Limit) AND ((next)`sal_count = 0) AND ((next)`sal_payload = (s)`sal_payload)))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND (((next)`sal_count = (s)`sal_count) AND ((next)`sal_payload = (s)`sal_payload))
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  check_initial_1(s, next: State): bool =
+    TRUE IMPLIES (LET bridge_rhs: sal_T = (sal_identity)(sal_seed) IN TRUE)
+
+  check_initial_2(s, next: State): bool =
+    TRUE IMPLIES (LET bridge_rhs: sal_Count = sal_initial_x5F_count IN TRUE)
+
+  check_step_1(s, next: State): bool =
+    (TRUE AND ((s)`sal_count < sal_Limit)) IMPLIES (LET bridge_rhs: sal_Count = ((s)`sal_count + 1) IN TRUE)
+
+  check_step_2(s, next: State): bool =
+    (TRUE AND ((s)`sal_count < sal_Limit)) IMPLIES (LET bridge_rhs: sal_T = (s)`sal_payload IN TRUE)
+
+  check_step_3(s, next: State): bool =
+    (TRUE AND ((s)`sal_count = sal_Limit)) IMPLIES (LET bridge_rhs: sal_Count = 0 IN TRUE)
+
+  check_step_4(s, next: State): bool =
+    (TRUE AND ((s)`sal_count = sal_Limit)) IMPLIES (LET bridge_rhs: sal_T = (s)`sal_payload IN TRUE)
+
+END SAL_sal_parameter_x5F_machine_sal_cell

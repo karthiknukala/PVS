@@ -1,0 +1,6 @@
+% SAL context terminal_deadlock; source /Users/e35480/git/kn-pvs/src/sal/examples/integration/terminal_deadlock.sal.
+SALCTX_sal_terminal_x5F_deadlock: THEORY
+BEGIN
+
+
+END SALCTX_sal_terminal_x5F_deadlock

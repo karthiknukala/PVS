@@ -1,0 +1,38 @@
+frontend_choice_guards: CONTEXT =
+BEGIN
+  Positive: TYPE = {n: INTEGER | n > 0};
+  positive(p: Positive): BOOLEAN = p > 0;
+  Index: TYPE = [0..1];
+
+  bad: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT flag: BOOLEAN
+      INITIALIZATION flag = FALSE
+      TRANSITION
+        [ free: TRUE --> flag' IN {b: BOOLEAN | TRUE}
+        [] partial: positive(arg) --> flag' = FALSE ]
+    END;
+
+  safe: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT flag: BOOLEAN
+      INITIALIZATION flag = FALSE
+      TRANSITION
+        [ free: TRUE --> flag' IN {b: BOOLEAN | TRUE}
+        [] conjunction: arg > 0 AND positive(arg) --> flag' = FALSE
+        [] disjunction: arg <= 0 OR positive(arg) --> flag' = FALSE
+        [] conditional: IF arg > 0 THEN positive(arg) ELSE FALSE ENDIF --> flag' = FALSE ]
+    END;
+
+  indexed: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT flag: BOOLEAN
+      INITIALIZATION flag = FALSE
+      TRANSITION
+        [ free: TRUE --> flag' IN {b: BOOLEAN | TRUE}
+        [] ([] (i: Index): positive(arg + i) --> flag' = FALSE) ]
+    END;
+END

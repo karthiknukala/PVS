@@ -1,0 +1,11 @@
+% This optional contract is interpreted at a selected system boundary.
+% Its axioms become obligations; they are not assumptions of the base semantics.
+SAL_Progress_Contract: THEORY
+BEGIN
+  S: TYPE
+  initial: [S -> bool]
+  step: [S, S -> bool]
+  IMPORTING SAL_Transition_System[S, initial, step] AS system
+  initialized: AXIOM EXISTS (s: S): initial(s)
+  progress: AXIOM system.deadlock_free
+END SAL_Progress_Contract

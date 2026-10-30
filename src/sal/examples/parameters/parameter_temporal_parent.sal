@@ -1,0 +1,14 @@
+parameter_temporal_parent: CONTEXT =
+BEGIN
+  system: MODULE =
+  BEGIN
+    OUTPUT count: [0..2]
+    INITIALIZATION count = 0
+    TRANSITION count' = IF count = 2 THEN 0 ELSE count + 1 ENDIF
+  END;
+
+  imported: THEOREM system |- parameter_temporal_library{BOOLEAN, 2}!recurring(count);
+  direct: THEOREM system |- G(F(count = 2));
+  bounded: THEOREM system |- parameter_temporal_library{BOOLEAN, 2}!always(count <= 2);
+  finite: THEOREM system |- G(parameter_temporal_library{BOOLEAN, 2}!bounded(count = 2, 3));
+END

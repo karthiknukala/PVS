@@ -1,0 +1,20 @@
+overlapping_subtype: CONTEXT =
+BEGIN
+  Small: TYPE = [0..2];
+
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: Small
+      INITIALIZATION value = 0
+      TRANSITION
+        [
+          safe: TRUE --> value' = 0
+        []
+          % SAL accepts this branch, but value + 1 escapes Small at value = 2.
+          % Both guards overlap. A PVS check must not assume safe is disabled.
+          overflow: TRUE --> value' = value + 1
+        ]
+    END;
+
+  bounded: THEOREM machine |- G(value <= 2);
+END

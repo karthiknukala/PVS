@@ -1,0 +1,76 @@
+% Independent metatheory of local SAL assignment checks.
+% This is a proof artifact, not an embedding used by translated machines.
+% Stores range over the unrestricted carrier V.  Subtype membership is the
+% arbitrary predicate ok; successors are NOT filtered through typed.
+%
+% Scope: expressions and guards in this core are total functions.  Source
+% expression definedness, predicate well-formedness, carrier compatibility,
+% and correctness/coverage of the actual SAL frontend are separate premises.
+% None of these theorems proves the implementation or all SAL constructs.
+
+Typing_Core[I: TYPE, V: TYPE, ok: [I, V -> bool]]: THEORY
+BEGIN
+  Store: TYPE = [I -> V]
+  Guard: TYPE = [Store -> bool]
+  Expr: TYPE = [Store -> V]
+  Relation: TYPE = [Store, Store -> bool]
+
+  typed(s: Store): bool = FORALL (i: I): ok(i, s(i))
+
+  atom(i: I, g: Guard, e: Expr): Relation =
+    LAMBDA (s, t: Store): g(s) AND t = (s WITH [(i) := e(s)])
+
+  preserves(r: Relation): bool =
+    FORALL (s, t: Store): typed(s) AND r(s, t) IMPLIES typed(t)
+
+  vc(i: I, g: Guard, e: Expr): bool =
+    FORALL (s: Store): typed(s) AND g(s) IMPLIES ok(i, e(s))
+
+  typed_update: LEMMA
+    FORALL (s: Store, i: I, v: V):
+      typed(s) IMPLIES
+        (typed(s WITH [(i) := v]) IFF ok(i, v))
+
+  % Soundness AND semantic relative completeness of the local obligation.
+  % No claim is made that proof search can decide whether vc is valid.
+  atom_exact: THEOREM
+    FORALL (i: I, g: Guard, e: Expr):
+      preserves(atom(i, g, e)) IFF vc(i, g, e)
+
+  choice(r, q: Relation): Relation =
+    LAMBDA (s, t: Store): r(s, t) OR q(s, t)
+
+  choice_exact: THEOREM
+    FORALL (r, q: Relation):
+      preserves(choice(r, q)) IFF (preserves(r) AND preserves(q))
+
+  indexed_choice(gs: [I -> Guard], es: [I -> Expr]): Relation =
+    LAMBDA (s, t: Store):
+      EXISTS (i: I): atom(i, gs(i), es(i))(s, t)
+
+  indexed_vc(gs: [I -> Guard], es: [I -> Expr]): bool =
+    FORALL (i: I): vc(i, gs(i), es(i))
+
+  indexed_preservation: THEOREM
+    FORALL (gs: [I -> Guard], es: [I -> Expr]):
+      preserves(indexed_choice(gs, es)) IFF
+        (FORALL (i: I): preserves(atom(i, gs(i), es(i))))
+
+  indexed_choice_exact: THEOREM
+    FORALL (gs: [I -> Guard], es: [I -> Expr]):
+      preserves(indexed_choice(gs, es)) IFF indexed_vc(gs, es)
+
+  % Each component owns exactly its coordinate i; every expression reads
+  % the same pre-state.  The index type need not be a concrete finite set.
+  simultaneous(gs: [I -> Guard], es: [I -> Expr]): Relation =
+    LAMBDA (s, t: Store):
+      (FORALL (i: I): gs(i)(s)) AND
+      (FORALL (i: I): t(i) = es(i)(s))
+
+  simultaneous_sound: THEOREM
+    FORALL (gs: [I -> Guard], es: [I -> Expr]):
+      indexed_vc(gs, es) IMPLIES preserves(simultaneous(gs, es))
+
+  % There is deliberately no simultaneous converse: a permanently false
+  % peer guard can mask another component's locally ill-typed assignment.
+END Typing_Core

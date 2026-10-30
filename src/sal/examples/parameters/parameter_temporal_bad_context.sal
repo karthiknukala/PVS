@@ -1,0 +1,5 @@
+parameter_temporal_bad_context: CONTEXT =
+BEGIN
+  system: MODULE = BEGIN OUTPUT bit: BOOLEAN TRANSITION bit' = bit END;
+  bad_context: THEOREM system |- parameter_temporal_library{BOOLEAN, 0}!always(TRUE);
+END

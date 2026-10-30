@@ -1,0 +1,36 @@
+% Generated from /Users/e35480/git/kn-pvs/src/sal/examples/integration/library_counter.sal, module machine.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_library_x5F_counter_sal_machine: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_library_x5F_counter
+
+  State: TYPE = [# sal_count: subrange(0, 3), sal_started: bool #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = TRUE
+
+  initial(s: State): bool = defined(s) AND (((s)`sal_count = 0) AND ((s)`sal_started = FALSE) AND TRUE)
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND ((TRUE AND ((s)`sal_count < 3) AND ((next)`sal_count = ((s)`sal_count + 1)) AND ((next)`sal_started = TRUE)) OR (TRUE AND (NOT ((s)`sal_count < 3)) AND ((next)`sal_count = (s)`sal_count) AND ((next)`sal_started = (s)`sal_started)))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND (((next)`sal_started = (s)`sal_started) AND ((next)`sal_count = (s)`sal_count))
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  check_initial_1(s, next: State): bool =
+    TRUE IMPLIES (LET bridge_rhs: subrange(0, 3) = 0 IN TRUE)
+
+  check_step_1(s, next: State): bool =
+    (TRUE AND ((s)`sal_count < 3)) IMPLIES (LET bridge_rhs: subrange(0, 3) = ((s)`sal_count + 1) IN TRUE)
+
+  check_step_2(s, next: State): bool =
+    (TRUE AND (NOT ((s)`sal_count < 3))) IMPLIES (LET bridge_rhs: subrange(0, 3) = (s)`sal_count IN TRUE)
+
+  sal_safe: THEOREM system.invariant(LAMBDA (s: State): (((s)`sal_count = 0) OR (s)`sal_started))
+
+  sal_bad: THEOREM system.invariant(LAMBDA (s: State): ((s)`sal_count < 2))
+
+END SAL_sal_library_x5F_counter_sal_machine

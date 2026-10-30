@@ -1,0 +1,15 @@
+% Finite function values are ordinary PVS arrays.  The bridge admits this
+% closed finite domain and preserves selection, update, and quantification.
+Reverse_Array_Library: THEORY
+BEGIN
+  Index: TYPE = {i: int | 0 <= i AND i <= 1}
+  State: TYPE = [# cursor: Index, marked: [Index -> bool] #]
+
+  initial(s: State): bool =
+    s`cursor = 0 AND (FORALL (i: Index): NOT s`marked(i))
+  next(s: State): State =
+    (# cursor := IF s`cursor = 0 THEN 1 ELSE 0 ENDIF,
+       marked := s`marked WITH [(s`cursor) := TRUE] #)
+  step(s, t: State): bool = t = next(s)
+  ordered(s: State): bool = s`marked(1) IMPLIES s`marked(0)
+END Reverse_Array_Library

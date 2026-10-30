@@ -1,0 +1,72 @@
+#+TITLE: Worked N-ary composition
+
+=nary.sal= is the semantic source of this example. For positive =N= it defines
+=N= identical cells with values in =[0..2]=. Each cell starts at zero, increments
+below two, and wraps to zero. Indexed synchronous composition advances every
+cell; indexed asynchronous composition selects one cell and frames the others.
+
+The =aligned= invariant states that every pair of cells has the same value.
+It is not a restatement of the value type. Equal initialization, deterministic
+identical cells and synchronous stepping preserve it. The analogous asynchronous
+claim is false at =N = 3= after one increment.
+
+* Run and inspect
+
+Set the existing tool paths as described in =../README.org=, then run from the
+repository root:
+
+#+begin_src sh
+src/sal/doc/nary/run.sh
+#+end_src
+
+The runner loads =demo.lisp= through the existing tutorial launcher. All runtime
+contexts and logs stay below =src/sal/doc/=. Each invocation uses a new
+=.demo/nary-run.*/= directory. It performs these checks:
+
+1. Import the symbolic family through SAL's native export; confirm that =N=
+   remains a PVS theory parameter and checker registration is deferred.
+2. Inspect the source-associated =check_step_1_TCC1=, whose index remains
+   quantified. The normalized source expression is =values'[i_2] = values[i_2] + 1=,
+   and its span points back to the original scalar assignment on line 10.
+3. Instantiate =nary{3}!sync=, typecheck, and prove its five required typing
+   TCCs: one source increment TCC plus four in the shared reachability theory.
+4. Prove =SAL_sal_nary_sal_sync.sal_aligned= with
+   =(then (sal-source) (sal-check "SAL_sal_nary_sal_sync.aligned"))=.
+5. Check =nary{3}!async=: SAL returns a counterexample and the PVS theorem
+   remains open.
+6. Start a fresh PVS process; replay the five saved TCC proofs and the saved
+   synchronous strategy proof. Confirm the native theorem is proved and complete.
+
+Both success markers are required: =SAL-NARY-DEMO-PASSED= and
+=SAL-NARY-REPLAY-PASSED=. Full transcripts are retained at
+=../.build/nary-prove.log= and =../.build/nary-replay.log=.
+
+* Artifacts and scope
+
+| Directory | Contents |
+|-----------+----------|
+| generated/generic | Actual parameterized PVS context/module and source TCC report |
+| generated/three | Actual N=3 context/module, pre-proof TCC report, saved proofs and positive checker result |
+| generated/async-three | Actual N=3 asynchronous context/module, TCC report, typing proofs and counterexample |
+
+Every directory includes the unchanged shared =SAL_Transition_System.pvs=.
+The report captures TCCs before proof, so its =NIL= status is intentional.
+Generic TCCs and the generic alignment theorem are not proved by this run.
+The model checker establishes only the selected =N = 3= instance. It still
+encodes that finite system; quantified PVS definitions do not eliminate backend
+state-space costs.
+
+The positive proof uses the experimental trusted SAL rule. It does not
+reconstruct proof evidence in PVS. Progress companion theories are intentionally
+disabled for this focused demonstration; the typing TCCs are retained.
+
+The slides shorten bound-variable names and remove redundant parentheses,
+universally true =defined= predicates and neutral conjuncts. These presentation
+edits do not alter the complete generated files here. The source-level report
+preserves SAL's normalized array expression rather than inventing a reverse
+translation of arbitrary prover expressions.
+
+To work interactively, launch =../run-demo.sh= and use =(sal-doc-nary)= or
+=(sal-doc-nary :n 3)=. Reopen the view in a fresh process before replay so its
+exact source and theorem are registered. Avoid editing generated snapshots;
+change =nary.sal=, regenerate, inspect the new TCCs, and replay instead.

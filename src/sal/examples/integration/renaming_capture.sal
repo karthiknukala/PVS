@@ -1,0 +1,13 @@
+renaming_capture: CONTEXT =
+BEGIN
+  cell: MODULE =
+    BEGIN
+      INPUT x: BOOLEAN
+      OUTPUT result: BOOLEAN
+      INITIALIZATION result = FALSE
+      % Renaming x to y must not capture the free input in this quantifier.
+      TRANSITION [ (EXISTS (y: BOOLEAN): x AND y) --> result' = TRUE ]
+    END;
+  system: MODULE = RENAME x TO y IN cell;
+  enabled: THEOREM system |- G(y => X(result));
+END

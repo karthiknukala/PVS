@@ -1,0 +1,13 @@
+frontend_partial_assignments: CONTEXT =
+BEGIN
+  Positive: TYPE = {n: NATURAL | n > 0};
+  positive(n: Positive): BOOLEAN = TRUE;
+  system: MODULE =
+  BEGIN
+    INPUT boolean_argument: INTEGER, real_argument: REAL
+    OUTPUT b: BOOLEAN, r: REAL
+    INITIALIZATION b = FALSE; r = 0
+    TRANSITION [ TRUE --> b' = TRUE; r' = 0
+               [] TRUE --> b' = positive(boolean_argument); r' = 1 / real_argument ]
+  END;
+END

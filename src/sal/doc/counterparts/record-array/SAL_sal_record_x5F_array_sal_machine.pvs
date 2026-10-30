@@ -1,0 +1,31 @@
+% Generated from /Users/e35480/git/kn-pvs/src/sal/examples/integration/record_array.sal, module machine.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_record_x5F_array_sal_machine: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_record_x5F_array
+
+  State: TYPE = [# sal_cells: [sal_Index -> sal_Cell] #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = TRUE
+
+  initial(s: State): bool = defined(s) AND (((s)`sal_cells = (LAMBDA (bridge_local_1_sal_i: sal_Index): (# sal_enabled := TRUE, sal_value := 0 #))) AND TRUE)
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND (TRUE AND TRUE AND ((next)`sal_cells = (LAMBDA (bridge_local_2_sal_i_x5F_1: sal_Index): (IF (((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_enabled THEN (((s)`sal_cells)(bridge_local_2_sal_i_x5F_1) WITH [sal_value := (IF ((((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_value < 2) THEN ((((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_value + 1) ELSE 0 ENDIF)]) ELSE ((s)`sal_cells)(bridge_local_2_sal_i_x5F_1) ENDIF))))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND ((next)`sal_cells = (s)`sal_cells)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  check_initial_1(s, next: State): bool =
+    TRUE IMPLIES (LET bridge_rhs: [sal_Index -> sal_Cell] = (LAMBDA (bridge_local_1_sal_i: sal_Index): (# sal_enabled := TRUE, sal_value := 0 #)) IN TRUE)
+
+  check_step_1(s, next: State): bool =
+    (TRUE AND TRUE) IMPLIES (LET bridge_rhs: [sal_Index -> sal_Cell] = (LAMBDA (bridge_local_2_sal_i_x5F_1: sal_Index): (IF (((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_enabled THEN (((s)`sal_cells)(bridge_local_2_sal_i_x5F_1) WITH [sal_value := (IF ((((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_value < 2) THEN ((((s)`sal_cells)(bridge_local_2_sal_i_x5F_1))`sal_value + 1) ELSE 0 ENDIF)]) ELSE ((s)`sal_cells)(bridge_local_2_sal_i_x5F_1) ENDIF)) IN TRUE)
+
+  sal_bounded: THEOREM system.invariant(LAMBDA (s: State): (FORALL (bridge_local_3_sal_i: sal_Index): ((((s)`sal_cells)(bridge_local_3_sal_i))`sal_value <= 2)))
+
+END SAL_sal_record_x5F_array_sal_machine

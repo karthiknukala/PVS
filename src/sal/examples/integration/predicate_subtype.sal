@@ -1,0 +1,15 @@
+predicate_subtype: CONTEXT =
+BEGIN
+  Small: TYPE = { n: [0..3] | n < 3 };
+
+  machine: MODULE =
+    BEGIN
+      OUTPUT value: Small
+      INITIALIZATION value = 0
+      TRANSITION
+        [ increment: value < 2 --> value' = value + 1
+        [] wrap: ELSE --> value' = 0 ]
+    END;
+
+  bounded: THEOREM machine |- G(value < 3);
+END

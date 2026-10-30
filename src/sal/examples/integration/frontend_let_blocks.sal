@@ -1,0 +1,77 @@
+frontend_let_blocks: CONTEXT =
+BEGIN
+  system: MODULE =
+  BEGIN
+    INPUT x: BOOLEAN
+    OUTPUT y: BOOLEAN
+    INITIALIZATION y = FALSE
+    TRANSITION [ TRUE --> y' =
+      LET gate_0: BOOLEAN = NOT x IN
+      LET gate_1: BOOLEAN = NOT gate_0 IN
+      LET gate_2: BOOLEAN = NOT gate_1 IN
+      LET gate_3: BOOLEAN = NOT gate_2 IN
+      LET gate_4: BOOLEAN = NOT gate_3 IN
+      LET gate_5: BOOLEAN = NOT gate_4 IN
+      LET gate_6: BOOLEAN = NOT gate_5 IN
+      LET gate_7: BOOLEAN = NOT gate_6 IN
+      LET gate_8: BOOLEAN = NOT gate_7 IN
+      LET gate_9: BOOLEAN = NOT gate_8 IN
+      LET gate_10: BOOLEAN = NOT gate_9 IN
+      LET gate_11: BOOLEAN = NOT gate_10 IN
+      LET gate_12: BOOLEAN = NOT gate_11 IN
+      LET gate_13: BOOLEAN = NOT gate_12 IN
+      LET gate_14: BOOLEAN = NOT gate_13 IN
+      LET gate_15: BOOLEAN = NOT gate_14 IN
+      LET gate_16: BOOLEAN = NOT gate_15 IN
+      LET gate_17: BOOLEAN = NOT gate_16 IN
+      LET gate_18: BOOLEAN = NOT gate_17 IN
+      LET gate_19: BOOLEAN = NOT gate_18 IN
+      LET gate_20: BOOLEAN = NOT gate_19 IN
+      LET gate_21: BOOLEAN = NOT gate_20 IN
+      LET gate_22: BOOLEAN = NOT gate_21 IN
+      LET gate_23: BOOLEAN = NOT gate_22 IN
+      LET gate_24: BOOLEAN = NOT gate_23 IN
+      LET gate_25: BOOLEAN = NOT gate_24 IN
+      LET gate_26: BOOLEAN = NOT gate_25 IN
+      LET gate_27: BOOLEAN = NOT gate_26 IN
+      LET gate_28: BOOLEAN = NOT gate_27 IN
+      LET gate_29: BOOLEAN = NOT gate_28 IN
+      LET gate_30: BOOLEAN = NOT gate_29 IN
+      LET gate_31: BOOLEAN = NOT gate_30 IN
+      LET gate_32: BOOLEAN = NOT gate_31 IN
+      LET gate_33: BOOLEAN = NOT gate_32 IN
+      LET gate_34: BOOLEAN = NOT gate_33 IN
+      LET gate_35: BOOLEAN = NOT gate_34 IN
+      LET gate_36: BOOLEAN = NOT gate_35 IN
+      LET gate_37: BOOLEAN = NOT gate_36 IN
+      LET gate_38: BOOLEAN = NOT gate_37 IN
+      LET gate_39: BOOLEAN = NOT gate_38 IN
+      LET gate_40: BOOLEAN = NOT gate_39 IN
+      LET gate_41: BOOLEAN = NOT gate_40 IN
+      LET gate_42: BOOLEAN = NOT gate_41 IN
+      LET gate_43: BOOLEAN = NOT gate_42 IN
+      LET gate_44: BOOLEAN = NOT gate_43 IN
+      LET gate_45: BOOLEAN = NOT gate_44 IN
+      LET gate_46: BOOLEAN = NOT gate_45 IN
+      LET gate_47: BOOLEAN = NOT gate_46 IN
+      LET gate_48: BOOLEAN = NOT gate_47 IN
+      LET gate_49: BOOLEAN = NOT gate_48 IN
+      LET gate_50: BOOLEAN = NOT gate_49 IN
+      LET gate_51: BOOLEAN = NOT gate_50 IN
+      LET gate_52: BOOLEAN = NOT gate_51 IN
+      LET gate_53: BOOLEAN = NOT gate_52 IN
+      LET gate_54: BOOLEAN = NOT gate_53 IN
+      LET gate_55: BOOLEAN = NOT gate_54 IN
+      LET gate_56: BOOLEAN = NOT gate_55 IN
+      LET gate_57: BOOLEAN = NOT gate_56 IN
+      LET gate_58: BOOLEAN = NOT gate_57 IN
+      LET gate_59: BOOLEAN = NOT gate_58 IN
+      LET gate_60: BOOLEAN = NOT gate_59 IN
+      LET gate_61: BOOLEAN = NOT gate_60 IN
+      LET gate_62: BOOLEAN = NOT gate_61 IN
+      LET gate_63: BOOLEAN = NOT gate_62 IN
+      LET gate_64: BOOLEAN = NOT gate_63 IN
+      gate_64 ]
+  END;
+END
+

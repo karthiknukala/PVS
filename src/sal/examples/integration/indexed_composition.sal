@@ -1,0 +1,26 @@
+indexed_composition: CONTEXT =
+BEGIN
+  Index: TYPE = [1..3];
+
+  cell: MODULE =
+    BEGIN
+      OUTPUT value: [0..2]
+      INITIALIZATION value = 0
+      TRANSITION
+        [ increment: value < 2 --> value' = value + 1
+        [] wrap: ELSE --> value' = 0 ]
+    END;
+
+  synchronous: MODULE =
+    WITH OUTPUT values: ARRAY Index OF [0..2]
+      (|| (i: Index): RENAME value TO values[i] IN cell);
+
+  asynchronous: MODULE =
+    WITH OUTPUT values: ARRAY Index OF [0..2]
+      ([] (i: Index): RENAME value TO values[i] IN cell);
+
+  sync_range: THEOREM synchronous |-
+    G(FORALL(i: Index): values[i] <= 2);
+  async_range: THEOREM asynchronous |-
+    G(FORALL(i: Index): values[i] <= 2);
+END

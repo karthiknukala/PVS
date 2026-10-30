@@ -1,0 +1,102 @@
+(|Typing_Core|
+ (|typed_update| 0
+  (|typed_update-1| NIL 4001960355
+   ("" (SKOLEM 1 ("s" "i" "v"))
+    (("" (GRIND :IF-MATCH NIL)
+      (("1" (INST -2 "i") (("1" (ASSERT) NIL NIL)) NIL)
+       ("2" (INST? :IF-MATCH ALL) NIL NIL))
+      NIL))
+    NIL)
+   ((I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|typed| CONST-DECL "[Store -> bool]" |Typing_Core| NIL))
+   SHOSTAK))
+ (|atom_exact| 0
+  (|atom_exact-1| NIL 4001960355
+   ("" (SKOLEM 1 ("i" "g" "e"))
+    (("" (EXPAND* "preserves" "atom" "vc")
+      (("" (GRIND :DEFS NIL :IF-MATCH NIL)
+        (("1" (INST -1 "s!1" "s!1 WITH [(i) := e(s!1)]")
+          (("1" (USE "typed_update" ("s" "s!1" "i" "i" "v" "e(s!1)"))
+            (("1" (GROUND) NIL NIL)) NIL))
+          NIL)
+         ("2" (INST -4 "s!1")
+          (("2" (USE "typed_update" ("s" "s!1" "i" "i" "v" "e(s!1)"))
+            (("2" (GROUND) NIL NIL)) NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   ((|typed_update| FORMULA-DECL NIL |Typing_Core| NIL)
+    (|Expr| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (|Store| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (V FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|preserves| CONST-DECL "[Relation -> bool]" |Typing_Core| NIL)
+    (|atom| CONST-DECL "[[I, Guard, Expr] -> Relation]" |Typing_Core| NIL)
+    (|vc| CONST-DECL "[[I, Guard, Expr] -> bool]" |Typing_Core| NIL))
+   SHOSTAK))
+ (|choice_exact| 0
+  (|choice_exact-1| NIL 4001960355
+   ("" (THEN (EXPAND* "preserves" "choice") (GRIND :DEFS NIL :IF-MATCH ALL))
+    NIL NIL)
+   ((|Store| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (V FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|preserves| CONST-DECL "[Relation -> bool]" |Typing_Core| NIL)
+    (|choice| CONST-DECL "[[Relation, Relation] -> Relation]" |Typing_Core|
+     NIL))
+   SHOSTAK))
+ (|indexed_preservation| 0
+  (|indexed_preservation-1| NIL 4001960355
+   ("" (EXPAND* "preserves" "indexed_choice")
+    (("" (GRIND :DEFS NIL :IF-MATCH NIL)
+      (("1" (INST -1 "s!1" "t!1")
+        (("1" (GROUND) (("1" (INST? :IF-MATCH ALL) NIL NIL)) NIL)) NIL)
+       ("2" (INST -3 "i!1")
+        (("2" (INST -3 "s!1" "t!1") (("2" (GROUND) NIL NIL)) NIL)) NIL))
+      NIL))
+    NIL)
+   ((|indexed_choice| CONST-DECL "[[[I -> Guard], [I -> Expr]] -> Relation]"
+     |Typing_Core| NIL)
+    (|preserves| CONST-DECL "[Relation -> bool]" |Typing_Core| NIL)
+    (I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (V FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|Store| TYPE-EQ-DECL NIL |Typing_Core| NIL))
+   SHOSTAK))
+ (|indexed_choice_exact| 0
+  (|indexed_choice_exact-1| NIL 4001960356
+   (""
+    (THEN (SKOLEM 1 ("gs" "es")) (REWRITE "indexed_preservation")
+     (EXPAND "indexed_vc") (GRIND :DEFS NIL :REWRITES ("atom_exact")))
+    NIL NIL)
+   ((|indexed_preservation| FORMULA-DECL NIL |Typing_Core| NIL)
+    (I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (V FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|Store| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (|Guard| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (|Expr| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (|atom_exact| FORMULA-DECL NIL |Typing_Core| NIL)
+    (|indexed_vc| CONST-DECL "[[[I -> Guard], [I -> Expr]] -> bool]"
+     |Typing_Core| NIL))
+   SHOSTAK))
+ (|simultaneous_sound| 0
+  (|simultaneous_sound-1| NIL 4001960356
+   (""
+    (THEN (EXPAND* "indexed_vc" "vc" "preserves" "simultaneous")
+     (GRIND :DEFS NIL :IF-MATCH NIL) (EXPAND "typed" 1) (SKOLEM 1 "i")
+     (INST -1 "i") (INST -1 "s!1") (INST -3 "i") (INST -4 "i") (GROUND))
+    NIL NIL)
+   ((|Store| TYPE-EQ-DECL NIL |Typing_Core| NIL)
+    (V FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (I FORMAL-TYPE-DECL NIL |Typing_Core| NIL)
+    (|typed| CONST-DECL "[Store -> bool]" |Typing_Core| NIL)
+    (|indexed_vc| CONST-DECL "[[[I -> Guard], [I -> Expr]] -> bool]"
+     |Typing_Core| NIL)
+    (|vc| CONST-DECL "[[I, Guard, Expr] -> bool]" |Typing_Core| NIL)
+    (|preserves| CONST-DECL "[Relation -> bool]" |Typing_Core| NIL)
+    (|simultaneous| CONST-DECL "[[[I -> Guard], [I -> Expr]] -> Relation]"
+     |Typing_Core| NIL))
+   SHOSTAK)))
+

@@ -1,0 +1,39 @@
+% Generated from /Users/e35480/git/kn-pvs/src/sal/doc/nary/nary.sal, module async.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_nary_sal_async: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_nary[3]
+
+  State: TYPE = [# sal_values: [sal_Index -> subrange(0, 2)] #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = (FORALL (bridge_local_1_sal_i: sal_Index): TRUE)
+
+  initial(s: State): bool = defined(s) AND (FORALL (bridge_local_2_sal_i_x5F_1: sal_Index): ((((s)`sal_values)(bridge_local_2_sal_i_x5F_1) = 0) AND TRUE))
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND (EXISTS (bridge_local_3_sal_i_x5F_2: sal_Index): (TRUE AND ((TRUE AND (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) < 2) AND (((next)`sal_values)(bridge_local_3_sal_i_x5F_2) = (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) + 1))) OR (TRUE AND (NOT (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) < 2)) AND (((next)`sal_values)(bridge_local_3_sal_i_x5F_2) = 0))) AND (FORALL (bridge_local_4_sal_i_x5F_3: sal_Index): ((bridge_local_3_sal_i_x5F_2 = bridge_local_4_sal_i_x5F_3) OR (((next)`sal_values)(bridge_local_4_sal_i_x5F_3) = ((s)`sal_values)(bridge_local_4_sal_i_x5F_3))))))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND (FORALL (bridge_local_5_sal_i_x5F_4: sal_Index): (((next)`sal_values)(bridge_local_5_sal_i_x5F_4) = ((s)`sal_values)(bridge_local_5_sal_i_x5F_4)))
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  check_module_3: bool = (LET bridge_local_6_sal_sal_x5F_macro_x5F_context_x5F_argument: {bridge_local_7_sal_n: nat | (bridge_local_7_sal_n > 0)} = 3 IN TRUE)
+
+  check_initial_1(s, next: State, bridge_local_2_sal_i_x5F_1: sal_Index): bool =
+    TRUE IMPLIES (LET bridge_rhs: subrange(0, 2) = 0 IN TRUE)
+
+  check_step_1(s, next: State, bridge_local_3_sal_i_x5F_2: sal_Index): bool =
+    (TRUE AND TRUE AND (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) < 2)) IMPLIES (LET bridge_rhs: subrange(0, 2) = (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) + 1) IN TRUE)
+
+  check_step_2(s, next: State, bridge_local_3_sal_i_x5F_2: sal_Index): bool =
+    (TRUE AND TRUE AND (NOT (((s)`sal_values)(bridge_local_3_sal_i_x5F_2) < 2))) IMPLIES (LET bridge_rhs: subrange(0, 2) = 0 IN TRUE)
+
+  check_step_3(s, next: State, bridge_local_3_sal_i_x5F_2: sal_Index, bridge_local_4_sal_i_x5F_3: sal_Index): bool =
+    TRUE IMPLIES (LET bridge_rhs: subrange(0, 2) = ((s)`sal_values)(bridge_local_4_sal_i_x5F_3) IN TRUE)
+
+  sal_async_x5F_aligned: THEOREM system.invariant(LAMBDA (s: State): (FORALL (bridge_local_8_sal_i: sal_Index, bridge_local_9_sal_j: sal_Index): (((s)`sal_values)(bridge_local_8_sal_i) = ((s)`sal_values)(bridge_local_9_sal_j))))
+
+END SAL_sal_nary_sal_async

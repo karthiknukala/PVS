@@ -1,0 +1,24 @@
+frontend_semantics: CONTEXT =
+BEGIN
+  Nonzero: TYPE = {n: INTEGER | n /= 0};
+  Ring: TYPE = RINGSET(3);
+
+  quotient(x: INTEGER, y: Nonzero): INTEGER = x DIV y;
+  residue(x: INTEGER, y: Nonzero): INTEGER = x MOD y;
+  successor(x: Ring): Ring = rsucc(x);
+  predecessor(x: Ring): Ring = rpred(x);
+  countdown(n: NATURAL): NATURAL =
+    IF n = 0 THEN 0 ELSE 1 + countdown(n - 1) ENDIF;
+
+  terminal: MODULE =
+  BEGIN
+    OUTPUT stopped: BOOLEAN
+    INITIALIZATION stopped = TRUE
+    TRANSITION [ FALSE --> stopped' = stopped ]
+  END;
+
+  terminal_next: THEOREM terminal |- AX(FALSE);
+  terminal_eventually: THEOREM terminal |- AF(FALSE);
+  terminal_no_infinite: THEOREM terminal |- NOT EG(TRUE);
+  terminal_not_exists_next: THEOREM terminal |- NOT EX(TRUE);
+END

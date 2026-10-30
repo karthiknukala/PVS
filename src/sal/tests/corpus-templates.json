@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "templates": [
+    {
+      "source": "tta-startup/faulty-hub/startup-faulty-guardian.sal",
+      "recipe": "tta-startup/faulty-hub/run.sh",
+      "directory": "faulty_hub",
+      "module": "system",
+      "representative": {
+        "filename": "startup_3_16_TRUE",
+        "nodes": "3",
+        "startuptime": "16",
+        "big_bang": "TRUE"
+      },
+      "documented_matrix": {
+        "nodes": [3, 4, 5],
+        "startuptime": "7 * nodes - 5",
+        "big_bang": ["TRUE", "FALSE"]
+      }
+    },
+    {
+      "source": "tta-startup/faulty-node/startup-skel.sal",
+      "recipe": "tta-startup/faulty-node/run.sh",
+      "directory": "faulty_node",
+      "module": "system",
+      "representative": {
+        "filename": "startup_3_16_TRUE",
+        "nodes": "3",
+        "startuptime": "16",
+        "feedback": "TRUE",
+        "degree": "6"
+      },
+      "documented_matrix": {
+        "nodes": [3, 4, 5],
+        "startuptime": ["7 * nodes - 5", "7 * nodes - 6"],
+        "feedback": ["TRUE", "FALSE"],
+        "degree": 6
+      }
+    }
+  ]
+}

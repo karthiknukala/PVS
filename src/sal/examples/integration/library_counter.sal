@@ -1,0 +1,15 @@
+library_counter: CONTEXT =
+BEGIN
+  machine: MODULE =
+    BEGIN
+      OUTPUT count: [0..3]
+      OUTPUT started: BOOLEAN
+      INITIALIZATION count = 0; started = FALSE
+      TRANSITION
+        [ advance: count < 3 --> count' = count + 1; started' = TRUE
+        [] hold: ELSE --> count' = count; started' = started ]
+    END;
+
+  safe: THEOREM machine |- G(count = 0 OR started);
+  bad: THEOREM machine |- G(count < 2);
+END

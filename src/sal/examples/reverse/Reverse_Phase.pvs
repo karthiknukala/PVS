@@ -1,0 +1,7 @@
+Reverse_Phase: THEORY
+BEGIN
+  IMPORTING Reverse_Phase_Library AS lib
+  native: THEORY = SAL_Transition_View{{
+    S := lib.State, initial := lib.initial, step := lib.step }}
+  completed_after_active: THEOREM native.invariant(lib.safe)
+END Reverse_Phase

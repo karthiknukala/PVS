@@ -1,0 +1,13 @@
+causality_good: CONTEXT =
+BEGIN
+  system: MODULE =
+    BEGIN
+      INPUT request: BOOLEAN
+      OUTPUT enabled: BOOLEAN
+      OUTPUT acknowledged: BOOLEAN
+      DEFINITION
+        enabled = request;
+        acknowledged = enabled
+    END;
+  agrees: THEOREM system |- G(acknowledged = request);
+END

@@ -1,0 +1,23 @@
+record_array: CONTEXT =
+BEGIN
+  Index: TYPE = [0..1];
+  Small: TYPE = [0..2];
+  Cell: TYPE = [# enabled: BOOLEAN, value: Small #];
+
+  machine: MODULE =
+    BEGIN
+      OUTPUT cells: ARRAY Index OF Cell
+      INITIALIZATION
+        cells = [[i: Index] (# enabled := TRUE, value := 0 #)]
+      TRANSITION
+        [ tick: TRUE -->
+          cells' = [[i: Index]
+            IF cells[i].enabled
+            THEN cells[i] WITH .value := IF cells[i].value < 2
+                                         THEN cells[i].value + 1 ELSE 0 ENDIF
+            ELSE cells[i] ENDIF]
+        ]
+    END;
+
+  bounded: THEOREM machine |- G(FORALL(i: Index): cells[i].value <= 2);
+END

@@ -1,0 +1,111 @@
+;;; Run only after doc/demo.lisp; all PVS state lives in a fresh local context.
+(in-package :pvs)
+(load (merge-pathnames "../tests/support.lisp" *sal-doc-directory*))
+(setq *proof-prompt-behavior* :noquestions *proceed-without-asking* t
+      *noninteractive* t *noninteractive-timeout* 60)
+
+(defparameter *sal-typing-core-targets*
+  '("typed_update" "atom_exact" "choice_exact" "indexed_preservation"
+    "indexed_choice_exact" "simultaneous_sound"))
+
+(defun sal-typing-core-strategy (name)
+  (cond ((string= name "typed_update")
+      '(spread (then (skolem 1 ("s" "i" "v")) (grind :if-match nil))
+         ((then (inst -2 "i") (assert))
+          (then (inst? :if-match all) (assert)))))
+        ((string= name "atom_exact")
+         '(spread
+            (then (skolem 1 ("i" "g" "e"))
+                  (expand* "preserves" "atom" "vc")
+                  (grind :defs nil :if-match nil))
+            ((then (inst -1 "s!1" "s!1 WITH [(i) := e(s!1)]")
+                   (use "typed_update" ("s" "s!1" "i" "i" "v" "e(s!1)"))
+                   (ground))
+             (then (inst -4 "s!1")
+                   (use "typed_update" ("s" "s!1" "i" "i" "v" "e(s!1)"))
+                   (ground)))))
+        ((string= name "choice_exact")
+         '(then (expand* "preserves" "choice") (grind :defs nil :if-match all)))
+        ((string= name "indexed_preservation")
+         '(spread
+            (then (expand* "preserves" "indexed_choice")
+                  (grind :defs nil :if-match nil))
+            ((then (inst -1 "s!1" "t!1") (ground)
+                   (inst? :if-match all) (assert))
+             (then (inst -3 "i!1") (inst -3 "s!1" "t!1") (ground)))))
+        ((string= name "indexed_choice_exact")
+         '(then (skolem 1 ("gs" "es"))
+                (rewrite "indexed_preservation") (expand "indexed_vc")
+                (grind :defs nil :rewrites ("atom_exact"))))
+        ((string= name "simultaneous_sound")
+         '(then (expand* "indexed_vc" "vc" "preserves" "simultaneous")
+                (grind :defs nil :if-match nil)
+                (expand "typed" 1) (skolem 1 "i")
+                (inst -1 "i") (inst -1 "s!1")
+                (inst -3 "i") (inst -4 "i") (ground)))
+        (t '(grind :if-match all))))
+
+(defun sal-typing-core-run ()
+  (let* ((source (merge-pathnames "semantics/" *sal-doc-directory*))
+         (output (uiop:ensure-directory-pathname
+                   (uiop:getenv "SAL_TYPING_CORE_OUTPUT")))
+         (replay (string= (uiop:getenv "SAL_TYPING_CORE_PHASE") "replay")))
+    (ensure-directories-exist (merge-pathnames "Typing_Core.pvs" output))
+    (sal-write-file-if-changed
+      (merge-pathnames "Typing_Core.pvs" output)
+      (uiop:read-file-string (merge-pathnames "Typing_Core.pvs" source)))
+    (when replay
+      (sal-write-file-if-changed
+        (merge-pathnames "Typing_Core.prf" output)
+        (uiop:read-file-string (merge-pathnames "Typing_Core.prf" source))))
+    (change-context (namestring output))
+    (typecheck-file "Typing_Core")
+    (let* ((th (get-typechecked-theory "Typing_Core"))
+           (decls (remove-if-not #'formula-decl? (theory th))))
+      (sal-test (null (assuming th)) "no ASSUMING declarations")
+      (sal-test (notany #'axiom? decls) "no AXIOM declarations")
+      (sal-test (null (collect-tccs th)) "total core generates no TCCs")
+      (sal-test (= (length decls) (length *sal-typing-core-targets*))
+                "all six proof declarations accounted for")
+      (dolist (name *sal-typing-core-targets*)
+        (let ((decl (find name decls :key (lambda (d) (string (id d)))
+                          :test #'string=)))
+          (sal-test decl (format nil "declaration ~a exists" name))
+          (if replay
+              (progn
+                (sal-test (justification decl) (format nil "saved proof ~a" name))
+                (sal-test
+                  (eq (status-flag
+                        (prove-decl decl :strategy '(then (rerun) (quit)))) '!)
+                  (format nil "fresh replay ~a" name)))
+              (sal-test-prove "Typing_Core" name (sal-typing-core-strategy name)))
+          (sal-test (and (proved? decl) (string= (pc-complete decl) "complete"))
+                    (format nil "~a is proved - complete" name))))
+      (save-all-proofs th t)
+      (save-context nil t)
+      (sal-write-file-if-changed
+        (merge-pathnames "Typing_Core.prf" source)
+        (uiop:read-file-string (merge-pathnames "Typing_Core.prf" output)))
+      (when replay
+        (with-open-file (out (merge-pathnames "typing-core-proofchain.txt" source)
+                             :direction :output :if-exists :supersede)
+          (let ((*standard-output* out)) (pc-analyze th)))
+        (with-open-file (out (merge-pathnames "typing-core-evidence.txt" source)
+                             :direction :output :if-exists :supersede)
+          (format out "PVS ~a: fresh-process replay of Typing_Core.prf~%" *pvs-version*)
+          (format out "Replay context: ~a~%" output)
+          (format out "Six proof declarations; zero TCCs; no AXIOM or ASSUMING declarations.~%~%")
+          (dolist (decl decls)
+            (format out "Typing_Core.~a: proved - ~a~%" (id decl) (pc-complete decl)))
+          (format out "~%Run: sh src/sal/doc/semantics/run-typing-core.sh~%")
+          (format out "Requires PVS_BIN, SAL_HOME, SAL_XMLS_SOURCE, as for doc/run-demo.sh.~%")
+          (format out "Scope: total expressions/guards, unrestricted stores, independent membership predicate,~%")
+          (format out "single-coordinate updates, choice, indexed choice, simultaneous independent ownership.~%")
+          (format out "This is metatheory, not a proof of the implemented compiler or all SAL typing.~%")))
+      (format t "~&SAL-TYPING-CORE-~a-PASSED: ~d declarations; no TCCs.~%"
+              (if replay "REPLAY" "PROVE") (length decls)))))
+
+(handler-case (sal-typing-core-run)
+  (error (condition)
+    (format t "~&SAL-TYPING-CORE-FAILED: ~a~%" condition)
+    (uiop:quit 1)))

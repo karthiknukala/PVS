@@ -1,0 +1,12 @@
+parameter_temporal_library{T: TYPE, limit: [1..2]}: CONTEXT =
+BEGIN
+  Positive: TYPE = {n: NATURAL | n > 0};
+  reaches(n: NATURAL): BOOLEAN = F(n = limit);
+  recurring(n: NATURAL): BOOLEAN = G(reaches(n));
+  always(p: BOOLEAN): BOOLEAN = G(p);
+  bounded(p: BOOLEAN, n: NATURAL): BOOLEAN =
+    n > 0 AND (p OR X(bounded(p, n - 1)));
+  unused_domain(n: Positive): BOOLEAN = G(TRUE);
+  positive_value(n: Positive): BOOLEAN = TRUE;
+  inner_bad(p: BOOLEAN): BOOLEAN = G(p AND positive_value(0));
+END

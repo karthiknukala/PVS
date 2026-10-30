@@ -1,0 +1,12 @@
+% SAL context nary; source /Users/e35480/git/kn-pvs/src/sal/doc/nary/nary.sal.
+SALCTX_sal_nary[sal_N: {bridge_local_1_sal_n: nat | (bridge_local_1_sal_n > 0)}]: THEORY
+BEGIN
+
+
+  sal_Index: TYPE = subrange(1, sal_N)
+
+  check_module_1: bool = (FORALL (bridge_local_2_sal_i: sal_Index): (LET bridge_local_3_sal_sal_x5F_macro_x5F_context_x5F_argument: {bridge_local_4_sal_n: nat | (bridge_local_4_sal_n > 0)} = sal_N IN TRUE))
+
+  check_module_2: bool = (FORALL (bridge_local_5_sal_i: sal_Index): (LET bridge_local_6_sal_sal_x5F_macro_x5F_context_x5F_argument: {bridge_local_7_sal_n: nat | (bridge_local_7_sal_n > 0)} = sal_N IN TRUE))
+
+END SALCTX_sal_nary

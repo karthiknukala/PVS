@@ -1,0 +1,7 @@
+.build/
+.demo/
+*.tex
+*.pdf
+!sal-pvs-tutorial.pdf
+!template/org/starter.pdf
+!template/org/assets/decay.pdf

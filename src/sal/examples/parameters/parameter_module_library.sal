@@ -1,0 +1,9 @@
+parameter_module_library{Limit: [1..2]}: CONTEXT =
+BEGIN
+  Seed: TYPE = {n: NATURAL | n > 0};
+  cell[seed: Seed]: MODULE =
+  BEGIN
+    LOCAL bit: BOOLEAN
+    TRANSITION bit' = bit
+  END;
+END
