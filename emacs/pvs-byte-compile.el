@@ -51,6 +51,7 @@
 		  pvs-menu
 		  pvs-mode
 		  pvs-print
+		  pvs-interface
 		  pvs-prover-helps
 		  pvs-prover-manip
 		  manip-debug-utils

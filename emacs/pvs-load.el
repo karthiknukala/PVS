@@ -105,6 +105,8 @@
 (load "prooflite" nil noninteractive) ; ProofLite
 ;; (load "pvs-websocket" nil noninteractive)
 (load "pvs-speedbar" nil noninteractive)
+(let ((load-prefer-newer t))
+  (load "pvs-interface" nil noninteractive))
 
 (or (let ((load-path (if (boundp 'pvs-original-load-path) pvs-original-load-path load-path)))
       (load "newcomment" t noninteractive))

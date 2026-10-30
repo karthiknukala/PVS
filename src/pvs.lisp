@@ -630,15 +630,20 @@ nil."
 	(dolist (dir (cons *pvs-path*
 			   (append (reverse *pvs-library-path*)
 				   (list (user-homedir-pathname)))))
-	  (setq pfiles (append pfiles (find-pvs-patch-files dir))))
+	  ;; Only core patches can be assumed incorporated into a newer image.
+	  ;; Library and user patches may supply code absent from the PVS build.
+	  (setq pfiles (append pfiles (find-pvs-patch-files dir
+						 (equal dir *pvs-path*)))))
 	pfiles))))
 
-(defun find-pvs-patch-files (dir)
+(defun find-pvs-patch-files (dir &optional (newer-than-build? t))
   (let ((pdir (format nil "~apvs-patches/" dir)))
     (when (uiop:directory-exists-p pdir)
       ;; First get the files
-      (let ((pfiles (remove-if (complement #'valid-patch-filename)
-		      (directory (format nil "~a/*.lisp" pdir)))))
+      (let ((pfiles (remove-if-not
+		    (lambda (file)
+		      (valid-patch-filename file newer-than-build?))
+		    (directory (format nil "~a/*.lisp" pdir)))))
 	(sort pfiles #'string< :key #'pathname-name)))))
 
 (defun pvs-build-date ()
@@ -647,12 +652,13 @@ nil."
     (declare (ignore sec min hour))
     (format nil "~4,'0d~2,'0d~2,'0d" year mon date)))
 
-(defun valid-patch-filename (pathname)
+(defun valid-patch-filename (pathname &optional (newer-than-build? t))
   (let ((fname (pathname-name pathname)))
     (and (>= (length fname) 14) ; patch-YYYYMMDD#, where # is any seq of chars
        (let ((date (subseq fname 6 14)))
 	 (and (every #'digit-char-p date)
-	      (string> date (pvs-build-date)))))))
+	      (or (not newer-than-build?)
+		  (string> date (pvs-build-date))))))))
 
 (defun collect-pvs-lisp-files ()
   (let ((lfiles nil))
