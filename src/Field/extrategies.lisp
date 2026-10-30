@@ -41,6 +41,10 @@
 
 (defparameter *extrategies-version* "Extrategies-8.1 (05/23/2026)")
 
+;;
+;; Oracle management
+;;
+
 (defstruct (TrustedOracle (:conc-name get-))
   (name nil :read-only t)      ; Oracle name
   (internal nil :read-only t)  ; Internal oracle (always enabled)
@@ -127,6 +131,160 @@
 	 (error-msg ,errmsg))
        ,docmsg ,format))))
 
+;;
+;; Support for .pvslib files
+;;
+
+;; Hash table of library records, indexed by library id. A pvslib-record is an association list
+;; representing a dictionary (key,val), where val is a list. The following fields are automatically
+;; filled: id (library identification), dir (absolute path to the library), and basepath (relative path
+;; to the library).
+(defparameter *extra-pvslibs* (make-hash-table :test #'equal))
+
+(defun remove-str-after-sharp (str)
+  "Remove anything after # and trim"
+  (when str
+    (let* ((pos     (position #\# str :test #'equal))
+	   (newstr  (if pos (subseq str 0 pos) str)))
+      (string-trim '(#\Space #\Newline) newstr))))
+
+
+(defun get-pvslib-val (key pvslib-record)
+  "Get value of key in pvslib-record. Return nil key is not in record."
+  (cdr (assoc key pvslib-record :test #'string=)))
+
+(defmacro put-pvslib-val (key val pvslib-record)
+  "Put pair of key,val into pvslib-record."
+  `(push (cons ,key (enlist-it ,val)) ,pvslib-record))
+
+(defun extra-check-pvslib-record (pvslib-dirpath pvslib-file pvslib-record)
+  "Check for duplicated id on *extra-pvslibs*, set key dir to pvslib-record, load lisploads, and
+process sub-libraries"
+  (let ((libid (car (get-pvslib-val "id" pvslib-record))))
+    (if libid
+	(let ((duplib-record (gethash libid *extra-pvslibs*)))
+	  (if duplib-record
+	      (pvs-message "Warning: Duplicated library id ~a in ~a and ~a.pvslib"
+			   libid pvslib-file (car (get-pvslib-val "dir" duplib-record)))
+	      (let ((pvslib-dir (car pvslib-dirpath))
+		    (pvslib-basepath (cdr pvslib-dirpath)))
+		(setf (gethash libid *extra-pvslibs*) pvslib-record)
+		(loop for lispload in (get-pvslib-val "lisploads" pvslib-record)
+		      for lispname = (merge-pathnames pvslib-dir (make-pathname :name lispload))
+		      do
+		      (if (file-exists-p lispname)
+			  (let ((*suppress-printing* t))
+			    (handler-bind ((sb-kernel:redefinition-warning #'muffle-warning))(load lispname)))
+			  (pvs-message "Warning:  Lisp file ~a of library ~a not found"
+				       lispname libid)))
+;; PRELUDE LIBRARIES CANNOT BE LOADED HERE
+;;	      (loop for preludext in (get-pvslib-val "preludedirs" pvslib-record)
+;;		    for dirname = (merge-pathnames pvslib-dir (make-pathname :name preludext))
+;;		    for preludectx = (merge-pathnames ".pvscontext"
+;;						      (uiop:ensure-directory-pathname dirname))
+;;		    do
+;;		    (cond ((not (uiop:directory-exists-p dirname))
+;;			   (pvs-message "Warning: Prelude subdirectory ~a of library ~a not found"
+;;					preludext libid))
+;;			  ((not (file-exists-p preludectx))
+;;			   (pvs-message
+;;			    "Warning: Prelude extension ~a of library ~a doesn't appear to be type-checked"
+;;			    preludext libid preludectx))
+;;			  (t (load-prelude-library dirname nil t))))
+		(loop for dir in (get-pvslib-val "sublibdirs" pvslib-record)
+		      for dirname = (merge-pathnames pvslib-dir (make-pathname :name dir))
+		      append
+		      (if (uiop:directory-exists-p dirname)
+			  (let ((newdir (format nil "~a/" dirname)))
+			    (unless (member newdir *pvs-library-path* :test #'equal)
+			      (list (cons newdir pvslib-basepath))))
+			  (pvs-message "Warning: Library subdirectory ~a of library ~a not found"
+				       dirname libid))))))
+      (pvs-message "Warning: File ~a without library id" pvslib-file))))
+
+;; Fill the hash table *extra-pvslibs*
+(defun extra-hash-pvslib (pvslib-dirpath pvslib-file)
+  (let* ((pvslib-dir (car pvslib-dirpath))
+	 (pvslib-record nil)
+	 (dirname (car (last (pathname-directory (uiop:ensure-directory-pathname pvslib-dir)))))
+	 (pvslib-basepath (append (cdr pvslib-dirpath) (list dirname))))
+    (put-pvslib-val "id" dirname pvslib-record) ;; May be overwritten by user
+    (when (file-exists-p pvslib-file)
+      (flet ((mk-record (line)
+	       (let ((keyval (split line #\:)))
+		 (if (<= (length keyval) 1)
+		     (pvs-message "Warning: Line ~s in ~a doesn't have the form <key>:<val>"
+				  line pvslib-file)
+		     (let* ((key (string-trim '(#\Space) (car keyval)))
+			    (preval (if (= (length keyval) 2)
+					(split (cadr keyval) #\,)
+					(cdr keyval)))
+			    (val (mapcar (lambda (x)(string-trim '(#\Space) x)) preval)))
+		       (put-pvslib-val key val pvslib-record))))))
+	(with-open-file
+	    (stream pvslib-file)
+	  (loop for line = (remove-str-after-sharp (read-line stream nil))
+		while line
+		unless (string= line "")
+		do (mk-record line)))))
+    (put-pvslib-val "dir" pvslib-dir pvslib-record) ;; Cann't be overwritten by user
+    (put-pvslib-val "basepath" pvslib-basepath pvslib-record) ;; Cann't be overwritten by user
+    (extra-check-pvslib-record (cons pvslib-dir pvslib-basepath) pvslib-file pvslib-record)))
+
+(defun extra-pvslib-keyval (id key &optional as-list?)
+  "Return value of KEY associated to library ID. Output is a list if AS-LIST? is set to T,
+otherwise if the val has a unique value it returns the value."
+  (let* ((pvslib-record (gethash id *extra-pvslibs*))
+	 (val (get-pvslib-val key pvslib-record)))
+    (if (or as-list? (cdr val)) val (car val))))
+
+(defun extra-load-pvslibs-rec (libs)
+  "A file called '.pvslib' is recursively searched in the directoies in LIBS.
+If the file is found, the information contained in it is collected and stored in specific
+global variables (see above). This function returns the list of directories recursively recognized
+as sub-libraries in the '.pvslib' files that are found. LIBS is a list of conses of
+(strings . list of strings), where the first component represents the absolute library directory
+and the second one represents the accumlative path starting from the main library as the recursion goes on.
+This second component helps to comput the basepath of the PVS library record."
+  (when libs
+    (let* ((pvslib-dir  (caar libs))
+	   (pvslib-file (merge-pathnames pvslib-dir
+					 (make-pathname :name ".pvslib")))
+	   (additional-libs (extra-hash-pvslib (car libs) pvslib-file)))
+      (append (mapcar #'car additional-libs)
+	      (extra-load-pvslibs-rec (append additional-libs (cdr libs)))))))
+
+;; Loop for all .pvslib files in the *pvs-library-path*
+(defun extra-load-pvslibs ()
+  (clrhash *extra-pvslibs*)
+  (let ((sub-libs (extra-load-pvslibs-rec (mapcar #'list *pvs-library-path*))))
+    (when sub-libs
+      ;; [M3] The sub-libraries are added to the end of *pvs-library-path*
+      ;; to allow shadowing of libraries.
+      (setf *pvs-library-path* (append *pvs-library-path* sub-libs)))))
+
+(defun extra-print-pvslibs ()
+  (loop for id being the hash-keys of *extra-pvslibs*
+        using (hash-value pvslib-record)
+	do
+	(loop for keyval in pvslib-record
+	      for key = (car keyval)
+	      for val = (cdr keyval)
+	      do (format t "~a:~{~a~^, ~} | " key val))
+	(format t "~%")))
+
+(defun extra-get-pvslib-id-from-dir (dir)
+  "Returns the collection id assigned to DIR if any."
+  (let* ((path (uiop:ensure-directory-pathname dir))
+	 (dirstr (directory-namestring path)))
+    (loop for id being the hash-keys of *extra-pvslibs*
+	  when (string= dirstr (extra-pvslib-keyval id "dir"))
+	  return id)))
+
+;;
+;;
+;;
+
 (defmacro extra-load-local-files (&rest filenames)
   "[Extrategies] Load a list of files from the same directory where
 the macro is called. This is particular useful when
@@ -150,7 +308,9 @@ prelude.pvs (since lib is in the PVS Library Path)"
 to a directory in the PVS Library Path"
   (let ((file (extra-libfile filename)))
     (if file
-	(load file)
+	;; Muffle redefinition warnings when loading files
+	(handler-bind (#+sbcl (sb-kernel:redefinition-warning #'muffle-warning))
+	  (load file))
       (error "File ~a not found in the PVS home directory or in the PVS library path" filename))))
 
 ;; Executes command in the operating system and returns a pair (status . string)
@@ -491,13 +651,13 @@ T, returns NIL when theory is not imported in current theory."
 	  theory))))
 
 (defun extra-imported-theory? (theory)
-  "Find if THEORY is an imported thoery in the current theory.
-Return NIL if not."
+  "Find if THEORY is an imported theory in the current theory (it is assummed that current theory
+is always imported in itself). Return NIL if not."
   (when theory
     (let ((current-th (current-theory))
 	  (qid        (extra-qid-theory theory)))
       (when current-th
-	(find qid (all-imported-theories current-th)
+	(find qid (cons current-th (all-imported-theories current-th))
 	      :test (lambda (qid th) (string= qid (extra-qid-theory th))))))))
 
 (defun extra-qid-theory (theory)
@@ -3574,7 +3734,8 @@ when the list of FNUMS is over. Options are as in eval-formula."
 		   (unbound-variable
 		    (c)
 		    (when *extra-debug-verbose*
-		      (format t "[suppress-when] Variable ~a is unbound in ~a. Expression assumed not to hold~%" (cell-error-name c) expr))))))))
+		      (format t "[suppress-when] Variable ~a is unbound in ~a. Expression assumed not to hold~%"
+			      (cell-error-name c) expr))))))))
     (setf (documentation fun 'function)
 	  (format nil "when expression ~a holds" expr))
     fun))
@@ -3591,7 +3752,8 @@ when the list of FNUMS is over. Options are as in eval-formula."
 		    (c)
 		    (not
 		     (when *extra-debug-verbose*
-		       (format t "[suppress-unless] Variable ~a is unbound in ~a. Expression assummed not to hold~%" (cell-error-name c) expr)))))))))
+		       (format t "[suppress-unless] Variable ~a is unbound in ~a. Expression assummed not to hold~%"
+			       (cell-error-name c) expr)))))))))
     (setf (documentation fun 'function)
 	  (format nil "unless expression ~a holds" expr))
     fun))
@@ -3700,9 +3862,8 @@ string, it prints the the string resulting from evaluating (format nil <FMSTRING
 when the i-th data input is a Lisp expression EXPR, it prints the line <expr> = <va>, where <val>
 is the evaluation of <expr>. In addition, this function will print backtrace frames (according to
 global variable *extra-debug-frame-count* and status of strategies stack at the point where the functions is
-called. Compiling a call of this function through (extra-set-debug-mode ...) without enabling debug mode
-results in a compilation error. This compilation error could be avoided by adding the compilation
-directive #+extra-debug before the call to the function."
+called. Compiling a call of this function without enabling debug mode results in a compilation error.
+This compilation error could be avoided by adding the compilation directive #+extra-debug before the call to the function."
   `(extra-debug-aux "*extra-debug-print*" ,data))
 
 (defmacro extra-debug-break (&rest data)
@@ -3716,15 +3877,15 @@ extra-debug-print. Data is a list of either a string, a formatted string of the 
 If the i-th data input is a string, it prints the string.If the i-th data input is formatted string,
 it prints the the string resulting from evaluating (format nil <FMSTRING> <e1> ... <en>). Otherwise,
 when the i-th data input is a Lisp expression EXPR, it prints the line <expr> = <va>, where <val>
-is the evaluation of <expr>. Compiling a call of this function without enabling debug mode through
-(extra-set-debug-mode ...) results in a compilation error. This compilation error could be avoided by adding
-the compilation directive #+extra-debug before the call to the function."
+is the evaluation of <expr>. Compiling a call of this function without enabling debug mode results
+in a compilation error. This compilation error could be avoided by adding the compilation
+directive #+extra-debug before the call to the function."
   (unless (member :extra-debug *features*)
     (error *debug-fail-msg*))
   `(format t "~%[*extra-debug-println*] ~{~a~@[ = ~{~s~}~]~^, ~}~%"
 	   (extra-debug-data ,data)))
 
-(defun extra-show-debug-mode (&optional msgs)
+(defun extra-show-debug-mode__ (&optional msgs)
    (format nil "~&*extra-debug-frame-count*: ~a~
                 ~%*extra-debug-files*: ~a~
                 ~%*extra-debug-verbose*: ~a~
@@ -3735,8 +3896,12 @@ the compilation directive #+extra-debug before the call to the function."
 	   (documentation *extra-debug-suppress* 'function)
 	   (member :extra-debug *features*) msgs))
 
+(defun extra-show-debug-mode ()
+  "[Extrategies] Show current debug mode."
+  (format t (extra-show-debug-mode__)))
+
 (defstrat show-debug-mode ()
-  (let ((msg (extra-show-debug-mode)))
+  (let ((msg (extra-show-debug-mode__)))
     (printf "~a" msg))
   "[Extrategies] Show current debug mode.")
 
@@ -3752,7 +3917,9 @@ Return list of loaded files"
 	      (if (member path loaded :test #'equal)
 		  (extra-load-files-aux (cdr files) loaded)
 		(progn
-		  (load path)
+		  ;; Muffle redefinition warnings when loading files
+		  (handler-bind (#+sbcl (sb-kernel:redefinition-warning #'muffle-warning))
+		    (load path))
 		  (extra-load-files-aux (cdr files) (cons path loaded))))
 	    (let* ((pvs-attachments
 		    (enlist-it (probe-file (format nil "~a/pvs-attachments" path))))
@@ -3802,10 +3969,38 @@ previously in *extra-debug-files*. When :LIB is t, it treats the file names in F
 PVS home directory or to any directory in the PVS Library Path."
   (let ((loaded-notfound (extra-load-files__ files reset lib)))
     (when loaded-notfound
-      (format t "~@[~%Loaded files: ~{~a~^, ~}~]~@[~%Files not found: ~{~a~^, ~}~]"
+      (format t "~%~@[~%Loaded files: ~{~a~^, ~}~]~@[~%Files not found: ~{~a~^, ~}~]"
 	      (car loaded-notfound) (cdr loaded-notfound)))))
 
 ;; See set-debug mode
+(defun extra-set-debug-mode__ (mode &key files frames (verbose 'none) suppress)
+  (let ((msgs))
+    (unless (equal verbose 'none)
+      (setq *extra-debug-verbose* (when verbose t)))
+    (cond ((eq mode 'toggle)
+	   (if (member :extra-debug *features*)
+	       (setq *features* (delete :extra-debug *features*))
+	       (pushnew :extra-debug *features*)))
+	  ((eq mode 'enable)
+	   (pushnew :extra-debug *features*))
+	  ((eq mode 'disable)
+	   (setq *features* (delete :extra-debug *features*)))
+	  (mode (push "MODE should be one of toggle, enable, or disable" msgs)))
+    (when frames
+      (if (numberp frames)
+	  (setq *extra-debug-frame-count* frames)
+	(push (format nil "FRAMES (~a) must be a number" frames) msgs)))
+    (when suppress
+      (let ((fsuppress (eval suppress)))
+	(if (typep fsuppress 'function)
+	    (setq *extra-debug-suppress* fsuppress)
+	  (push (format nil "SUPPRESS (~a) must be a function" suppress) msgs))))
+    (when files
+      (let ((notfound (cdr (extra-load-files__ files t nil))))
+	(when notfound (format nil "Files not found: ~{~s~^, ~}" notfound))))
+    (extra-show-debug-mode__ msgs)))
+
+
 (defun extra-set-debug-mode (&optional mode &key files frames (verbose 'none) suppress)
   "[Extrategies] Load files or directories specified in FILES afer enabling/disabling debug mode.
 In the case of directories, load all files *.pvs, pvs-attachments, and pvs-strategies in the directory.
@@ -3854,33 +4049,10 @@ TECHNICAL NOTES:
  - EXPR in (suppress-when EXPR) and (suppress-unless EXPR) can be an arbitrary Lisp code including
    global variables, variables that are printed by extra-debug-print and extra-debug-break, and tags
    that are specified by those functions."
-  (let ((msgs))
-    (unless (equal verbose 'none)
-      (setq *extra-debug-verbose* (when verbose t)))
-    (cond ((eq mode 'toggle)
-	   (extra-set-debug-mode
-	    (if (member :extra-debug *features*) 'disable 'enable) :files files :frames frames :verbose verbose))
-	  ((eq mode 'enable)
-	   (pushnew :extra-debug *features*))
-	  ((eq mode 'disable)
-	   (setq *features* (delete :extra-debug *features*)))
-	  (mode (push "MODE should be one of toggle, enable, or disable" msgs)))
-    (when frames
-      (if (numberp frames)
-	  (setq *extra-debug-frame-count* frames)
-	(push (format nil "FRAMES (~a) must be a number" frames) msgs)))
-    (when suppress
-      (let ((fsuppress (eval suppress)))
-	(if (typep fsuppress 'function)
-	    (setq *extra-debug-suppress* fsuppress)
-	  (push (format nil "SUPPRESS (~a) must be a function" suppress) msgs))))
-    (when files
-      (let ((notfound (cdr (extra-load-files__ files t nil))))
-	(when notfound (format nil "Files not found: ~{~s~^, ~}" notfound))))
-    (extra-show-debug-mode msgs)))
+  (format t (extra-set-debug-mode__ mode :files files :frames frames :verbose verbose :suppress suppress)))
 
 (defstrat set-debug-mode (&key mode frames (verbose none) suppress &rest files)
-  (let ((msg (extra-set-debug-mode mode :files files :frames frames :verbose verbose :suppress suppress)))
+  (let ((msg (extra-set-debug-mode__ mode :files files :frames frames :verbose verbose :suppress suppress)))
     (printf "~a" msg))
   "[Extrategies] Load files or directories specified in FILES afer enabling/disabling debug mode.
 In the case of directories, load all files *.pvs, pvs-attachments, and pvs-strategies in the directory.
@@ -3932,14 +4104,14 @@ TECHNICAL NOTES:
 ")
 
 (defstrat enable-debug-mode (&rest files)
-  (let ((msg (extra-set-debug-mode 'enable :files (or files *extra-debug-files*))))
+  (let ((msg (extra-set-debug-mode__ 'enable :files (or files *extra-debug-files*))))
     (printf "~a" msg))
   "[Extrategies] Load files or directories specified in FILES afer enabling debug mode.
 In the case of directories, load all files *.pvs, pvs-attachments, and pvs-strategies in the directory.
 If FILES is null, load files in *extra-debug-files*.")
 
 (defstrat disable-debug-mode (&rest files)
-  (let ((msg (extra-set-debug-mode 'disable :files (or files *extra-debug-files*))))
+  (let ((msg (extra-set-debug-mode__ 'disable :files (or files *extra-debug-files*))))
     (printf "~a" msg))
   "[Extrategies] Load files or directories specified in FILES afer disabling debug mode.
 In the case of directories, load all files *.pvs, pvs-attachments, and pvs-strategies in the directory.

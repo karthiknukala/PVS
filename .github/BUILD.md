@@ -14,15 +14,17 @@ It has two jobs:
 
 1. `build-macos-arm64`
    This job always runs. It builds the standalone Apple Silicon bundle, smoke-tests it, and uploads:
-   - `pvs-<branch>-<date>-macos-arm64.tgz`
+   - `pvs8.1-dev-<date>-macos-arm64.tgz` for development builds
+   - `pvs8.1.N-<date>-macos-arm64.tgz` for stable builds
 
 2. `package-macos-arm64`
    This job runs automatically whenever all required signing and notarization secrets are present. It downloads the standalone tarball from the first job, rebuilds a macOS installer package from it, signs the package, notarizes it, staples the notarization ticket, and uploads:
-   - `pvs-<branch>-<date>-macos-arm64.pkg`
+   - `pvs8.1-dev-<date>-macos-arm64.pkg` for development builds
+   - `pvs8.1.N-<date>-macos-arm64.pkg` for stable builds
 
 The split is intentional: the signed and notarized package path should not block the plain standalone tarball and bundle build.
 
-Before building PVS itself, the Apple Silicon workflow installs Homebrew's native Apple Silicon `sbcl` package only as the bootstrap host, then builds a custom SBCL `2.6.3` install tree from source via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh). PVS is built against that custom SBCL, and the bundle step copies that active SBCL support tree into the release so the packaged runtime matches the source-built SBCL layout instead of shipping Homebrew's SBCL runtime directly.
+Before building PVS itself, the Apple Silicon workflow installs Homebrew's native Apple Silicon `sbcl` package only as the bootstrap host, then builds a custom SBCL `2.6.9` install tree from source via [.github/scripts/install-patched-sbcl-source.sh](./scripts/install-patched-sbcl-source.sh). PVS is built against that custom SBCL, and the bundle step copies that active SBCL support tree into the release so the packaged runtime matches the source-built SBCL layout instead of shipping Homebrew's SBCL runtime directly.
 
 Platform workflows prepare a neutral build tree under `/tmp` before configuring or compiling PVS. The original GitHub checkout lives under the runner home, for example `/Users/runner/work/...` on macOS and `/home/runner/work/...` on Linux; SBCL cores, SBCL saved shared-object metadata, and native debug sections can retain compile-time paths. Before saving the SBCL core, the build discards build-time shared objects so the image does not try to reopen `src/.../file_utils`, `src/.../mu`, or `src/.../ws1s` on an end-user machine; runtime startup loads the packaged copies from `PVS_RUNTIME_DIR`. Each tarball is also extracted and audited before upload by [.github/scripts/audit-release-artifact.sh](./scripts/audit-release-artifact.sh), which fails the job if the runner checkout, neutral build tree, runner temp directory, runner tool cache, or runner home path appears in the payload.
 
@@ -39,32 +41,88 @@ Release publication is controlled by [.github/release-config.env](./release-conf
 - `PVS_RELEASE_DEV_BRANCH`
 - `PVS_RELEASE_VERSION`
 
-Those variables determine which branches feed the stable/dev release tracks and which PVS version is embedded in branch-created release tags.
+Those variables determine the stable branch used to validate official release
+tags, the branch that feeds the rolling development prerelease, and the PVS
+version embedded in release tags.
 
 The current release policy is:
 
-- pushes to the configured stable branch publish or update a release tagged `pvs8.1-master-YYYYMMDD`
-- pushes to the configured dev branch publish or update a prerelease tagged `pvs8.1-dev-YYYYMMDD`
-- pushes of git tags whose commits are contained in the configured stable branch publish stable releases using the pushed tag name
+- pushes to the configured dev branch publish or update the rolling prerelease tagged `pvs8.1-dev`
+- pushes to the configured stable branch do not publish a release by themselves
+- pushing a sequential tag such as `pvs8.1.1`, `pvs8.1.2`, or `pvs8.1.3` publishes a stable release when the tagged commit is contained in the configured stable branch
+- stable releases are explicitly marked as the latest GitHub Release
+- tag names outside the configured `pvs<version>.<positive-integer>` series are rejected by the release policy
 - the `publish-release` job in [.github/workflows/release-builds.yml](./workflows/release-builds.yml) is the only job that mutates GitHub Releases
 - the GitHub Releases page publishes the standalone platform tarballs for successful builds; macOS notarized `.pkg` assets are published in addition to those tarballs when signing and notarization are enabled
 - each stable or dev asset family is reconciled once in that final publish job, so the release keeps only the latest asset for each platform/package kind
 
-This keeps stable and dev builds on the same GitHub Releases page while still letting the branch mapping be changed in one place during branch-based testing.
+The normal promotion sequence is to merge `dev` into `master`, create the next
+`pvs8.1.N` tag on that master commit, and push the tag. Development then
+continues on `dev`, whose moving `pvs8.1-dev` prerelease is updated by the next
+successful dev build.
+
+For example, after the release merge is present on `master`:
+
+```sh
+git switch master
+git pull --ff-only origin master
+git tag -a pvs8.1.1 -m "PVS 8.1.1"
+git push origin pvs8.1.1
+git switch dev
+```
 
 ## Which Artifact To Distribute
 
 If the goal is to minimize Gatekeeper friction for end users, distribute the notarized `.pkg` artifact when one is available. The standalone platform tarballs are also published on the GitHub Releases page for successful builds.
 
-Build artifacts and GitHub Release assets use the same naming scheme: `pvs-<branch>-<date>-<os>-<arch>.tgz` for standalone tarballs and `pvs-<branch>-<date>-<os>-<arch>.pkg` for notarized macOS packages. The current release flow vendors any non-system dylib dependencies discovered in the packaged runtime directory so the shipped bundle does not reach back into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O payload files, signs the installer package, and notarizes that packaged distribution.
+Internal GitHub Actions artifacts and final GitHub Release assets use the same
+date-stamped names. Development assets retain the PVS version and dev channel:
+
+- `pvs8.1-dev-YYYYMMDD-linux-x86_64.tgz`
+- `pvs8.1-dev-YYYYMMDD-linux-aarch64.tgz`
+- `pvs8.1-dev-YYYYMMDD-macos-arm64.tgz`
+- `pvs8.1-dev-YYYYMMDD-macos-x86_64.tgz`
+- `pvs8.1-dev-YYYYMMDD-macos-arm64.pkg`, when signing and notarization are enabled
+- `pvs8.1-dev-YYYYMMDD-macos-x86_64.pkg`, when signing and notarization are enabled
+
+Stable assets use the exact stable release tag as their prefix:
+
+- `pvs8.1.N-YYYYMMDD-linux-x86_64.tgz`
+- `pvs8.1.N-YYYYMMDD-linux-aarch64.tgz`
+- `pvs8.1.N-YYYYMMDD-macos-arm64.tgz`
+- `pvs8.1.N-YYYYMMDD-macos-x86_64.tgz`
+- `pvs8.1.N-YYYYMMDD-macos-arm64.pkg`, when signing and notarization are enabled
+- `pvs8.1.N-YYYYMMDD-macos-x86_64.pkg`, when signing and notarization are enabled
+
+The current release flow vendors any non-system dylib dependencies discovered
+in the packaged runtime directory so the shipped bundle does not reach back
+into Homebrew on an end user's machine. The `.pkg` path then signs those Mach-O
+payload files, signs the installer package, and notarizes that packaged
+distribution.
+
+Release downloads are tag- and date-specific. For example, for a build made on
+October 12, 2026:
+
+- stable `pvs8.1.2` Linux x86_64: `https://github.com/SRI-CSL/PVS/releases/download/pvs8.1.2/pvs8.1.2-20261012-linux-x86_64.tgz`
+- rolling dev Linux x86_64: `https://github.com/SRI-CSL/PVS/releases/download/pvs8.1-dev/pvs8.1-dev-20261012-linux-x86_64.tgz`
+
+Every build writes an ignored `metadata.json` at the source-tree root. Release
+bundles contain their own `metadata.json` with the PVS version and target,
+UTC build time, Git and commit details, GitHub Actions provenance when
+available, toolchain versions, and a SHA-256 manifest of the packaged PVS
+native binaries, Lisp cores, dynamic libraries, and ASDF system definitions.
+Documentation, examples, headers, and solver input files are not inventoried.
+Release auditing requires valid metadata. macOS installer packaging refreshes
+the manifest after payload signing so its hashes describe the bytes shipped in
+the `.pkg`.
 
 ## Release Tracks
 
-- Stable branch releases are named with the PVS version, branch, and UTC date, for example `pvs8.1-master-20260420`.
-- Stable version-tag releases are still supported when the pushed tag's commit is on the configured stable branch.
-- Dev releases are prereleases named with the PVS version, branch, and UTC date, for example `pvs8.1-dev-20260420`.
-- If multiple stable or dev builds run on the same UTC date, they update the same release for that channel and replace its assets in place.
-- Asset cleanup is centralized in the final publish job so old Linux/macOS tarballs and notarized macOS packages are pruned in one pass instead of by the individual builders.
+- Stable releases use explicit, permanent tags in the `pvs8.1.N` series, and the tagged commit must be contained in `master`.
+- Dev builds update the single moving prerelease tag `pvs8.1-dev` and replace its assets in place.
+- Both internal Actions artifacts and published release assets use `<release-tag>-YYYYMMDD-<os>-<arch>` names.
+- Dev asset names begin with `pvs8.1-dev`; stable asset names begin with their exact `pvs8.1.N` tag.
+- Asset cleanup is centralized in the final publish job. It prunes stale Linux/macOS tarballs and notarized macOS packages only from the Release currently being published. Historical Releases, tags, and assets—including `pvs8.0`, `pvs7.1`, and all earlier versions—are never removed or modified.
 
 For the SBCL runtime, the packaged bundle now uses:
 
@@ -210,20 +268,20 @@ base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n'
 
 ## Setting Secrets With `gh`
 
-Examples below use `karthiknukala/PVS`. Replace that if you are configuring a different repository.
+Examples below use `SRI-CSL/PVS`. Replace that if you are configuring a different repository.
 
 ```bash
-base64 < ~/cert/DeveloperIDApplication.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 -R karthiknukala/PVS
-gh secret set MACOS_DEV_ID_APPLICATION_CERT_PASSWORD -R karthiknukala/PVS
-gh secret set MACOS_DEV_ID_APPLICATION_CERT_NAME -R karthiknukala/PVS --body "Developer ID Application: Your Name (TEAMID)"
+base64 < ~/cert/DeveloperIDApplication.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_APPLICATION_CERT_P12_BASE64 -R SRI-CSL/PVS
+gh secret set MACOS_DEV_ID_APPLICATION_CERT_PASSWORD -R SRI-CSL/PVS
+gh secret set MACOS_DEV_ID_APPLICATION_CERT_NAME -R SRI-CSL/PVS --body "Developer ID Application: Your Name (TEAMID)"
 
-base64 < ~/cert/Certificates.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 -R karthiknukala/PVS
-gh secret set MACOS_DEV_ID_INSTALLER_CERT_PASSWORD -R karthiknukala/PVS
-gh secret set MACOS_DEV_ID_INSTALLER_CERT_NAME -R karthiknukala/PVS --body "Developer ID Installer: Your Name (TEAMID)"
+base64 < ~/cert/Certificates.p12 | tr -d '\n' | gh secret set MACOS_DEV_ID_INSTALLER_CERT_P12_BASE64 -R SRI-CSL/PVS
+gh secret set MACOS_DEV_ID_INSTALLER_CERT_PASSWORD -R SRI-CSLPVS
+gh secret set MACOS_DEV_ID_INSTALLER_CERT_NAME -R SRI-CSL/PVS --body "Developer ID Installer: Your Name (TEAMID)"
 
-gh secret set MACOS_NOTARY_ISSUER_ID -R karthiknukala/PVS
-gh secret set MACOS_NOTARY_KEY_ID -R karthiknukala/PVS
-base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_API_KEY_P8_BASE64 -R karthiknukala/PVS
+gh secret set MACOS_NOTARY_ISSUER_ID -R SRI-CSL/PVS
+gh secret set MACOS_NOTARY_KEY_ID -R SRI-CSL/PVS
+base64 < ~/cert/AuthKey_<KEY_ID>.p8 | tr -d '\n' | gh secret set MACOS_NOTARY_API_KEY_P8_BASE64 -R SRI-CSL/PVS
 ```
 
 ## What Happens Once All Secrets Are Set
@@ -239,7 +297,7 @@ Once all nine secrets are present:
    - builds a signed installer package
    - submits the package to Apple's notarization service
    - staples the notarization ticket
-   - uploads the final `pvs-<branch>-<date>-macos-arm64.pkg` artifact
+   - uploads the final `<release-tag>-<date>-macos-arm64.pkg` artifact
 
 ## Current Authentication Choice
 
@@ -256,7 +314,7 @@ It does not currently use the alternate Apple ID + app-specific password flow fo
 If the pkg job is skipped:
 
 - Check that all nine secrets are present.
-- `gh secret list -R karthiknukala/PVS` will show secret names, but not values.
+- `gh secret list -R SRI-CSL/PVS` will show secret names, but not values.
 
 If the `Developer ID Application` or `Developer ID Installer` identity does not appear after importing the `.cer`:
 
@@ -292,7 +350,7 @@ If `notarytool` exits with an error like `must be a valid UUID` for `--issuer`:
 Once the pkg is built and downloaded onto a machine, run
 
 ```
-installer -pkg ./pvs-master-<date>-macos-arm64.pkg -target CurrentUserHomeDirectory
+installer -pkg ./pvs8.1.2-<date>-macos-arm64.pkg -target CurrentUserHomeDirectory
 ```
 
 to have PVS installed at ~/PVS.

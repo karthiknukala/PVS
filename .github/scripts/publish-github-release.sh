@@ -15,10 +15,13 @@ Usage: publish-github-release.sh \
   [--target <sha>] \
   [--repo <owner/repo>] \
   [--prerelease] \
+  [--latest] \
   [--move-tag]
 
 Publishes or updates a GitHub Release and uploads a single asset with a stable
-display name. When --move-tag is supplied, the tag is force-moved to --target.
+display name. Asset pruning is restricted to the Release identified by --tag;
+other Releases, their tags, and their assets are never removed. When --move-tag
+is supplied, the tag is force-moved to --target.
 EOF
 }
 
@@ -37,6 +40,7 @@ notes=
 target=
 repo=${GITHUB_REPOSITORY:-}
 prerelease=false
+latest=false
 move_tag=false
 upload_asset=
 upload_tmpdir=
@@ -81,6 +85,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --prerelease)
       prerelease=true
+      shift
+      ;;
+    --latest)
+      latest=true
       shift
       ;;
     --move-tag)
@@ -201,6 +209,9 @@ fi
 release_flags=(--title "$title" --notes-file "$notes_file")
 if [[ $prerelease == true ]]; then
   release_flags+=(--prerelease)
+fi
+if [[ $latest == true ]]; then
+  release_flags+=(--latest)
 fi
 
 if gh release view "$tag" -R "$repo" >/dev/null 2>&1; then

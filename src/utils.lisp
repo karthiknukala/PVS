@@ -1,11 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; -*- Mode: Lisp -*- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; utils.lisp -- 
 ;; Author          : Sam Owre and N. Shankar
-;; Created On      : Thu Dec  2 13:31:00 1993
-;; Last Modified By: Sam Owre
-;; Last Modified On: Tue Dec 18 03:35:31 2012
-;; Update Count    : 94
-;; Status          : Stable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; --------------------------------------------------------------------
@@ -48,6 +43,13 @@ is replaced with replacement."
 	  when pos do (progn (write-string replacement out) (incf n))
 	  while pos))
      n)))
+
+(defun string-equalp (obj1 obj2 &key (start1 0) end1 (start2 0) end2)
+  "Like string-equal, but returns nil if either object cannot be treated as
+a string"
+  (when (and (typep obj1 '(or string symbol character))
+	     (typep obj2 '(or string symbol character)))
+    (string-equal obj1 obj2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
 
 (defun pvs-file (theoryname)
   "Returns the filename (without extension) containing the given theoryname."
@@ -103,41 +105,6 @@ is replaced with replacement."
 	     (uiop:subdirectories (path *workspace-session*)))))
       (setf (subdir-alist *workspace-session*) alist)))
   (subdir-alist *workspace-session*))
-
-(defun current-pvs-context ()
-  (unless *workspace-session*
-    (setq *workspace-session* (get-workspace-session *default-pathname-defaults*)))
-  (pvs-context *workspace-session*))
-
-(defmethod pvs-context :around ((ws workspace-session))
-  (let* ((ctx-file (merge-pathnames ".pvscontext" (path ws)))
-	 (fdate (when (uiop:file-exists-p ctx-file)
-		  (file-write-date ctx-file))))
-    (when (and fdate
-	       (pvs-context-date ws)
-	       (< (pvs-context-date ws) fdate))
-      ;; Context was changed after being read
-      (setf (pvs-context ws) (read-context-file ctx-file))
-      (setf (pvs-context-date ws) fdate)))
-  (call-next-method))
-
-(defsetf current-pvs-context () (pvsctx)
-  `(setf (pvs-context *workspace-session*) ,pvsctx))
-
-(defun current-pvs-context-changed ()
-  (pvs-context-changed *workspace-session*))
-
-(defsetf current-pvs-context-changed () (cc)
-  `(setf (pvs-context-changed *workspace-session*) ,cc))
-
-(defun current-context ()
-  *current-context*)
-
-(defmethod context-path ((ctx context))
-  (context-path (theory ctx)))
-
-(defmethod context-path ((decl declaration))
-  (context-path (module decl)))
 
 (defun current-pvs-file ()
   (when *current-context*
@@ -4836,7 +4803,8 @@ space")
       prinfo
     (list id description create-date ;;run-date
 	  script ;;status
-	  (sexp refers-to) ;;real-time run-time interactive?
+	  ;; sexp of a skolem-const-decl is nil
+	  (remove-if #'null (sexp refers-to)) ;;real-time run-time interactive?
 	  decision-procedure-used)))
 
 (defmethod sexp ((prinfo tcc-proof-info))
@@ -4848,7 +4816,7 @@ space")
       prinfo
     (list id description create-date ;;run-date
 	  script ;;status
-	  (sexp refers-to) ;;real-time run-time interactive?
+	  (remove-if #'null (sexp refers-to)) ;;real-time run-time interactive?
 	  decision-procedure-used
 	  (sexp origin))))
 
@@ -4867,17 +4835,16 @@ space")
     (list id class type theory-id library)))
 
 (defmethod sexp ((decl declaration))
-  (list (id decl)
-	(type-of decl)
-	(when (and (typed-declaration? decl)
-		   (not (typep decl 'formal-type-decl)))
-	  (or (declared-type-string decl)
-	      (setf (declared-type-string decl)
-		    (unparse (or (declared-type decl)
-				 (type decl)) :string t))))
-	(when (module decl) (id (module decl)))
-	(when (lib-datatype-or-theory? (module decl))
-	  (get-library-id (context-path (module decl))))))
+  (unless (typep decl 'skolem-const-decl)
+    (list (id decl)
+	  (type-of decl)
+	  (when (and (typed-declaration? decl)
+		     (not (typep decl 'formal-type-decl)))
+	    (or (declared-type-string decl)
+		(setf (declared-type-string decl) (str (type decl)))))
+	  (when (module decl) (id (module decl)))
+	  (when (lib-datatype-or-theory? (module decl))
+	    (get-library-id (context-path (module decl)))))))
 
 (defmethod sexp ((theory module))
   (list (id theory)
@@ -5421,20 +5388,44 @@ we can get this method using
 ;; }
 
 (defun pvs-meta-info ()
-  (lcons :pvs-version *pvs-version*
-	 :pvs-path *pvs-path*
-	 :lisp-version (lisp-implementation-version)
-	 :emacs-version (pvs-emacs-eval "(emacs-version)")
-	 :pvs-executable (get-file-ref (car (uiop:raw-command-line-arguments)))
-	 :lisp-patches (get-patches-info)
-	 :strategies-files (mapcar #'get-file-ref
-			     (cdr (assq :strategies *files-loaded*)))
-	 :pvs-environment-variables (mapcan #'(lambda (var)
-						(let ((val (environment-variable
-							    (string var))))
-						  (when val
-						    (list (cons var val)))))
-				      *pvs-environment-variables*)))
+  (lcons "pvs-version" *pvs-version*
+	 "pvs-path" *pvs-path*
+	 "lisp-version" (lisp-implementation-version)
+	 "emacs-version" (pvs-emacs-eval "(emacs-version)")
+	 "pvs-executable" (get-file-ref (car (uiop:raw-command-line-arguments)))
+	 "lisp-patches" (get-patches-info)
+	 "strategies-files" (mapcar #'get-file-ref
+			            (cdr (assq :strategies *files-loaded*)))
+	 "pvs-environment-variables" (mapcan #'(lambda (var)
+						 (let ((val (environment-variable
+							     (string var))))
+						   (when val
+						     (list (cons var val)))))
+				             *pvs-environment-variables*)
+	 "version-control" (when (and (git-available-p) (in-git-repo-p *pvs-path*))
+			     (multiple-value-bind (short-commit long-commit) (git-current-commit)
+			       (let ((git-description (pvs-git-description))
+				     (branch-description (git-current-branch))
+				     (commit-date (git-current-commit-date)))
+				 `(("short-hash" . ,short-commit)
+				   ("long-hash" . ,long-commit)
+				   ("description" . ,git-description)
+				   ("branch-info" . ,branch-description)
+				   ("commit-date" . ,commit-date)))))
+         "build-date" (when *pvs-build-time*
+                        (handler-case
+                            (multiple-value-bind (second minute hour date month year day-of-week dst-p tz)
+                                (decode-universal-time *pvs-build-time*)
+                              (declare (ignore day-of-week dst-p))
+                              ;; Convert Lisp timezone (hours west) to standard ISO offset (hours/mins east/west)
+                              (multiple-value-bind (tz-hours tz-mins) (truncate (* tz 60))
+                                (let ((sign (if (<= tz-hours 0) "+" "-"))
+                                      (abs-hours (abs (truncate tz-hours 60)))
+                                      (abs-mins (abs tz-mins)))
+                                  (format nil "~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D ~A~2,'0D~2,'0D"
+                                          year month date hour minute second 
+                                          sign abs-hours abs-mins))))
+                          (error () nil)))))
 
 (defun get-lisp-exec-info ()
   (list (get-file-ref (format nil "~a/pvs" *pvs-path*))
@@ -5810,6 +5801,13 @@ and the next method is called with this. Only \formula\" is required."
 	#\:))
       (error "*pvs-path* has no .git directory")))
 
+(defun git-current-commit-date ()
+    (when (in-git-repo-p *pvs-path*)
+      (uiop:run-program (format nil "git -C ~a log -1 --format=%cd --date=iso" *pvs-path*)
+			:input "//dev//null"
+			:output '(:string :stripped t))))
+
+
 (defun in-git-repo-p (path)
   "Check if the given PATH is inside a Git repository."
   (let ((result (ignore-errors
@@ -6137,10 +6135,25 @@ Walks through each script, collecting ngrams for each strategy name. 1-grams are
 	  (t (flatten-proof-script-list (break "flatten-proof-script-list"))))))
 
 #+sbcl
-(defun dbg ()
+(defun dbg (&optional (on t))
   "Sets optimization for debugging, giving more visibility to subsequently
 loaded files and defuns."
-  (proclaim '(optimize (safety 3) (speed 0) (cl:debug 3))))
+  (if on
+      (proclaim '(optimize (speed 0) (safety 3) (cl:debug 3)))
+      (proclaim '(optimize (speed 3) (safety 1) (cl:debug 0))))
+  (uiop:get-optimization-settings))
+
+#+sbcl
+(defun dbg-concise (&optional (on t))
+  (declare (special *cur-dbg-print-alist*))
+  (unless (boundp '*cur-dbg-print-alist*)
+    (setq *cur-dbg-print-alist* sb-ext:*debug-print-variable-alist*))
+  (if on
+      (setq sb-ext:*debug-print-variable-alist*
+	    '((*print-pretty* . nil)
+	      (*print-right-margin* . 999999)
+	      (sbrt:*default-char-width* . 999999)))
+      (setq sb-ext:*debug-print-variable-alist* *cur-dbg-print-alist*)))
 
 #+sbcl
 (defun control-stack-size ()

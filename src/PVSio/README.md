@@ -527,7 +527,7 @@ previous definitions.
 
 Semantic attachements provide access to declaration formals, including
 theory parameters, and declaration types through the special list
-forms `(<VAR> :decl-form <PARAM>)` and `(<VAR> :decl-type)` in
+forms `(<VAR> :decl-formal <PARAM>)` and `(<VAR> :decl-type)` in
 `<parameters>`. The former declares the variable `<VAR>` and binds it
 to the value of the declaration formal, or theory parameter, `<PARM>`. Since
 `<PARAM>` is a PVS identifier, it is should be surrounded by bars to
