@@ -1,0 +1,78 @@
+% Cyrluk, Moeller, Ruess: An Efficient Decision Procedure for a Theory
+% of Fixed-Sized Bitvectors with Composition and Extraction, sections 3-6.
+% Indices are least-significant-bit first, as in the PVS prelude.
+% Positive lengths match the paper; empty padding is omitted by the solver.
+cmr98_bv[n,m,p: posnat]: THEORY
+BEGIN
+  x: VAR bvec[n]
+  y: VAR bvec[m]
+  z: VAR bvec[p]
+
+  slice(n: posnat, x: bvec[n], lo: below(n),
+        k: {k: posnat | lo + k <= n}): bvec[k] = x^(lo+k-1, lo)
+
+  % Definition 3.2 and the semantics on page 4.
+  slice_point: LEMMA FORALL (lo: below(n), k: {k: posnat | lo+k <= n},
+                            i: below(k)):
+    slice(n,x,lo,k)(i) = x(lo+i)
+
+  slice_full: LEMMA slice(n,x,0,n) = x
+
+  concat_assoc: LEMMA (x o y) o z = x o (y o z)
+
+  concat_low: LEMMA FORALL (lo: below(m), k: {k: posnat | lo+k <= m}):
+    slice(n+m,x o y,lo,k) = slice(m,y,lo,k)
+
+  concat_high: LEMMA FORALL (lo: below(n), k: {k: posnat | lo+k <= n}):
+    slice(n+m,x o y,m+lo,k) = slice(n,x,lo,k)
+
+  concat_cross: LEMMA FORALL (lo: below(m), k: upto(n-1)):
+    slice(n+m,x o y,lo,m-lo+k+1) =
+      slice(n,x,0,k+1) o slice(m,y,lo,m-lo)
+
+  slice_nested: LEMMA
+    FORALL (lo: below(n), k: {k: posnat | lo+k <= n},
+            offset: below(k), len: {len: posnat | offset+len <= k}):
+      slice(k,slice(n,x,lo,k),offset,len) = slice(n,x,lo+offset,len)
+
+  slice_join: LEMMA
+    FORALL (lo: below(n), a: posnat, b: {b: posnat | lo+a+b <= n}):
+      slice(n,x,lo+a,b) o slice(n,x,lo,a) = slice(n,x,lo,a+b)
+
+  concat_zero: LEMMA bvec0[n] o bvec0[m] = bvec0[n+m]
+  concat_one: LEMMA bvec1[n] o bvec1[m] = bvec1[n+m]
+
+  % Slicing an equation at a shared boundary is an equivalence, not
+  % merely a necessary condition (the basis of section 6 slicing).
+  split_equation: LEMMA FORALL (a,b: bvec[n+m]):
+    (a=b) IFF (slice(n+m,a,0,m)=slice(n+m,b,0,m) AND
+              slice(n+m,a,m,n)=slice(n+m,b,m,n))
+
+  % Common-column equality propagation and constant-conflict detection.
+  column_transitive: LEMMA FORALL (a,b,c: bvec[n]):
+    a=b AND b=c IMPLIES a=c
+  constant_conflict: LEMMA bvec0[n] /= bvec1[n]
+
+  % csolve for overlapping windows: the equality is exactly a local
+  % periodicity constraint. No assumption that the windows are disjoint.
+  overlap_period: LEMMA
+    FORALL (lo: below(n), d: posnat,
+            k: {k: posnat | lo+d+k <= n}):
+      (slice(n,x,lo+d,k)=slice(n,x,lo,k)) IFF
+        (FORALL (i: below(k)): x(lo+d+i)=x(lo+i))
+
+  % Certificate rule: project an assumed equation onto any valid column.
+  project_equal: LEMMA FORALL (a,b: bvec[n], lo: below(n),
+                               k: {k: posnat | lo+k <= n}):
+    a=b IMPLIES slice(n,a,lo,k)=slice(n,b,lo,k)
+
+  % The fresh representative in a solved form is existentially quantified.
+  shared_solved_form: LEMMA FORALL (a,b: bvec[n]):
+    (a=b) IFF (EXISTS (r: bvec[n]): a=r AND b=r)
+
+  % A simple csolve case: an extracted middle block fixes that block;
+  % the high and low padding remain arbitrary, existential fresh vectors.
+  extract_solved_form: LEMMA FORALL (a: bvec[n+m+p], b: bvec[m]):
+    (slice(n+m+p,a,p,m)=b) IFF
+      (EXISTS (hi: bvec[n], lo: bvec[p]): a=(hi o b) o lo)
+END cmr98_bv

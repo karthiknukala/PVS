@@ -1,0 +1,14 @@
+agent_fixture: THEORY
+BEGIN
+  inc(x: nat): nat = x + 1
+  left_bound: LEMMA FORALL (x: nat): inc(x) > x
+  right_bound: LEMMA FORALL (x: nat): inc(x) > x
+  branching: LEMMA FORALL (x, y: nat): inc(x) > x AND inc(y) > y
+  alternative: LEMMA FORALL (x: nat): inc(x) > x
+  false_goal: LEMMA FORALL (x: nat): x > 10
+END agent_fixture
+
+agent_other: THEORY
+BEGIN
+  real_bound: LEMMA FORALL (x: real): x + 1 > x
+END agent_other

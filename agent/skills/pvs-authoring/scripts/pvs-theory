@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: pvs-theory {tc|tcc|tc-tcc} THEORY [DIRECTORY [LIBRARY_PATH]]" >&2
+  exit 2
+}
+
+[[ $# -ge 2 && $# -le 4 ]] || usage
+
+action=$1
+theory=$2
+directory=${3:-.}
+library_path=${4:-${PVS_LIBRARY_PATH:-}}
+pvs_bin=${PVS_BIN:-"$HOME/git/PVS/pvs"}
+
+[[ "$theory" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || {
+  echo "invalid PVS theory name: $theory" >&2
+  exit 2
+}
+
+[[ -d "$directory" ]] || {
+  echo "theory directory does not exist: $directory" >&2
+  exit 2
+}
+
+[[ -x "$pvs_bin" ]] || {
+  echo "PVS executable not found or not executable: $pvs_bin" >&2
+  exit 2
+}
+
+run_pvs() {
+  local expression=$1
+  if [[ -n "$library_path" ]]; then
+    (
+      cd "$directory"
+      PVS_LIBRARY_PATH="$library_path" "$pvs_bin" -raw -E "$expression"
+    )
+  else
+    (
+      cd "$directory"
+      "$pvs_bin" -raw -E "$expression"
+    )
+  fi
+}
+
+case "$action" in
+  tc)
+    run_pvs "(tc \"$theory\" t)"
+    ;;
+  tcc)
+    run_pvs "(show-tccs \"$theory\")"
+    ;;
+  tc-tcc)
+    run_pvs "(tc \"$theory\" t)"
+    run_pvs "(show-tccs \"$theory\")"
+    ;;
+  *)
+    usage
+    ;;
+esac

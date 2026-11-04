@@ -1,0 +1,18 @@
+;;; Test-only startup instrumentation. Capture before PVS recovers the error.
+(in-package :pvs)
+(dolist (name '(sb-impl::signal-corrupt-hash-table sb-impl::signal-corrupt-hash-table-bucket sb-int:bug sb-kernel:assert-error type-incompatible))
+  (let ((original (symbol-function name)) (hook name))
+    (sb-ext:without-package-locks
+      (setf (symbol-function name)
+            (lambda (&rest args)
+              (let* ((id (if (current-session) (string (id (current-session))) "none"))
+                     (path (format nil "/tmp/pvs-race-stack-~a.log" id)))
+                (with-open-file (out path :direction :output :if-exists :supersede)
+                  (let ((*print-length* 8) (*print-level* 5) (*print-pretty* nil))
+                    (format out "Hook: ~s arguments: ~s~%" hook args)
+                    (sb-debug:print-backtrace :stream out :count 100)
+                    (format out "~%Dynamically visible hash tables:~%")
+                    (do-symbols (s :pvs)
+                      (when (and (boundp s) (hash-table-p (symbol-value s)))
+                        (format out "~a = ~s~%" s (symbol-value s))))))
+              (apply original args)))))))

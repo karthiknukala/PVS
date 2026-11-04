@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pvs-agent"
+version = "0.3.2"
+description = "Thin persistent MCP interface to native PVS proof and evaluator sessions"
+requires-python = ">=3.11"
+dependencies = [
+  "websockets>=14,<17",
+  "mcp>=1.12,<2",
+]
+
+[project.scripts]
+pvs-agent = "server:main"
+
+[tool.setuptools]
+py-modules = ["server", "observer", "recovery"]
+
+[tool.setuptools.data-files]
+"share/pvs-agent/web" = ["web/index.html", "web/app.js", "web/style.css"]

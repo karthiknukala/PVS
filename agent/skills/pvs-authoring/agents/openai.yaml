@@ -1,0 +1,4 @@
+interface:
+  display_name: "PVS Authoring"
+  short_description: "Author robust PVS specifications and refinements"
+  default_prompt: "Use $pvs-authoring to design, typecheck, and audit this PVS development."

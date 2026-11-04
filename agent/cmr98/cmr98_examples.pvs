@@ -1,0 +1,20 @@
+% Checked examples of the composition/extraction fragment; no arithmetic solver.
+cmr98_examples: THEORY
+BEGIN
+ IMPORTING cmr98_bv
+ x,y,z: VAR bvec[8]
+ a,b: VAR bvec[4]
+ identity: THEOREM (x^(7,4) o x^(3,0))=x
+ nested: THEOREM (x^(6,1))^(4,2)=x^(5,3)
+ shared: THEOREM x=y AND y=z IMPLIES x=z
+ crossing: THEOREM (a o b)^(5,2) = a^(1,0) o b^(3,2)
+ propagate: THEOREM x^(7,4)=a AND a=b IMPLIES x^(7,4)=b
+ overlap: THEOREM x^(7,1)=x^(6,0) IMPLIES x^(7,7)=x^(0,0)
+ conflict: THEOREM x^(7,4)=bvec0[4] AND x^(5,2)=bvec1[4] IMPLIES FALSE
+ multi: THEOREM x=(a o b) AND y=(b o a) IMPLIES x^(7,4)=y^(3,0)
+ constants: THEOREM (bvec0[4] o bvec0[4])=bvec0[8]
+ wide: THEOREM FORALL (v,w: bvec[1000000]): v=w IMPLIES v^(999999,500000)=w^(999999,500000)
+ % Deliberate non-theorems: regression guards must leave these unproved.
+ false_equality: CONJECTURE x=y
+ false_overlap: CONJECTURE x^(7,2)=x^(5,0) IMPLIES x^(7,7)=x^(0,0)
+END cmr98_examples

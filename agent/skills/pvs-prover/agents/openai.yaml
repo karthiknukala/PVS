@@ -1,0 +1,4 @@
+interface:
+  display_name: "PVS Prover"
+  short_description: "Develop, diagnose, and replay PVS proofs"
+  default_prompt: "Use $pvs-prover to prove this PVS obligation and save a replayable proof."

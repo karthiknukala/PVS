@@ -1,0 +1,814 @@
+(|cmr98_bv|
+ (|slice_TCC1| 0
+  (|slice_TCC1-0| "" 4002374387 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice| SUBTYPE "lo + k - 1" "below(cmr98_bv.n)" (12 52 12 58)))
+  (|slice_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice| SUBTYPE "lo + k - 1" "below(cmr98_bv.n)" (12 52 12 58))))
+ (|slice_TCC2| 0
+  (|slice_TCC2-0| "" 4002374387 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice| SUBTYPE "lo"
+    "upto((number_fields.-)((number_fields.+)(cmr98_bv.k, cmr98_bv.lo), 1))"
+    (12 60 12 62)))
+  (|slice_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice| SUBTYPE "lo"
+    "upto((number_fields.-)((number_fields.+)(cmr98_bv.k, cmr98_bv.lo), 1))"
+    (12 60 12 62))))
+ (|slice_point_TCC1| 0
+  (|slice_point_TCC1-0| "" 4002374769 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_point| SUBTYPE "lo + i" "below(cmr98_bv.n)" (17 27 17 31)))
+  (|slice_point_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_point| SUBTYPE "lo + i" "below(cmr98_bv.n)" (17 27 17 31))))
+ (|slice_point| 0
+  (|slice_point-0| "" 4002374295
+   ("" (SKOSIMP*)
+    (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1")) NIL NIL)) NIL)
+   NIL SHOSTAK)
+  (|slice_point-1| NIL 4002374295 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|slice_full_TCC1| 0
+  (|slice_full_TCC1-0| "" 4002374769 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_full| SUBTYPE "0" "below(cmr98_bv.n)" (19 30 19 31)))
+  (|slice_full_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_full| SUBTYPE "0" "below(cmr98_bv.n)" (19 30 19 31))))
+ (|slice_full_TCC2| 0
+  (|slice_full_TCC2-0| "" 4002374774 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_full| SUBTYPE "n" "{k: integers.posnat | reals.<=(k, cmr98_bv.n)}"
+    (19 32 19 33)))
+  (|slice_full_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_full| SUBTYPE "n" "{k: integers.posnat | reals.<=(k, cmr98_bv.n)}"
+    (19 32 19 33))))
+ (|slice_full| 0
+  (|slice_full-2| "" 4002375148
+   ("" (SKOSIMP*)
+    (("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+      (("" (AUTO-REWRITE-DEFS :ALWAYS? T)
+        ((""
+          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL :CASES-REWRITE?
+                  NIL :TYPE-CONSTRAINTS? T :IGNORE-PROVER-OUTPUT? NIL
+                  :QUANT-SIMP? NIL :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                  NIL)
+          (("" (EXTENSIONALITY "[below(n) -> bit]")
+            ((""
+              (INST -
+               (TYPECHECKED "LAMBDA (ii: below(n)): x!1(ii)"
+                "[below(n) -> bit]")
+               (TYPECHECKED "x!1" "bvec[n]"))
+              (("" (SPLIT -1)
+                (("1" (PROPAX) NIL NIL) ("2" (SKOLEM! 1) NIL NIL)) NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|slice_full-0| "" 4002374356
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1")) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|slice_full-1| NIL 4002374356 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_assoc| 0
+  (|concat_assoc-2| "" 4002375130
+   ("" (SKOSIMP*)
+    (("" (EXPAND "O")
+      (("" (APPLY-EXTENSIONALITY :HIDE? T)
+        (("1" (GRIND) NIL NIL) ("2" (GRIND) NIL NIL) ("3" (GRIND) NIL NIL)
+         ("4" (GRIND) NIL NIL) ("5" (GRIND) NIL NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_assoc-0| "" 4002374774
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+        (("1" (EXPAND "O")
+          (("1" (ASSERT) (("1" (GRIND :DEFS ("O")) NIL NIL)) NIL)) NIL)
+         ("2" (AUTO-REWRITE-DEFS)
+          (("2" (EXTENSIONALITY "bvec[m + n + p]")
+            (("2"
+              (INST - (TYPECHECKED "(x!1 o y!1) o z!1" "bvec[m + n + p]")
+               (TYPECHECKED "x!1 o (y!1 o z!1)" "bvec[m + n + p]"))
+              (("2" (SPLIT -1)
+                (("1" (PROPAX) NIL NIL)
+                 ("2" (SKOLEM! 1)
+                  (("2" (ASSERT 1)
+                    (("2" (DELETE 3)
+                      (("2" (BDDSIMP)
+                        (("1"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          (("1" (EXPAND* "O") (("1" (GRIND) NIL NIL)) NIL))
+                          NIL)
+                         ("2"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          (("2" (POSTPONE) NIL NIL)) NIL))
+                        NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_assoc-1| NIL 4002374774 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_low_TCC1| 0
+  (|concat_low_TCC1-0| "" 4002374778 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_low| SUBTYPE "lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (24 20 24 22)))
+  (|concat_low_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_low| SUBTYPE "lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (24 20 24 22))))
+ (|concat_low_TCC2| 0
+  (|concat_low_TCC2-0| "" 4002374778 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_low| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (24 23 24 24)))
+  (|concat_low_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_low| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (24 23 24 24))))
+ (|concat_low| 0
+  (|concat_low-0| "" 4002374783
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1")) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_low-1| NIL 4002374783 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_high_TCC1| 0
+  (|concat_high_TCC1-0| "" 4002374783 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_high| SUBTYPE "m + lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (27 20 27 24)))
+  (|concat_high_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_high| SUBTYPE "m + lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (27 20 27 24))))
+ (|concat_high_TCC2| 0
+  (|concat_high_TCC2-0| "" 4002374787 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_high| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.m), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (27 25 27 26)))
+  (|concat_high_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_high| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.m), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (27 25 27 26))))
+ (|concat_high| 0
+  (|concat_high-0| "" 4002374787
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1")) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_high-1| NIL 4002374787 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_cross_TCC1| 0
+  (|concat_cross_TCC1-0| "" 4002374792 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_cross| SUBTYPE "lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (30 20 30 22)))
+  (|concat_cross_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_cross| SUBTYPE "lo"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (30 20 30 22))))
+ (|concat_cross_TCC2| 0
+  (|concat_cross_TCC2-0| "" 4002374792 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_cross| SUBTYPE "m - lo + k + 1"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (30 23 30 31)))
+  (|concat_cross_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_cross| SUBTYPE "m - lo + k + 1"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (30 23 30 31))))
+ (|concat_cross_TCC3| 0
+  (|concat_cross_TCC3-0| "" 4002374796 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_cross| SUBTYPE "k + 1"
+    "{k: integers.posnat | reals.<=(k, cmr98_bv.n)}" (31 18 31 21)))
+  (|concat_cross_TCC3-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_cross| SUBTYPE "k + 1"
+    "{k: integers.posnat | reals.<=(k, cmr98_bv.n)}" (31 18 31 21))))
+ (|concat_cross_TCC4| 0
+  (|concat_cross_TCC4-0| "" 4002374796 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_cross| SUBTYPE "m - lo"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.m)}"
+    (31 38 31 42)))
+  (|concat_cross_TCC4-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_cross| SUBTYPE "m - lo"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.m)}"
+    (31 38 31 42))))
+ (|concat_cross_TCC5| 0
+  (|concat_cross_TCC5-0| "" 4002374801 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|concat_cross| SUBTYPE "m - lo" "nat" (31 23 31 24)))
+  (|concat_cross_TCC5-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|concat_cross| SUBTYPE "m - lo" "nat" (31 23 31 24))))
+ (|concat_cross| 0
+  (|concat_cross-2| "" 4002375145
+   ("" (SKOSIMP*)
+    (("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+      (("" (AUTO-REWRITE-DEFS :ALWAYS? T)
+        ((""
+          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL :CASES-REWRITE?
+                  NIL :TYPE-CONSTRAINTS? T :IGNORE-PROVER-OUTPUT? NIL
+                  :QUANT-SIMP? NIL :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                  NIL)
+          (("" (EXTENSIONALITY "[below(1 - lo!1 + k!1 + m) -> bit]")
+            ((""
+              (INST -
+               (TYPECHECKED "LAMBDA (ii: below(1 - lo!1 + k!1 + m)):
+  IF ii + lo!1 < m THEN y!1(ii + lo!1) ELSE x!1(ii - m + lo!1) ENDIF"
+                "[below(1 - lo!1 + k!1 + m) -> bit]")
+               (TYPECHECKED "LAMBDA (nm: below(1 + k!1 + (m - lo!1))):
+  IF nm < m - lo!1 THEN y!1(nm + lo!1) ELSE x!1(nm - m + lo!1) ENDIF"
+                "[below(m - lo!1 + (1 + k!1)) -> bit]"))
+              (("1" (SPLIT -1)
+                (("1" (PROPAX) NIL NIL)
+                 ("2" (SKOLEM! 1)
+                  (("2" (ASSERT 1)
+                    (("2" (DELETE 2)
+                      (("2" (BDDSIMP)
+                        (("1"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          NIL NIL)
+                         ("2"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          NIL NIL)
+                         ("3"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          NIL NIL)
+                         ("4"
+                          (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                  :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                  :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                  :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                  NIL)
+                          NIL NIL))
+                        NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL)
+               ("2" (ASSERT)
+                (("2" (DELETE 2)
+                  (("2" (SKOLEM-TYPEPRED)
+                    (("2" (FLATTEN)
+                      (("2"
+                        (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                NIL)
+                        NIL NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL)
+               ("3" (ASSERT)
+                (("3" (DELETE 2)
+                  (("3" (SKOLEM-TYPEPRED)
+                    (("3" (FLATTEN)
+                      (("3"
+                        (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                NIL)
+                        NIL NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL)
+               ("4" (ASSERT)
+                (("4" (DELETE 2)
+                  (("4" (SKOLEM-TYPEPRED)
+                    (("4" (FLATTEN)
+                      (("4"
+                        (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                                :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                                :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                                :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS?
+                                NIL)
+                        NIL NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_cross-0| "" 4002374801
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+        (("1" (POSTPONE) NIL NIL) ("2" (POSTPONE) NIL NIL)) NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_cross-1| NIL 4002374801 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|slice_nested_TCC1| 0
+  (|slice_nested_TCC1-0| "" 4002374806 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_nested| SUBTYPE "len"
+    "{k: integers.posnat | reals.<=((number_fields.+)((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.offset), cmr98_bv.n)}"
+    (36 64 36 67)))
+  (|slice_nested_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_nested| SUBTYPE "len"
+    "{k: integers.posnat | reals.<=((number_fields.+)((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.offset), cmr98_bv.n)}"
+    (36 64 36 67))))
+ (|slice_nested| 0
+  (|slice_nested-0| "" 4002374806
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1")) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|slice_nested-1| NIL 4002374806 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|slice_join_TCC1| 0
+  (|slice_join_TCC1-0| "" 4002374811 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_join| SUBTYPE "lo + a" "below(cmr98_bv.n)" (40 16 40 20)))
+  (|slice_join_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_join| SUBTYPE "lo + a" "below(cmr98_bv.n)" (40 16 40 20))))
+ (|slice_join_TCC2| 0
+  (|slice_join_TCC2-0| "" 4002374811 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_join| SUBTYPE "a"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (40 39 40 40)))
+  (|slice_join_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_join| SUBTYPE "a"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (40 39 40 40))))
+ (|slice_join_TCC3| 0
+  (|slice_join_TCC3-0| "" 4002374815 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|slice_join| SUBTYPE "a + b"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (40 57 40 60)))
+  (|slice_join_TCC3-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|slice_join| SUBTYPE "a + b"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (40 57 40 60))))
+ (|slice_join| 0
+  (|slice_join-2| "" 4002375146
+   ("" (SKOSIMP*) (("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1") NIL NIL)) NIL)
+   NIL SHOSTAK)
+  (|slice_join-0| "" 4002374815
+   ("" (SKOSIMP*)
+    (("" (APPLY-EXTENSIONALITY)
+      (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+        (("1" (POSTPONE) NIL NIL) ("2" (POSTPONE) NIL NIL)) NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|slice_join-1| NIL 4002374815 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_zero| 0
+  (|concat_zero-2| "" 4002375146
+   ("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1") NIL NIL) NIL SHOSTAK)
+  (|concat_zero-0| "" 4002374820 ("" (POSTPONE) NIL NIL) NIL SHOSTAK)
+  (|concat_zero-1| NIL 4002374820 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|concat_one| 0
+  (|concat_one-2| "" 4002375146
+   ("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1") NIL NIL) NIL SHOSTAK)
+  (|concat_one-0| "" 4002374820
+   ("" (APPLY-EXTENSIONALITY)
+    (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+      (("" (POSTPONE) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|concat_one-1| NIL 4002374820 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|split_equation_TCC1| 0
+  (|split_equation_TCC1-0| "" 4002374824 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|split_equation| SUBTYPE "0"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (48 27 48 28)))
+  (|split_equation_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|split_equation| SUBTYPE "0"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (48 27 48 28))))
+ (|split_equation_TCC2| 0
+  (|split_equation_TCC2-0| "" 4002374824 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|split_equation| SUBTYPE "m"
+    "{k: integers.posnat | reals.<=(k, (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (48 29 48 30)))
+  (|split_equation_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|split_equation| SUBTYPE "m"
+    "{k: integers.posnat | reals.<=(k, (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (48 29 48 30))))
+ (|split_equation_TCC3| 0
+  (|split_equation_TCC3-0| "" 4002374828 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|split_equation| SUBTYPE "m"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (49 26 49 27)))
+  (|split_equation_TCC3-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|split_equation| SUBTYPE "m"
+    "below((number_fields.+)(cmr98_bv.m, cmr98_bv.n))" (49 26 49 27))))
+ (|split_equation_TCC4| 0
+  (|split_equation_TCC4-0| "" 4002374828 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|split_equation| SUBTYPE "n"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.m), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (49 28 49 29)))
+  (|split_equation_TCC4-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|split_equation| SUBTYPE "n"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.m), (number_fields.+)(cmr98_bv.m, cmr98_bv.n))}"
+    (49 28 49 29))))
+ (|split_equation| 0
+  (|split_equation-3| "" 4002375196
+   ("" (SKOSIMP*)
+    (("" (SPLIT)
+      (("1" (FLATTEN) (("1" (ASSERT) NIL NIL)) NIL)
+       ("2" (FLATTEN)
+        (("2"
+          (REWRITE "functions[below(m),bool].extensionality_postulate" -1 :DIR
+           RL)
+          (("2"
+            (REWRITE "functions[below(n),bool].extensionality_postulate" -2
+             :DIR RL)
+            (("2" (EXPAND* "slice" "^")
+              (("2" (APPLY-EXTENSIONALITY :HIDE? T)
+                (("2" (LABEL "low" -1)
+                  (("2" (LABEL "high" -2)
+                    (("2" (CASE "x!1<m")
+                      (("1" (INST "low" "x!1") NIL NIL)
+                       ("2" (INST "high" "x!1-m")
+                        (("1" (ASSERT) NIL NIL) ("2" (ASSERT) NIL NIL)) NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|split_equation-2| "" 4002375147
+   ("" (SKOSIMP*)
+    (("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+      (("" (AUTO-REWRITE-DEFS :ALWAYS? T)
+        (("" (BDDSIMP)
+          (("1"
+            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                    :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                    :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                    :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+            NIL NIL)
+           ("2"
+            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                    :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                    :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                    :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+            NIL NIL)
+           ("3"
+            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                    :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                    :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                    :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+            (("3" (EXTENSIONALITY "bvec[m + n]")
+              (("3"
+                (INST - (TYPECHECKED "a!1" "bvec[m + n]")
+                 (TYPECHECKED "b!1" "bvec[m + n]"))
+                (("3" (SPLIT -1)
+                  (("1" (PROPAX) NIL NIL)
+                   ("2" (SKOLEM! 1)
+                    (("2" (ASSERT 1)
+                      (("2" (DELETE 2)
+                        (("2" (BDDSIMP)
+                          (("1"
+                            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH?
+                                    NIL :CASES-REWRITE? NIL :TYPE-CONSTRAINTS?
+                                    T :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                    NIL :IMPLICIT-TYPEPREDS? NIL
+                                    :IGNORE-TYPEPREDS? NIL)
+                            (("1" (POSTPONE) NIL NIL)) NIL)
+                           ("2"
+                            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH?
+                                    NIL :CASES-REWRITE? NIL :TYPE-CONSTRAINTS?
+                                    T :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                    NIL :IMPLICIT-TYPEPREDS? NIL
+                                    :IGNORE-TYPEPREDS? NIL)
+                            (("2" (POSTPONE) NIL NIL)) NIL))
+                          NIL))
+                        NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|split_equation-0| "" 4002374833
+   ("" (SKOSIMP*)
+    (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+      (("" (POSTPONE) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|split_equation-1| NIL 4002374833 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|column_transitive| 0
+  (|column_transitive-0| "" 4002374833
+   ("" (SKOSIMP*) (("" (APPLY-EXTENSIONALITY) NIL NIL)) NIL) NIL SHOSTAK)
+  (|column_transitive-1| NIL 4002374833 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|constant_conflict| 0
+  (|constant_conflict-3| "" 4002375183
+   ("" (FLATTEN)
+    (("" (CASE "bvec0[n](0)=bvec1[n](0)")
+      (("1" (ASSERT)
+        (("1" (EXPAND "bvec0" -1)
+          (("1" (EXPAND "bvec1" -1) (("1" (ASSERT) NIL NIL)) NIL)) NIL))
+        NIL)
+       ("2" (ASSERT) NIL NIL) ("3" (ASSERT) NIL NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|constant_conflict-2| "" 4002375147
+   ("" (CASE "bvec0[n](0)=bvec1[n](0)")
+    (("1" (EXPAND "bvec0")
+      (("1" (EXPAND "bvec1") (("1" (PROPAX) NIL NIL)) NIL)) NIL)
+     ("2" (EXPAND "bvec0")
+      (("2" (EXPAND "bvec1") (("2" (ASSERT) (("2" (POSTPONE) NIL NIL)) NIL))
+        NIL))
+      NIL)
+     ("3" (EXPAND "bvec0")
+      (("3" (EXPAND "bvec1") (("3" (ASSERT) NIL NIL)) NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|constant_conflict-0| "" 4002374838
+   ("" (SKOSIMP*)
+    (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+      (("" (POSTPONE) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|constant_conflict-1| NIL 4002374838 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|overlap_period_TCC1| 0
+  (|overlap_period_TCC1-0| "" 4002374838 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|overlap_period| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (61 38 61 39)))
+  (|overlap_period_TCC1-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|overlap_period| SUBTYPE "k"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.lo), cmr98_bv.n)}"
+    (61 38 61 39))))
+ (|overlap_period_TCC2| 0
+  (|overlap_period_TCC2-0| "" 4002374842 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|overlap_period| SUBTYPE "lo + d + i" "below(cmr98_bv.n)" (62 33 62 39)))
+  (|overlap_period_TCC2-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|overlap_period| SUBTYPE "lo + d + i" "below(cmr98_bv.n)" (62 33 62 39))))
+ (|overlap_period_TCC3| 0
+  (|overlap_period_TCC3-0| "" 4002374842 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|overlap_period| SUBTYPE "lo + i" "below(cmr98_bv.n)" (62 43 62 47)))
+  (|overlap_period_TCC3-1| NIL 4002374262 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|overlap_period| SUBTYPE "lo + i" "below(cmr98_bv.n)" (62 43 62 47))))
+ (|overlap_period| 0
+  (|overlap_period-3| "" 4002375234
+   ("" (SKOSIMP*)
+    ((""
+      (REWRITE "functions[below(k!1),bool].extensionality_postulate" :DIR RL)
+      (("" (EXPAND* "slice" "^") NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|overlap_period-2| "" 4002375147
+   ("" (SKOSIMP*)
+    (("" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+      (("" (AUTO-REWRITE-DEFS :ALWAYS? T)
+        (("" (BDDSIMP)
+          (("1"
+            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                    :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                    :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                    :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+            (("1" (SKOLEM-TYPEPRED)
+              (("1"
+                (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                        :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                        :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                        :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+                (("1" (BDDSIMP)
+                  (("1"
+                    (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                            :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                            :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                            :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+                    (("1" (POSTPONE) NIL NIL)) NIL)
+                   ("2"
+                    (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                            :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                            :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                            :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+                    (("2" (POSTPONE) NIL NIL)) NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL)
+           ("2"
+            (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T :FLUSH? NIL
+                    :CASES-REWRITE? NIL :TYPE-CONSTRAINTS? T
+                    :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP? NIL
+                    :IMPLICIT-TYPEPREDS? NIL :IGNORE-TYPEPREDS? NIL)
+            (("2" (INST? :IF-MATCH T :POLARITY? NIL :WHERE *)
+              (("2" (EXTENSIONALITY "[below(k!1) -> bit]")
+                (("2"
+                  (INST -
+                   (TYPECHECKED "LAMBDA (ii: below(k!1)): x!1(ii + d!1 + lo!1)"
+                    "[below(k!1) -> bit]")
+                   (TYPECHECKED "LAMBDA (ii: below(k!1)): x!1(ii + lo!1)"
+                    "[below(k!1) -> bit]"))
+                  (("2" (SPLIT -1)
+                    (("1" (PROPAX) NIL NIL)
+                     ("2" (SKOLEM! 1)
+                      (("2" (ASSERT 1)
+                        (("2" (DELETE 2)
+                          (("2" (ASSERT)
+                            (("2" (BDDSIMP)
+                              (("1"
+                                (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T
+                                        :FLUSH? NIL :CASES-REWRITE? NIL
+                                        :TYPE-CONSTRAINTS? T
+                                        :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                        NIL :IMPLICIT-TYPEPREDS? NIL
+                                        :IGNORE-TYPEPREDS? NIL)
+                                (("1" (POSTPONE) NIL NIL)) NIL)
+                               ("2"
+                                (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T
+                                        :FLUSH? NIL :CASES-REWRITE? NIL
+                                        :TYPE-CONSTRAINTS? T
+                                        :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                        NIL :IMPLICIT-TYPEPREDS? NIL
+                                        :IGNORE-TYPEPREDS? NIL)
+                                (("2" (POSTPONE) NIL NIL)) NIL)
+                               ("3"
+                                (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T
+                                        :FLUSH? NIL :CASES-REWRITE? NIL
+                                        :TYPE-CONSTRAINTS? T
+                                        :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                        NIL :IMPLICIT-TYPEPREDS? NIL
+                                        :IGNORE-TYPEPREDS? NIL)
+                                (("3" (POSTPONE) NIL NIL)) NIL)
+                               ("4"
+                                (ASSERT :REWRITE-FLAG NIL :LET-REDUCE? T
+                                        :FLUSH? NIL :CASES-REWRITE? NIL
+                                        :TYPE-CONSTRAINTS? T
+                                        :IGNORE-PROVER-OUTPUT? NIL :QUANT-SIMP?
+                                        NIL :IMPLICIT-TYPEPREDS? NIL
+                                        :IGNORE-TYPEPREDS? NIL)
+                                (("4" (POSTPONE) NIL NIL)) NIL))
+                              NIL))
+                            NIL))
+                          NIL))
+                        NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|overlap_period-0| "" 4002374846
+   ("" (SKOSIMP*)
+    (("" (GRIND :DEFS ("slice" "o" "^" "bvec0" "bvec1"))
+      (("1" (POSTPONE) NIL NIL) ("2" (POSTPONE) NIL NIL)
+       ("3" (POSTPONE) NIL NIL) ("4" (POSTPONE) NIL NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|overlap_period-1| NIL 4002374846 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|project_equal| 0
+  (|project_equal-0| "" 4002375398 ("" (GRIND) NIL NIL) NIL SHOSTAK)
+  (|project_equal-1| NIL 4002375398 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|shared_solved_form| 0
+  (|shared_solved_form-0| "" 4002375399 ("" (GRIND) NIL NIL) NIL SHOSTAK)
+  (|shared_solved_form-1| NIL 4002375399 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|extract_solved_form_TCC1| 0
+  (|extract_solved_form_TCC1-0| "" 4002375399 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|extract_solved_form| SUBTYPE "p"
+    "below((number_fields.+)((number_fields.+)(cmr98_bv.m, cmr98_bv.n), cmr98_bv.p))"
+    (76 19 76 20)))
+  (|extract_solved_form_TCC1-1| NIL 4002375302 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|extract_solved_form| SUBTYPE "p"
+    "below((number_fields.+)((number_fields.+)(cmr98_bv.m, cmr98_bv.n), cmr98_bv.p))"
+    (76 19 76 20))))
+ (|extract_solved_form_TCC2| 0
+  (|extract_solved_form_TCC2-0| "" 4002375400 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|extract_solved_form| SUBTYPE "m"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.p), (number_fields.+)((number_fields.+)(cmr98_bv.m, cmr98_bv.n), cmr98_bv.p))}"
+    (76 21 76 22)))
+  (|extract_solved_form_TCC2-1| NIL 4002375302 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|extract_solved_form| SUBTYPE "m"
+    "{k: integers.posnat | reals.<=((number_fields.+)(k, cmr98_bv.p), (number_fields.+)((number_fields.+)(cmr98_bv.m, cmr98_bv.n), cmr98_bv.p))}"
+    (76 21 76 22))))
+ (|extract_solved_form| 0
+  (|extract_solved_form-0| "" 4002375628
+   ("" (SKOSIMP*)
+    (("" (SPLIT)
+      (("1" (FLATTEN)
+        (("1" (INST 1 "a!1^(n+m+p-1,m+p)" "a!1^(p-1,0)")
+          (("1" (REPLACE -1 :DIR RL)
+            (("1" (ASSERT)
+              (("1" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+                (("1" (EXTENSIONALITY "bvec[m + n + p]")
+                  (("1"
+                    (INST - (TYPECHECKED "a!1" "bvec[m + n + p]")
+                     (TYPECHECKED "LAMBDA (nm_1: below(m + n + p)): a!1(nm_1)"
+                      "[below(p + (m + n)) -> bit]"))
+                    (("1" (SPLIT -1)
+                      (("1" (PROPAX) NIL NIL) ("2" (SKOLEM! 1) NIL NIL)) NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL)
+           ("2" (ASSERT) NIL NIL) ("3" (ASSERT) NIL NIL) ("4" (ASSERT) NIL NIL)
+           ("5" (ASSERT) NIL NIL))
+          NIL))
+        NIL)
+       ("2" (SKOSIMP*)
+        (("2" (REPLACE -1)
+          (("2" (ASSERT)
+            (("2" (EXPAND* "slice" "O" "^" "bvec0" "bvec1")
+              (("2" (EXTENSIONALITY "[below(m) -> bit]")
+                (("2"
+                  (INST -
+                   (TYPECHECKED "LAMBDA (ii: below(m)): b!1(ii)"
+                    "[below(m) -> bit]")
+                   (TYPECHECKED "b!1" "bvec[m]"))
+                  (("2" (SPLIT -1)
+                    (("1" (PROPAX) NIL NIL) ("2" (SKOLEM! 1) NIL NIL)) NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   ((O CONST-DECL "bvec[n + m]" |bv_concat_def| NIL)
+    (|slice| CONST-DECL "bvec[k]" |cmr98_bv| NIL)
+    (|nat| NONEMPTY-TYPE-EQ-DECL NIL |naturalnumbers| NIL)
+    (|below| TYPE-EQ-DECL NIL |naturalnumbers| NIL)
+    (|bit| TYPE-EQ-DECL NIL |bit| NIL) (|bvec| TYPE-EQ-DECL NIL |bv| NIL)
+    (|upto| NONEMPTY-TYPE-EQ-DECL NIL |naturalnumbers| NIL)
+    (^ CONST-DECL "bvec[PROJ_1(sp) - PROJ_2(sp) + 1]" |bv_caret| NIL)
+    (< CONST-DECL "bool" |reals| NIL)
+    (AND CONST-DECL "[bool, bool -> bool]" |booleans| NIL)
+    (<= CONST-DECL "bool" |reals| NIL)
+    (|p| FORMAL-CONST-DECL "posnat" |cmr98_bv| NIL)
+    (|n| FORMAL-CONST-DECL "posnat" |cmr98_bv| NIL)
+    (|m| FORMAL-CONST-DECL "posnat" |cmr98_bv| NIL)
+    (|posnat| NONEMPTY-TYPE-EQ-DECL NIL |integers| NIL)
+    (> CONST-DECL "bool" |reals| NIL)
+    (|nonneg_int| NONEMPTY-TYPE-EQ-DECL NIL |integers| NIL)
+    (|int| NONEMPTY-TYPE-EQ-DECL NIL |integers| NIL)
+    (|integer_pred| CONST-DECL "[rational -> boolean]" |integers| NIL)
+    (|rational| NONEMPTY-TYPE-FROM-DECL NIL |rationals| NIL)
+    (|rational_pred| CONST-DECL "[real -> boolean]" |rationals| NIL)
+    (- CONST-DECL "[numfield, numfield -> numfield]" |number_fields| NIL)
+    (+ CONST-DECL "[numfield, numfield -> numfield]" |number_fields| NIL)
+    (|numfield| NONEMPTY-TYPE-EQ-DECL NIL |number_fields| NIL)
+    (>= CONST-DECL "bool" |reals| NIL)
+    (|bool| NONEMPTY-TYPE-EQ-DECL NIL |booleans| NIL)
+    (|real| NONEMPTY-TYPE-FROM-DECL NIL |reals| NIL)
+    (|real_pred| CONST-DECL "[number_field -> boolean]" |reals| NIL)
+    (|number_field| NONEMPTY-TYPE-FROM-DECL NIL |number_fields| NIL)
+    (|number_field_pred| CONST-DECL "[number -> boolean]" |number_fields| NIL)
+    (|boolean| NONEMPTY-TYPE-DECL NIL |booleans| NIL)
+    (|number| NONEMPTY-TYPE-DECL NIL |numbers| NIL)
+    (|nnint_plus_posint_is_posint| APPLICATION-JUDGEMENT "posint" |integers|
+     NIL)
+    (|minus_nzint_is_nzint| APPLICATION-JUDGEMENT "nzint" |integers| NIL)
+    (|int_minus_int_is_int| APPLICATION-JUDGEMENT "int" |integers| NIL)
+    (|int_plus_int_is_int| APPLICATION-JUDGEMENT "int" |integers| NIL)
+    (|real_le_is_total_order| NAME-JUDGEMENT "(total_order?[real])"
+     |real_props| NIL)
+    (|real_ge_is_total_order| NAME-JUDGEMENT "(total_order?[real])"
+     |real_props| NIL)
+    (|real_lt_is_strict_total_order| NAME-JUDGEMENT
+     "(strict_total_order?[real])" |real_props| NIL))
+   SHOSTAK)
+  (|extract_solved_form-1| NIL 4002375628 ("" (POSTPONE) NIL NIL) NIL SHOSTAK)))
+

@@ -1,0 +1,137 @@
+% Mechanized metatheory of the CMR representation and quotient model.
+% This does not assert a refinement proof of the Common Lisp implementation.
+cmr98_metatheory: THEORY
+BEGIN
+  atom: DATATYPE
+  BEGIN
+    zero: zero?
+    one: one?
+    reference(variable: nat, position: nat): reference?
+  END atom
+
+  term: DATATYPE
+  BEGIN
+    constant(bit: bool, size: posnat): constant?
+    variable(name: nat, size: posnat): variable?
+    composition(high: term, low: term): composition?
+    extraction(source: term, offset: nat, size: posnat): extraction?
+  END term
+
+  width(t: term): RECURSIVE posnat =
+    CASES t OF
+      constant(b,n): n, variable(v,n): n,
+      composition(h,l): width(h)+width(l), extraction(s,o,n): n
+    ENDCASES MEASURE t BY <<
+
+  well_formed(t: term): RECURSIVE bool =
+    CASES t OF
+      constant(b,n): TRUE, variable(v,n): TRUE,
+      composition(h,l): well_formed(h) AND well_formed(l),
+      extraction(s,o,n): well_formed(s) AND o+n<=width(s)
+    ENDCASES MEASURE t BY <<
+
+  valuation: TYPE = [nat -> [nat -> bool]]
+  value(a: atom, rho: valuation): bool =
+    CASES a OF zero: FALSE, one: TRUE, reference(v,i): rho(v)(i) ENDCASES
+
+  % Normal form is a vector of atomic bit references; slices are offsets,
+  % composition selects a column. The implementation compresses adjacent atoms.
+  normal(t: term, i: nat): RECURSIVE atom =
+    CASES t OF
+      constant(b,n): IF b THEN one ELSE zero ENDIF,
+      variable(v,n): reference(v,i),
+      composition(h,l): IF i<width(l) THEN normal(l,i)
+                        ELSE normal(h,i-width(l)) ENDIF,
+      extraction(s,o,n): normal(s,o+i)
+    ENDCASES MEASURE t BY <<
+
+  meaning(t: term, rho: valuation, i: nat): RECURSIVE bool =
+    CASES t OF
+      constant(b,n): b, variable(v,n): rho(v)(i),
+      composition(h,l): IF i<width(l) THEN meaning(l,rho,i)
+                        ELSE meaning(h,rho,i-width(l)) ENDIF,
+      extraction(s,o,n): meaning(s,rho,o+i)
+    ENDCASES MEASURE t BY <<
+
+  word(t: term, rho: valuation): bvec[width(t)] =
+    LAMBDA (i: below(width(t))): meaning(t,rho,i)
+
+  t,u: VAR term
+  rho: VAR valuation
+  i: VAR nat
+  a,b: VAR atom
+
+  normalization_sound: THEOREM value(normal(t,i),rho)=meaning(t,rho,i)
+
+  % Atom equality is complete for validity under all valuations.
+  atom_separation: LEMMA
+    (FORALL (rho: valuation): value(a,rho)=value(b,rho)) IMPLIES a=b
+
+  canonical_complete: THEOREM
+    width(t)=width(u) IMPLIES
+      ((FORALL (rho: valuation): word(t,rho)=word(u,rho)) IFF
+       (FORALL (i: below(width(t))): normal(t,i)=normal(u,i)))
+
+  composition_semantics: THEOREM word(composition(t,u),rho)=word(t,rho) o word(u,rho)
+
+  extraction_semantics: THEOREM
+    FORALL (o: below(width(t)), n: {n: posnat | o+n<=width(t)}):
+      word(extraction(t,o,n),rho)=word(t,rho)^(o+n-1,o)
+
+END cmr98_metatheory
+
+cmr98_partition[N: posnat]: THEORY
+BEGIN
+  cell: TYPE = below(N)
+  relation: TYPE = [cell,cell -> bool]
+  assignment: TYPE = [cell -> bool]
+  R,E: VAR relation
+  v: VAR assignment
+  x,y,z: VAR cell
+  zeroes,ones: VAR pred[cell]
+
+  respects(R,v): bool = FORALL (x,y): R(x,y) IMPLIES v(x)=v(y)
+  extends(E,R): bool = FORALL (x,y): R(x,y) IMPLIES E(x,y)
+  equivalence(E): bool =
+    (FORALL (x): E(x,x)) AND
+    (FORALL (x,y): E(x,y) IMPLIES E(y,x)) AND
+    (FORALL (x,y,z): E(x,y) AND E(y,z) IMPLIES E(x,z))
+  anchored(v,zeroes,ones): bool =
+    (FORALL (x): zeroes(x) IMPLIES NOT v(x)) AND
+    (FORALL (x): ones(x) IMPLIES v(x))
+  consistent(E,zeroes,ones): bool =
+    NOT (EXISTS (x,y): zeroes(x) AND ones(y) AND E(x,y))
+  model(E,ones)(x): bool = EXISTS (y): ones(y) AND E(x,y)
+
+  equality_kernel: LEMMA equivalence(LAMBDA (x,y): v(x)=v(y))
+  projection_sound: LEMMA extends(E,R) AND respects(E,v) IMPLIES respects(R,v)
+  conflict_sound: THEOREM
+    respects(E,v) AND anchored(v,zeroes,ones) IMPLIES consistent(E,zeroes,ones)
+  model_respects: LEMMA equivalence(E) IMPLIES respects(E,model(E,ones))
+  model_anchored: LEMMA
+    equivalence(E) AND consistent(E,zeroes,ones) IMPLIES anchored(model(E,ones),zeroes,ones)
+  consistency_complete: THEOREM
+    equivalence(E) IMPLIES
+      (consistent(E,zeroes,ones) IFF
+       (EXISTS (v): respects(E,v) AND anchored(v,zeroes,ones)))
+
+  % Least equivalence closure: a specification for union-find/partition output.
+  least_closure(E,R): bool = equivalence(E) AND extends(E,R) AND
+    (FORALL (Q: relation): equivalence(Q) AND extends(Q,R) IMPLIES extends(Q,E))
+  closure_preserves_models: THEOREM
+    least_closure(E,R) IMPLIES (respects(E,v) IFF respects(R,v))
+  solver_correct: THEOREM
+    least_closure(E,R) IMPLIES
+      (consistent(E,zeroes,ones) IFF
+       (EXISTS (v): respects(R,v) AND anchored(v,zeroes,ones)))
+
+  % Choosing one fresh Boolean per representative gives all solved-form models.
+  representative: TYPE = [cell -> cell]
+  rep: VAR representative
+  represents(rep,E): bool = FORALL (x,y): E(x,y) IFF rep(x)=rep(y)
+  representative_sound: LEMMA
+    represents(rep,E) IMPLIES respects(E,LAMBDA (x): v(rep(x)))
+  solved_form_complete: THEOREM
+    represents(rep,E) AND (FORALL (x): rep(rep(x))=rep(x)) IMPLIES
+      (respects(E,v) IFF (EXISTS (fresh: assignment): v=(LAMBDA (x): fresh(rep(x)))))
+END cmr98_partition

@@ -1,0 +1,15 @@
+(in-package :pvs)
+(load (merge-pathnames "cmr98_solver.lisp" *load-truename*))
+(load (merge-pathnames "cmr98_pvs.lisp" *load-truename*))
+(defstep cmr98-foundation ()
+  (then (skosimp*) (expand* "slice" "O" "^" "bvec0" "bvec1")
+        (grind-with-ext$))
+  "Prove CMR semantic laws using prelude definitions and extensionality."
+  "Proving the CMR semantic foundation")
+
+;; The raw/CLI development remains usable without the agent extension.
+;; In the interactive integration, keep derived certificates grouped even when
+;; invoked with the traditional $ spelling. All checking still uses native APPLY.
+(when (fboundp 'agent-mark-lazy-strategy)
+  (eval '(lazy-strategies cmr98-bv cmr98-columns cmr98-normalization
+                          cmr98-foundation)))

@@ -1,0 +1,437 @@
+(|cmr98_metatheory|
+ (|width_TCC1| 0
+  (|width_TCC1-0| "" 4002380270 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|width| TERMINATION "cmr98_metatheory.width(cmr98_metatheory.h)" "NIL"
+    (23 24 23 32)))
+  (|width_TCC1-1| NIL 4002380045 ("" (TERMINATION-TCC) NIL NIL) NIL NIL
+   (|width| TERMINATION "cmr98_metatheory.width(cmr98_metatheory.h)" "NIL"
+    (23 24 23 32))))
+ (|width_TCC2| 0
+  (|width_TCC2-0| "" 4002380270 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|width| TERMINATION "cmr98_metatheory.width(cmr98_metatheory.l)" "NIL"
+    (23 33 23 41)))
+  (|width_TCC2-1| NIL 4002380045 ("" (TERMINATION-TCC) NIL NIL) NIL NIL
+   (|width| TERMINATION "cmr98_metatheory.width(cmr98_metatheory.l)" "NIL"
+    (23 33 23 41))))
+ (|well_formed_TCC1| 0
+  (|well_formed_TCC1-0| "" 4002380270 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|well_formed| TERMINATION
+    "cmr98_metatheory.well_formed(cmr98_metatheory.s)" "NIL" (30 25 30 39)))
+  (|well_formed_TCC1-1| NIL 4002380045 ("" (TERMINATION-TCC) NIL NIL) NIL NIL
+   (|well_formed| TERMINATION
+    "cmr98_metatheory.well_formed(cmr98_metatheory.s)" "NIL" (30 25 30 39))))
+ (|normal_TCC1| 0
+  (|normal_TCC1-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|normal| SUBTYPE
+    "(number_fields.-)(cmr98_metatheory.i, cmr98_metatheory.width(cmr98_metatheory.l))"
+    "nat" (44 38 44 48)))
+  (|normal_TCC1-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL NIL
+   (|normal| SUBTYPE
+    "(number_fields.-)(cmr98_metatheory.i, cmr98_metatheory.width(cmr98_metatheory.l))"
+    "nat" (44 38 44 48))))
+ (|normalization_sound| 0
+  (|normalization_sound-2| "" 4002380265
+   ("" (INDUCT "t")
+    (("1" (GRIND) NIL NIL) ("2" (GRIND) NIL NIL) ("3" (GRIND) NIL NIL)
+     ("4" (GRIND) NIL NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|normalization_sound-0| "" 4002380083
+   ("" (INDUCT "t")
+    (("1" (GRIND) NIL NIL) ("2" (GRIND) NIL NIL) ("3" (GRIND) NIL NIL)
+     ("4" (GRIND) NIL NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|normalization_sound-1| NIL 4002380083 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|atom_separation| 0
+  (|atom_separation-2| "" 4002380298
+   ("" (SKOSIMP*)
+    (("" (INST-CP -1 "LAMBDA (v:nat): LAMBDA (i:nat): FALSE")
+      (("" (INST-CP -1 "LAMBDA (v:nat): LAMBDA (i:nat): TRUE")
+        ((""
+          (INST-CP -1
+           "LAMBDA (v:nat): LAMBDA (i:nat): v=variable(a!1) AND i=position(a!1)")
+          (("1" (GRIND :IF-MATCH NIL)
+            (("1" (CASE "reference?(a!1)")
+              (("1" (CASE "reference?(b!1)")
+                (("1" (GRIND)
+                  (("1" (LEMMA "atom_reference_eta")
+                    (("1" (INST-CP -1 "a!1")
+                      (("1" (INST -1 "b!1") (("1" (GRIND) NIL NIL)) NIL)) NIL))
+                    NIL))
+                  NIL)
+                 ("2" (GRIND) NIL NIL))
+                NIL)
+               ("2" (CASE "reference?(b!1)")
+                (("1" (GRIND) NIL NIL) ("2" (GRIND) NIL NIL)) NIL))
+              NIL))
+            NIL)
+           ("2" (GRIND :IF-MATCH NIL) NIL NIL)
+           ("3" (GRIND :IF-MATCH NIL) NIL NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|atom_separation-0| "" 4002380265
+   ("" (SKOSIMP*)
+    (("" (INST-CP -1 "LAMBDA (v:nat): LAMBDA (i:nat): FALSE")
+      (("" (GRIND :IF-MATCH NIL)
+        (("1" (POSTPONE) NIL NIL) ("2" (POSTPONE) NIL NIL)
+         ("3" (POSTPONE) NIL NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|atom_separation-1| NIL 4002380265 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|canonical_complete_TCC1| 0
+  (|canonical_complete_TCC1-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|canonical_complete| SUBTYPE
+    "cmr98_metatheory.word(cmr98_metatheory.u, cmr98_metatheory.rho)"
+    "bvec[width(t)]" (72 45 72 56)))
+  (|canonical_complete_TCC1-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|canonical_complete| SUBTYPE
+    "cmr98_metatheory.word(cmr98_metatheory.u, cmr98_metatheory.rho)"
+    "bvec[width(t)]" (72 45 72 56))))
+ (|canonical_complete| 0
+  (|canonical_complete-2| "" 4002380343
+   ("" (SKOSIMP*)
+    (("" (SPLIT)
+      (("1" (SKOSIMP*)
+        (("1"
+          (LEMMA "atom_separation"
+           ("a" "normal(t!1,i!1)" "b" "normal(u!1,i!1)"))
+          (("1" (ASSERT)
+            (("1" (SKOSIMP*)
+              (("1" (INST -1 "rho!1")
+                (("1" (DECOMPOSE-EQUALITY -1)
+                  (("1" (INST -1 "i!1")
+                    (("1"
+                      (LEMMA "normalization_sound"
+                       ("t" "t!1" "i" "i!1" "rho" "rho!1"))
+                      (("1"
+                        (LEMMA "normalization_sound"
+                         ("t" "u!1" "i" "i!1" "rho" "rho!1"))
+                        (("1" (EXPAND "word") (("1" (ASSERT) NIL NIL)) NIL))
+                        NIL))
+                      NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL)
+       ("2" (SKOSIMP*)
+        (("2" (APPLY-EXTENSIONALITY :HIDE? T)
+          (("2" (INST -1 "x!1")
+            (("2"
+              (LEMMA "normalization_sound" ("t" "t!1" "i" "x!1" "rho" "rho!1"))
+              (("2"
+                (LEMMA "normalization_sound"
+                 ("t" "u!1" "i" "x!1" "rho" "rho!1"))
+                (("2" (EXPAND "word") (("2" (ASSERT) NIL NIL)) NIL)) NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|canonical_complete-0| "" 4002380268
+   ("" (SKOSIMP*) (("" (POSTPONE) NIL NIL)) NIL) NIL SHOSTAK)
+  (|canonical_complete-1| NIL 4002380268 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|composition_semantics_TCC1| 0
+  (|composition_semantics_TCC1-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL
+   SHOSTAK
+   (|composition_semantics| SUBTYPE
+    "bv_concat_def[cmr98_metatheory.width(cmr98_metatheory.t), cmr98_metatheory.width(cmr98_metatheory.u)].o(cmr98_metatheory.word(cmr98_metatheory.t, cmr98_metatheory.rho), cmr98_metatheory.word(cmr98_metatheory.u, cmr98_metatheory.rho))"
+    "bvec[width(composition(t, u))]" (75 60 75 85)))
+  (|composition_semantics_TCC1-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|composition_semantics| SUBTYPE
+    "bv_concat_def[cmr98_metatheory.width(cmr98_metatheory.t), cmr98_metatheory.width(cmr98_metatheory.u)].o(cmr98_metatheory.word(cmr98_metatheory.t, cmr98_metatheory.rho), cmr98_metatheory.word(cmr98_metatheory.u, cmr98_metatheory.rho))"
+    "bvec[width(composition(t, u))]" (75 60 75 85))))
+ (|composition_semantics| 0
+  (|composition_semantics-0| "" 4002380268
+   ("" (SKOSIMP*)
+    (("" (EXPAND "word")
+      (("" (EXPAND "O")
+        (("" (EXTENSIONALITY "[below(width(composition(t!1, u!1))) -> bool]")
+          ((""
+            (INST -
+             (TYPECHECKED "LAMBDA (i: below(width(composition(t!1, u!1)))):
+  meaning(composition(t!1, u!1), rho!1, i)"
+              "[below(width(composition(t!1, u!1))) -> bool]")
+             (TYPECHECKED "LAMBDA (nm: below(width(t!1) + width(u!1))):
+  IF nm < width(u!1) THEN meaning(u!1, rho!1, nm)
+  ELSE meaning(t!1, rho!1, nm - width(u!1))
+  ENDIF"
+              "[below(width(u!1) + width(t!1)) -> bit]"))
+            (("1" (SPLIT -1)
+              (("1" (PROPAX) NIL NIL)
+               ("2" (SKOLEM! 1)
+                (("2" (ASSERT 1) (("2" (DELETE 2) (("2" (GRIND) NIL NIL)) NIL))
+                  NIL))
+                NIL))
+              NIL)
+             ("2" (ASSERT) (("2" (DELETE 2) (("2" (GRIND) NIL NIL)) NIL)) NIL)
+             ("3" (ASSERT) (("3" (DELETE 2) (("3" (GRIND) NIL NIL)) NIL)) NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|composition_semantics-1| NIL 4002380268 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK))
+ (|extraction_semantics_TCC1| 0
+  (|extraction_semantics_TCC1-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|extraction_semantics| SUBTYPE
+    "(number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1)"
+    "below(cmr98_metatheory.width(cmr98_metatheory.t))" (79 47 79 52)))
+  (|extraction_semantics_TCC1-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|extraction_semantics| SUBTYPE
+    "(number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1)"
+    "below(cmr98_metatheory.width(cmr98_metatheory.t))" (79 47 79 52))))
+ (|extraction_semantics_TCC2| 0
+  (|extraction_semantics_TCC2-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|extraction_semantics| SUBTYPE "cmr98_metatheory.o"
+    "upto((number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1))"
+    (79 53 79 54)))
+  (|extraction_semantics_TCC2-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|extraction_semantics| SUBTYPE "cmr98_metatheory.o"
+    "upto((number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1))"
+    (79 53 79 54))))
+ (|extraction_semantics_TCC3| 0
+  (|extraction_semantics_TCC3-0| "" 4002380271 ("" (GRIND) NIL NIL) NIL SHOSTAK
+   (|extraction_semantics| SUBTYPE
+    "bv_caret[cmr98_metatheory.width(cmr98_metatheory.t)].^(cmr98_metatheory.word(cmr98_metatheory.t, cmr98_metatheory.rho), ((number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1), cmr98_metatheory.o))"
+    "bvec[width(extraction(t, o, n))]" (79 34 79 55)))
+  (|extraction_semantics_TCC3-1| NIL 4002380045 ("" (SUBTYPE-TCC) NIL NIL) NIL
+   NIL
+   (|extraction_semantics| SUBTYPE
+    "bv_caret[cmr98_metatheory.width(cmr98_metatheory.t)].^(cmr98_metatheory.word(cmr98_metatheory.t, cmr98_metatheory.rho), ((number_fields.-)((number_fields.+)(cmr98_metatheory.o, cmr98_metatheory.n), 1), cmr98_metatheory.o))"
+    "bvec[width(extraction(t, o, n))]" (79 34 79 55))))
+ (|extraction_semantics| 0
+  (|extraction_semantics-0| "" 4002380270
+   ("" (SKOSIMP*)
+    (("" (EXPAND "word")
+      (("" (EXPAND "^")
+        ((""
+          (EXTENSIONALITY "[below(width(extraction(t!1, oh!1, n!1))) -> bool]")
+          ((""
+            (INST -
+             (TYPECHECKED "LAMBDA (i: below(width(extraction(t!1, oh!1, n!1)))):
+  meaning(extraction(t!1, oh!1, n!1), rho!1, i)"
+              "[below(width(extraction(t!1, oh!1, n!1))) -> bool]")
+             (TYPECHECKED
+              "LAMBDA (ii: below(n!1)): meaning(t!1, rho!1, ii + oh!1)"
+              "[below(n!1) -> bool]"))
+            (("1" (SPLIT -1)
+              (("1" (PROPAX) NIL NIL)
+               ("2" (SKOLEM! 1)
+                (("2" (ASSERT 1) (("2" (DELETE 2) (("2" (GRIND) NIL NIL)) NIL))
+                  NIL))
+                NIL))
+              NIL)
+             ("2" (ASSERT) (("2" (DELETE 2) (("2" (GRIND) NIL NIL)) NIL)) NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|extraction_semantics-1| NIL 4002380270 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK)))
+(|cmr98_partition|
+ (|equality_kernel| 0
+  (|equality_kernel-0| "" 4002380272 ("" (GRIND) NIL NIL) NIL SHOSTAK)
+  (|equality_kernel-1| NIL 4002380272 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|projection_sound| 0
+  (|projection_sound-0| "" 4002380272 ("" (GRIND) NIL NIL) NIL SHOSTAK)
+  (|projection_sound-1| NIL 4002380272 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|conflict_sound| 0
+  (|conflict_sound-2| "" 4002380298
+   ("" (GRIND :IF-MATCH NIL)
+    (("" (INST -3 "x!1" "y!1")
+      (("" (INST -4 "x!1") (("" (INST -5 "y!1") (("" (ASSERT) NIL NIL)) NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|conflict_sound-0| "" 4002380272 ("" (GRIND) (("" (POSTPONE) NIL NIL)) NIL)
+   NIL SHOSTAK)
+  (|conflict_sound-1| NIL 4002380272 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|model_respects| 0
+  (|model_respects-2| "" 4002380272
+   ("" (GRIND :IF-MATCH NIL)
+    (("1" (INST -5 "x!1" "y!1")
+      (("1" (INST -6 "y!1" "x!1" "y!2")
+        (("1" (INST 1 "y!2") (("1" (ASSERT) NIL NIL)) NIL)) NIL))
+      NIL)
+     ("2" (INST -6 "x!1" "y!1" "y!2")
+      (("2" (INST 1 "y!2") (("2" (ASSERT) NIL NIL)) NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|model_respects-0| "" 4002380083
+   ("" (GRIND :IF-MATCH NIL)
+    (("1" (INST -5 "x!1" "y!1")
+      (("1" (INST -6 "y!1" "x!1" "y!2")
+        (("1" (INST 1 "y!2") (("1" (ASSERT) NIL NIL)) NIL)) NIL))
+      NIL)
+     ("2" (INST -6 "x!1" "y!1" "y!2")
+      (("2" (INST 1 "y!2") (("2" (ASSERT) NIL NIL)) NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|model_respects-1| NIL 4002380083 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|model_anchored| 0
+  (|model_anchored-2| "" 4002380343
+   ("" (GRIND :IF-MATCH NIL)
+    (("1" (INST -2 "x!1") (("1" (INST 2 "x!1") (("1" (ASSERT) NIL NIL)) NIL))
+      NIL)
+     ("2" (INST 1 "x!1" "y!1") (("2" (ASSERT) NIL NIL)) NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|model_anchored-0| "" 4002380274 ("" (GRIND) (("" (POSTPONE) NIL NIL)) NIL)
+   NIL SHOSTAK)
+  (|model_anchored-1| NIL 4002380274 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|consistency_complete| 0
+  (|consistency_complete-2| "" 4002380474
+   ("" (SKOSIMP*)
+    (("" (SPLIT)
+      (("1" (SKOSIMP*)
+        (("1" (INST 1 "model(E!1,ones!1)")
+          (("1" (LEMMA "model_respects" ("E" "E!1" "ones" "ones!1"))
+            (("1"
+              (LEMMA "model_anchored"
+               ("E" "E!1" "ones" "ones!1" "zeroes" "zeroes!1"))
+              (("1" (ASSERT) NIL NIL)) NIL))
+            NIL))
+          NIL))
+        NIL)
+       ("2" (SKOSIMP*)
+        (("2"
+          (LEMMA "conflict_sound"
+           ("E" "E!1" "ones" "ones!1" "zeroes" "zeroes!1" "v" "v!1"))
+          (("2" (ASSERT) NIL NIL)) NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|consistency_complete-0| "" 4002380274
+   ("" (SKOSIMP*)
+    (("" (LEMMA "conflict_sound")
+      (("" (LEMMA "model_respects")
+        (("" (LEMMA "model_anchored")
+          (("" (GRIND :DEFS NIL) (("" (POSTPONE) NIL NIL)) NIL)) NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|consistency_complete-1| NIL 4002380274 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK))
+ (|closure_preserves_models| 0
+  (|closure_preserves_models-2| "" 4002380474
+   ("" (SKOSIMP*)
+    (("" (LEMMA "equality_kernel" ("v" "v!1"))
+      (("" (EXPAND "least_closure")
+        (("" (FLATTEN)
+          (("" (INST -4 "LAMBDA (x,y:cell): v!1(x)=v!1(y)")
+            (("" (LEMMA "projection_sound" ("E" "E!1" "R" "R!1" "v" "v!1"))
+              (("" (EXPAND "extends" -4)
+                (("" (EXPAND "respects")
+                  (("" (ASSERT)
+                    (("" (EXPAND "extends")
+                      (("" (GRIND :DEFS NIL :IF-MATCH NIL) NIL NIL)) NIL))
+                    NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|closure_preserves_models-0| "" 4002380279
+   ("" (SKOSIMP*) (("" (POSTPONE) NIL NIL)) NIL) NIL SHOSTAK)
+  (|closure_preserves_models-1| NIL 4002380279 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK))
+ (|solver_correct| 0
+  (|solver_correct-2| "" 4002380527
+   ("" (SKOSIMP*)
+    ((""
+      (LEMMA "consistency_complete"
+       ("E" "E!1" "zeroes" "zeroes!1" "ones" "ones!1"))
+      (("" (EXPAND "least_closure")
+        (("" (GRIND :DEFS NIL :IF-MATCH NIL)
+          (("1" (INST 1 "v!1")
+            (("1" (LEMMA "projection_sound" ("E" "E!1" "R" "R!1" "v" "v!1"))
+              (("1" (ASSERT) NIL NIL)) NIL))
+            NIL)
+           ("2" (INST 2 "v!1")
+            (("2"
+              (LEMMA "closure_preserves_models"
+               ("E" "E!1" "R" "R!1" "v" "v!1"))
+              (("2" (EXPAND "least_closure")
+                (("2" (GRIND :DEFS NIL :IF-MATCH NIL) NIL NIL)) NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|solver_correct-0| "" 4002380279
+   ("" (SKOSIMP*)
+    (("" (LEMMA "consistency_complete")
+      (("" (LEMMA "closure_preserves_models")
+        (("" (GRIND :DEFS NIL)
+          (("1" (POSTPONE) NIL NIL) ("2" (POSTPONE) NIL NIL)
+           ("3" (POSTPONE) NIL NIL) ("4" (POSTPONE) NIL NIL)
+           ("5" (POSTPONE) NIL NIL))
+          NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|solver_correct-1| NIL 4002380279 ("" (POSTPONE) NIL NIL) NIL SHOSTAK))
+ (|representative_sound| 0
+  (|representative_sound-0| "" 4002380283 ("" (GRIND) NIL NIL) NIL SHOSTAK)
+  (|representative_sound-1| NIL 4002380283 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK))
+ (|solved_form_complete| 0
+  (|solved_form_complete-2| "" 4002380527
+   ("" (SKOSIMP*)
+    (("" (SPLIT)
+      (("1" (SKOSIMP*)
+        (("1" (INST 1 "v!1")
+          (("1" (APPLY-EXTENSIONALITY :HIDE? T)
+            (("1" (EXPAND "respects")
+              (("1" (EXPAND "represents")
+                (("1" (INST -1 "x!1" "rep!1(x!1)")
+                  (("1" (INST -2 "x!1" "rep!1(x!1)")
+                    (("1" (INST -3 "x!1") (("1" (ASSERT) NIL NIL)) NIL)) NIL))
+                  NIL))
+                NIL))
+              NIL))
+            NIL))
+          NIL))
+        NIL)
+       ("2" (SKOSIMP*)
+        (("2"
+          (LEMMA "representative_sound"
+           ("rep" "rep!1" "E" "E!1" "v" "fresh!1"))
+          (("2" (ASSERT) NIL NIL)) NIL))
+        NIL))
+      NIL))
+    NIL)
+   NIL SHOSTAK)
+  (|solved_form_complete-0| "" 4002380283
+   ("" (SKOSIMP*) (("" (POSTPONE) NIL NIL)) NIL) NIL SHOSTAK)
+  (|solved_form_complete-1| NIL 4002380283 ("" (POSTPONE) NIL NIL) NIL
+   SHOSTAK)))
