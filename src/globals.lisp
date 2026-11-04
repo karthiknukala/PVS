@@ -30,6 +30,9 @@ in util.lisp")
 
 (defvar *pvs-path* nil "Set by make process")
 
+(defvar *pvs-prelude-directory-cache* nil
+  "Installation path and canonical prelude directory for the running image.")
+
 (defvar *pvs-library-path* nil
   "Set from the PVS_LIBRARY_PATH environment variable + *pvs-path*")
 

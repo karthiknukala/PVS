@@ -530,6 +530,26 @@ in your PVS_LIBRARY_PATH."
       *pvs-library-alist*
       (setq *pvs-library-alist* (get-pvs-library-alist))))
 
+(defun directory-has-pvs-source-p (dir)
+  #+sbcl
+  (let ((mapper (find-symbol "MAP-DIRECTORY" :sb-ext)))
+    (when (and mapper (fboundp mapper) (not (typep dir 'logical-pathname)))
+      (handler-case
+          (progn
+            (funcall mapper
+                     (lambda (file)
+                       ;; MAP-DIRECTORY includes dangling links.
+                       (when (and (equal (pathname-type file) "pvs")
+                                  (handler-case (sb-posix:stat file)
+                                    (sb-posix:syscall-error () nil)))
+                         (return-from directory-has-pvs-source-p t)))
+                     dir :directories nil)
+            (return-from directory-has-pvs-source-p nil))
+        (error () nil))))
+  ;; Use the portable implementation for logical paths, or if this SBCL
+  ;; lacks a suitable directory iterator.
+  (not (null (uiop:directory-files dir "*.pvs"))))
+
 (defun get-pvs-library-alist ()
   (let ((alist nil))
     (dolist (path *pvs-library-path*)
@@ -541,7 +561,7 @@ in your PVS_LIBRARY_PATH."
 	      (when (and (valid-pvs-id* dname)
 			 (not (string-equal dname "pvsbin"))
 			 (or (uiop:file-exists-p (merge-pathnames ".pvscontext" sdir))
-			     (uiop:directory-files sdir "*.pvs")))
+			     (directory-has-pvs-source-p sdir)))
 		(push (cons (intern dname :pvs) subdir) alist))))
 	  (pvs-warning "~a is in the library path, but is not a directory" path)))
     ;; earlier paths in *pvs-library-path* shadow later ones.
@@ -894,6 +914,14 @@ point."
 
 ;;;   3. A libpath, which is an absolute pathname.
 
+(defun prelude-library-directory ()
+  ;; Before initialization, or when processing a different installation,
+  ;; resolve against the active PVS path.
+  (let ((entry *pvs-prelude-directory-cache*))
+    (if (and entry (equal (car entry) *pvs-path*))
+        (cdr entry)
+        (uiop:directory-exists-p (format nil "~a/lib/" *pvs-path*)))))
+
 (defun get-library-reference (libref)
   "Given a libref, attempts to return three values: an absolute lib-path, a
 lib-id, and the origin.  Returns nil if a lib-path cannot be determined.  A
@@ -944,7 +972,7 @@ not a dir: if a valid id
 	 (idstr (if pos (subseq nlibstr (1+ pos)) nlibstr)) ; possible id is after the last '/'
 	 (pid (when (valid-pvs-id* idstr) (intern idstr :pvs)))) ; is it a valid pvs id?
     (cond (dirp
-	   (cond ((equal lib-path (uiop:directory-exists-p (format nil "~a/lib/" *pvs-path*)))
+	   (cond ((equal lib-path (prelude-library-directory))
 		  (values lib-path nil :prelude))
 		 ;; ((equal lib-path (path *workspace-session*))
 		 ;;  (values lib-path nil :current-workspace))
