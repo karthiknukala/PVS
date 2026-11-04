@@ -155,15 +155,20 @@ using probe-file, make-pathname or merge-pathnames."
     (not (gethash source *pvsio-loaded-files*))))
 
 (defun purge-pvsio-attachments ()
-  "Remove attachments that are outdated because the theory has been re-typechecked
-since they were loaded."
-  (maphash #'(lambda (key attach)
-	       (let ((theory (extra-get-theory (attachment-theo-qid attach))))
-		 (when (or (attachment-source-not-found (attachment-source attach))
-			   (not theory)
-			   (< (attachment-tc-time attach) (typecheck-time theory)))
-                   (remhash key *pvsio-attachments*))))
-             *pvsio-attachments*))
+  "Remove attachments missing their source or theory, or predating the current typecheck."
+  (let ((theories (make-hash-table :test 'equal)))
+    (maphash
+     (lambda (key attach)
+       (let ((qid (attachment-theo-qid attach)))
+         (multiple-value-bind (theory found) (gethash qid theories)
+           (unless found
+             (setf theory (extra-get-theory qid)
+                   (gethash qid theories) theory))
+           (when (or (attachment-source-not-found (attachment-source attach))
+                     (not theory)
+                     (< (attachment-tc-time attach) (typecheck-time theory)))
+             (remhash key *pvsio-attachments*)))))
+     *pvsio-attachments*)))
 
 
 (defun all-imported-paths ()
