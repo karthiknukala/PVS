@@ -1539,7 +1539,13 @@
 		     (step-or-rule-defn (car expr))
 		     (not (isfun? (car expr))))
 		 expr
-		 (eval expr)))
+		 ;; These strategy forms are usually evaluated only once per branch.
+		 ;; Asking SBCL to compile each one dominates large GRIND replays.
+		 (let (#+sbcl
+		       (sb-ext:*evaluator-mode*
+			#.(if (or (find-package :sb-eval) (find-package :sb-interpreter))
+			      :interpret :compile)))
+		   (eval expr))))
 	    (t (if (or (numberp expr)
 		       (special-variable-p expr))
 		   (eval expr)
