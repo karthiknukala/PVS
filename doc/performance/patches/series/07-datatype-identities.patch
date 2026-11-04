@@ -1,0 +1,254 @@
+Subject: [07] Defer parsing identity maps until a generated datatype term uses them, CHERI cold `top64`
+
+Measurement: 46.58 → 42.41 s. Midpoints of two trials per arm. The individual pairs saved 5.07 and 3.28 s. Allocation fell from 5.07 to 4.20 GB.
+
+diff --git a/src/datatype.lisp b/src/datatype.lisp
+index a77cd4f..9e48541 100644
+--- a/src/datatype.lisp
++++ b/src/datatype.lisp
+@@ -3129,6 +3129,26 @@ generated")
+ ;;       :type-value ntype
+ ;;       :expr nexpr)))
+ 
++;; Most identity maps are discarded by their parent selection. Save the
++;; spelling in the current unparse context and parse only maps used in terms.
++(defstruct (deferred-identity-fun (:constructor make-deferred-identity-fun (source)))
++  source)
++
++(defun defer-identity-fun (te)
++  (make-deferred-identity-fun
++   (unparse (mk-name-expr '|id| (list (mk-actual te))) :string t)))
++
++(defun materialize-adt-map (map)
++  (if (deferred-identity-fun-p map)
++      (pc-parse (deferred-identity-fun-source map) 'expr)
++      map))
++
++(defmethod identity-fun? ((expr deferred-identity-fun))
++  t)
++
++(defun apply-adt-maps (operator maps)
++  (mk-application* operator (mapcar #'materialize-adt-map maps)))
++
+ (defmethod acc-map-selection (arg (te type-name) pvars ptypes fpairs
+ 				  adt adtinst curried?)
+   (cond ((member te ptypes :test #'corresponding-formals)
+@@ -3309,7 +3329,7 @@ generated")
+ 					   :actuals (subst-map-actuals
+ 						     (list (mk-actual te))
+ 						     fpairs)
+-					   :argument (mk-application map
++					   :argument (mk-application (materialize-adt-map map)
+ 						       var))))
+ 			  (mk-selection in-expr (list bd) sel-expr)))
+ 	      maps (types te)))
+@@ -3333,9 +3353,9 @@ generated")
+ 						     pvars ptypes fpairs adt adtinst))
+ 			     (positive-actuals te))))
+ 	   (if (every #'identity-fun? maps)
+-	       (mk-identity-fun te)
++	       (defer-identity-fun te)
+ 	       (mk-map-application te fpairs adt maps))))
+-	(t (mk-identity-fun te))))
++	(t (defer-identity-fun te))))
+ 
+ (defmethod acc-map-selection* ((te datatype-subtype) pvars ptypes fpairs
+ 			       adt adtinst)
+@@ -3346,7 +3366,7 @@ generated")
+       (let ((map (acc-map-selection* (domain (supertype te))
+ 				     pvars ptypes fpairs adt adtinst)))
+ 	(if (identity-fun? map)
+-	    (mk-identity-fun te)
++	    (defer-identity-fun te)
+ 	    (mk-application '|image| map)))
+       (acc-map-selection* (supertype te) pvars ptypes fpairs adt adtinst)))
+ 
+@@ -3363,7 +3383,7 @@ generated")
+ 		   (range te))
+ 	       pvars ptypes fpairs adt adtinst)))
+     (cond ((identity-fun? map)
+-	   (mk-identity-fun te))
++	   (defer-identity-fun te))
+ 	  ((sequence? te)
+ 	   (mk-map-application te fpairs adt (list map)))
+ 	  (t
+@@ -3387,7 +3407,7 @@ generated")
+ 	 (maps (acc-map-selection-fields
+ 		(fields te) rvar pvars ptypes fpairs adt adtinst (dependent? te))))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list rbd)
+ 	  (mk-record-expr
+ 	   (mapcar #'(lambda (fd map)
+@@ -3409,7 +3429,7 @@ generated")
+ 	 (maps (acc-map-selection-types
+ 		(types te) tvar pvars ptypes fpairs adt adtinst)))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-tuple-expr
+ 	   (let ((num 0))
+@@ -3434,7 +3454,7 @@ generated")
+ 	 (maps (acc-map-selection-types
+ 		(types te) tvar pvars ptypes fpairs adt adtinst)))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-cases-expr tvar
+ 	    (let ((num 0)
+@@ -3452,7 +3472,7 @@ generated")
+ 					     :actuals (subst-map-actuals
+ 						       (list (mk-actual te))
+ 						       fpairs)
+-					     :argument (mk-application map
++					     :argument (mk-application (materialize-adt-map map)
+ 							 var))))
+ 			    (mk-selection in-expr (list bd) sel-expr)))
+ 		maps (types te)))
+@@ -3478,7 +3498,7 @@ generated")
+ 
+ (defmethod acc-map-selection* ((te type-expr) pvars ptypes fpairs adt adtinst)
+   (declare (ignore pvars ptypes fpairs adt adtinst))
+-  (mk-identity-fun te))
++  (defer-identity-fun te))
+ 
+ ;(defmethod acc-map-selection (arg (te tupletype) pvars ptypes adt)
+ ;  (labels ((map-tup (types i forms)
+@@ -4167,13 +4187,13 @@ generated")
+ 				     (id (module-instance te)))))
+ 		     (setf (dactuals appname) (append (dactuals te) dfacts))
+ 		     (let ((pname (pc-parse (unparse appname :string t) 'expr)))
+-		       (mk-application (mk-application* pname dfuns)
++		       (mk-application (apply-adt-maps pname dfuns)
+ 			 (copy arg)))))
+ 	       (if (every #'identity-fun? dfuns)
+ 		   (let* ((appname (mk-name-expr '|map|
+ 				     (append (actuals te) facts)))
+ 			  (pname (pc-parse (unparse appname :string t) 'expr)))
+-		     (mk-application (mk-application* pname funs)
++		     (mk-application (apply-adt-maps pname funs)
+ 		       (copy arg)))
+ 		   (break "acc-reduce-selection (type-name): have both actuals and dactuals")))))
+ 	(t (copy arg))))
+@@ -4315,7 +4335,7 @@ generated")
+ 					   :id (makesym "IN_~d" num)
+ 					   :index num
+ 					   :actuals (list (mk-actual fdom))
+-					   :argument (mk-application fun
++					   :argument (mk-application (materialize-adt-map fun)
+ 						       var))))
+ 			  (mk-selection in-expr (list bd) sel-expr)))
+ 	      funs (types te)))
+@@ -4335,9 +4355,9 @@ generated")
+ 		(funs (acc-reduce-sel-acts acts (actuals (find-supertype fte))
+ 					   fname red adt)))
+ 	   (if (every #'identity-fun? funs)
+-	       (mk-identity-fun te)
+-	       (mk-application* '|map| funs))))
+-	(t (mk-identity-fun fte))))
++	       (defer-identity-fun te)
++	       (apply-adt-maps '|map| funs))))
++	(t (defer-identity-fun fte))))
+ 
+ (defmethod acc-reduce-selection* ((te datatype-subtype) red fname fdom adt)
+   (acc-reduce-selection* (declared-type te) red fname fdom adt))
+@@ -4350,7 +4370,7 @@ generated")
+ 	     (nfun (acc-reduce-selection*
+ 		    (domain (supertype te)) red fname nfdom adt)))
+ 	(if (identity-fun? nfun)
+-	    (mk-identity-fun te)
++	    (defer-identity-fun te)
+ 	    (mk-application '|image| nfun)))
+       (acc-reduce-selection* (find-supertype te) red fname
+ 			     (find-declared-adt-supertype fdom) adt)))
+@@ -4372,7 +4392,7 @@ generated")
+ 		   (range fdom))
+ 	       adt)))
+     (cond ((identity-fun? fun)
+-	   (mk-identity-fun fdom))
++	   (defer-identity-fun fdom))
+ 	  ((sequence? te)
+ 	   (mk-application '|map|
+ 	     red))
+@@ -4399,7 +4419,7 @@ generated")
+ 		(fields te) (fields fdom) rvar red fname fdom adt
+ 		(dependent? te) (dependent? fdom))))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun fdom)
++	(defer-identity-fun fdom)
+ 	(mk-lambda-expr (list rbd)
+ 	  (mk-record-expr
+ 	   (mapcar #'(lambda (fd fun)
+@@ -4421,7 +4441,7 @@ generated")
+ 	 (funs (acc-reduce-selection-types
+ 		(types te) (types fdom) tvar red fname adt)))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-tuple-expr
+ 	   (let ((num 0))
+@@ -4446,7 +4466,7 @@ generated")
+ 	 (funs (acc-reduce-selection-types
+ 		(types te) (types fdom) tvar red fname adt)))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-cases-expr tvar
+ 	    (let ((num 0)
+@@ -4462,7 +4482,7 @@ generated")
+ 					     :id (makesym "IN_~d" num)
+ 					     :actuals (list (mk-actual fdom))
+ 					     :index num
+-					     :argument (mk-application fun var))))
++					     :argument (mk-application (materialize-adt-map fun) var))))
+ 			    (mk-selection in-expr (list bd) sel-expr)))
+ 		funs (types te)))
+ 	    nil)))))
+@@ -4495,7 +4515,7 @@ generated")
+ 
+ (defmethod acc-reduce-selection* ((te type-expr) red fname fdom adt)
+   (declare (ignore red fname fdom adt))
+-  (mk-identity-fun te))
++  (defer-identity-fun te))
+ 
+ 
+ (defun gen-adt-reduce-funtype (c bindings rtype adt adttype thinst strong?)
+@@ -5439,9 +5459,7 @@ function, tuple, or record type")
+        (eq (declaration (expression expr)) (declaration *false*))))
+ 
+ (defun mk-identity-fun (te)
+-  (let ((act (mk-actual te)))
+-    (pc-parse (unparse (mk-name-expr '|id| (list act)) :string t)
+-	      'expr)))
++  (materialize-adt-map (defer-identity-fun te)))
+ 
+ (defmethod identity-fun? (expr)
+   (declare (ignore expr))
+@@ -5465,7 +5483,7 @@ function, tuple, or record type")
+ 
+ (defmethod mk-map-application ((te type-name) fpairs adt maps)
+   (if (eq (adt te) adt)
+-      (mk-application* '|map| maps)
++      (apply-adt-maps '|map| maps)
+       (let* ((acts (raise-actuals (actuals (module-instance te))))
+ 	     (macts (raise-actuals (subst-map-actuals (positive-actuals te) fpairs)))
+ 	     (dacts (raise-actuals (dactuals (module-instance te))))
+@@ -5473,11 +5491,11 @@ function, tuple, or record type")
+ 	     (name (mk-name-expr '|map| (append acts macts))))
+ 	(setf (dactuals name) (append dacts dmacts))
+ 	(let ((pname (pc-parse (unparse name :string t) 'expr)))
+-	  (mk-application* pname maps)))))
++	  (apply-adt-maps pname maps)))))
+ 
+ (defmethod mk-map-application ((te funtype) fpairs adt maps)
+   (declare (ignore fpairs adt))
+-  (mk-application* '|map| maps))
++  (apply-adt-maps '|map| maps))
+ 
+ (defmethod mk-map-application ((te datatype-subtype) fpairs adt maps)
+   (mk-map-application (declared-type te) fpairs adt maps))

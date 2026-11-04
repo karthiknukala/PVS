@@ -1,0 +1,64 @@
+Subject: [20] Release stale fetch references and recreate discarded buffers
+
+Measurement: About 1 MB less retained after GC. 756 KiB fixture; startup buffer recreation has no separate timing.
+
+diff --git a/src/store-object.lisp b/src/store-object.lisp
+index 8e9702b..9c7c5c4 100644
+--- a/src/store-object.lisp
++++ b/src/store-object.lisp
+@@ -273,20 +273,24 @@
+ 			(object-store start))
+     (fill *fetch-object-table* *fetch-object-not-present*
+ 	  :end (object-store start))
+-    (prog1
+-	(fetch-obj (1+ start))
+-      (block loop
+-	(loop
+-	 (when (= *fetch-object-update-end* 0)
+-	   (return-from loop nil))
+-	 (decf *fetch-object-update-end*)
+-	 (let ((*fetch-object-ptr* (svref *fetch-object-update-ptr*
+-					  *fetch-object-update-end*)))
+-	   (update-fetched (svref *fetch-object-update-obj*
+-				  *fetch-object-update-end*))))))))
++    (unwind-protect
++         (prog1 (fetch-obj (1+ start))
++           (loop while (plusp *fetch-object-update-end*)
++                 do (let* ((i (decf *fetch-object-update-end*))
++                           (*fetch-object-ptr* (svref *fetch-object-update-ptr* i))
++                           (obj (svref *fetch-object-update-obj* i)))
++                      ;; Updates may immediately reuse this stack slot.
++                      (setf (svref *fetch-object-update-obj* i) nil)
++                      (update-fetched obj))))
++      (fill *fetch-object-table* nil :end (object-store start))
++      (fill *fetch-object-update-obj* nil :end *fetch-object-update-end*))))
++
+ 
+ #+(or allegro cmu sbcl)
+ (defun fetch-object-from-file (file)
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
+   (with-open-file (f file :direction :input
+                      :element-type #+sbcl '(unsigned-byte 8) #-sbcl '(unsigned-byte 32))
+     ;; SBCL's word streams decode one element at a time. Its octet reader
+@@ -326,6 +330,9 @@
+ 
+ #+lucid
+ (defun fetch-object-from-file (file)
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
+   (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+     (setf (object-store 0) (read-byte f))
+     (ensure-vector-size *store-object-store* *store-object-store-size*
+@@ -335,6 +342,9 @@
+ 
+ #+gcl
+ (defun fetch-object-from-file (file)
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
+   (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+     (setf (object-store 0) (read-byte f))
+     (ensure-vector-size *store-object-store* *store-object-store-size*

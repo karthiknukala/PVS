@@ -1,0 +1,42 @@
+Subject: [02] Scope the `mapobject` visited table to each AST walk, after the lexer change
+
+Measurement: 43.49 → 18.19 s. Fresh tables raised allocation from 4.93 to 5.79 GB. In a separate pair, reusing tables of at most 512 slots reduced 5.80 to 5.02 GB at essentially the same time (16.33 → 16.43 s).
+
+diff --git a/src/gensubst.lisp b/src/gensubst.lisp
+index dcd4b91..2322b0b 100644
+--- a/src/gensubst.lisp
++++ b/src/gensubst.lisp
+@@ -806,10 +806,16 @@ behavior:
+ 
+ (defvar *mapobject-infix* nil)
+ 
++(defvar *spare-mapobject-cache*)
++;; Bound during typechecking. Each nested walk must own its visited set.
+ (defun mapobject (fn obj)
+-  (unwind-protect
+-      (mapobject* fn obj)
+-    (clrhash *mapobject-cache*))
++  (let* ((reuse? (boundp '*spare-mapobject-cache*))
++         (*mapobject-cache* (or (and reuse? (shiftf *spare-mapobject-cache* nil))
++                                (make-hash-table :test #'eq :size 37))))
++    (unwind-protect (mapobject* fn obj)
++      (when (and reuse? (null *spare-mapobject-cache*)
++                 (<= (hash-table-size *mapobject-cache*) 512))
++        (setf *spare-mapobject-cache* (clrhash *mapobject-cache*)))))
+   obj)
+ 
+ (defmethod mapobject* :around (fn obj)
+diff --git a/src/pvs.lisp b/src/pvs.lisp
+index 04cfc79..a9c838e 100644
+--- a/src/pvs.lisp
++++ b/src/pvs.lisp
+@@ -1905,7 +1905,8 @@ Needs to pay attention to sections."
+ 		(pvs-message "Deleted file ~a" sname))))))))
+ 
+ (defun typecheck-theories (pathname theories)
+-  (let* ((specpath (make-specpath pathname))
++  (let* ((*spare-mapobject-cache* nil)
++         (specpath (make-specpath pathname))
+ 	 (filename (pvs-filename specpath))
+ 	 (sorted-theories (sort-theories theories)))
+     ;; (check-import-circularities sorted-theories)

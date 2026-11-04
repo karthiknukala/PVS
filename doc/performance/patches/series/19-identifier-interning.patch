@@ -1,0 +1,111 @@
+Subject: [19] Avoid interning uppercase identifiers
+
+Measurement: 6,000 → 0 extra symbols. 3,000 mixed-case identifiers, across two packages.
+
+diff --git a/src/ergo-runtime-fixes.lisp b/src/ergo-runtime-fixes.lisp
+index fc5d213..22be6a3 100644
+--- a/src/ergo-runtime-fixes.lisp
++++ b/src/ergo-runtime-fixes.lisp
+@@ -199,21 +199,21 @@
+ 		     ((eq (lexical-character-syntax readtable char) :alphabetic)
+ 		      (let ((a (alpha-lexer self (lexical-read-char self nil))))
+ 			(if (and (symbolp a)
+-				 (member (intern (string-upcase a) :sbst)
++				 (member (find-symbol (string-upcase a) :sbst)
+ 					 '(sbst::TYPE
+ 					   sbst::CONVERSION
+ 					   sbst::AUTO_REWRITE)
+ 					 :test #'eq))
+ 			    (let ((nch (lexical-read-char self nil)))
+ 			      (cond ((and nch (char= nch #\+))
+-				     (case (intern (string-upcase a) :sbst)
++				     (case (find-symbol (string-upcase a) :sbst)
+ 				       (sbst::TYPE 'sbst::TYPE+)
+ 				       (sbst::CONVERSION 'sbst::CONVERSION+)
+ 				       (sbst::AUTO_REWRITE 'sbst::AUTO_REWRITE+)
+ 				       (t (lexical-unread-char self)
+ 					  a)))
+ 				    ((and nch (char= nch #\-))
+-				     (case (intern (string-upcase a) :sbst)
++				     (case (find-symbol (string-upcase a) :sbst)
+ 				       (sbst::CONVERSION 'sbst::CONVERSION-)
+ 				       (sbst::AUTO_REWRITE 'sbst::AUTO_REWRITE-)
+ 				       (t (lexical-unread-char self)
+diff --git a/src/parse.lisp b/src/parse.lisp
+index 92994e9..39c9d35 100644
+--- a/src/parse.lisp
++++ b/src/parse.lisp
+@@ -2045,43 +2045,23 @@ char-exprs"
+ 	   (xt-typed-name expr name type pred))
+ 	  ((typep name '(or number-expr decimal))
+ 	   name)
+-	  (t (let ((upid (intern (string-upcase (format nil "~a" (id name))) :pvs)))
+-	       (multiple-value-bind (prindex prkind)
+-		   (projection? upid)
+-		 (if prindex
+-		     (cond ;;((actuals name)
+-		       ;;(parse-error expr "Projection may not have actuals"))
+-		       ((mod-id name)
+-			(parse-error expr "Projection may not have a theory id"))
+-		       ((library name)
+-			(parse-error expr "Projection may not have a library id"))
+-		       ((zerop prindex)
+-			(parse-error expr "Projection index may not be zero"))
+-		       (t (case prkind
+-			    (proj (make-instance 'projection-expr
+-				    :id upid
+-				    :actuals (actuals name)
+-				    :index prindex
+-				    :place (term-place expr)))
+-			    (in (make-instance 'injection-expr
+-				  :id upid
+-				  :actuals (actuals name)
+-				  :index prindex
+-				  :place (term-place expr)))
+-			    (in? (make-instance 'injection?-expr
+-				   :id upid
+-				   :actuals (actuals name)
+-				   :index prindex
+-				   :place (term-place expr)))
+-			    (out (make-instance 'extraction-expr
+-				   :id upid
+-				   :actuals (actuals name)
+-				   :index prindex
+-				   :place (term-place expr)))
+-			    (t (error "problem in xt-name-expr")))))
+-		     (progn (change-class name 'name-expr)
+-			    (setf (place name) (term-place expr))
+-			    name))))))))
++	  (t (multiple-value-bind (index kind) (projection? (id name))
++       (cond ((null index)
++              (change-class name 'name-expr)
++              (setf (place name) (term-place expr))
++              name)
++             ((mod-id name) (parse-error expr "Projection may not have a theory id"))
++             ((library name) (parse-error expr "Projection may not have a library id"))
++             ((zerop index) (parse-error expr "Projection index may not be zero"))
++             (t (make-instance (ecase kind
++                                 (proj 'projection-expr)
++                                 (in 'injection-expr)
++                                 (in? 'injection?-expr)
++                                 (out 'extraction-expr))
++                  :id (intern (string-upcase (id name)) :pvs)
++                  :actuals (actuals name)
++                  :index index
++                  :place (term-place expr)))))))))
+ 
+ (defun xt-typed-name (expr name type pred)
+   (unless *allowed-typed-names*
+diff --git a/src/pvs-parser-runtime-fixes.lisp b/src/pvs-parser-runtime-fixes.lisp
+index 480b360..be847f2 100644
+--- a/src/pvs-parser-runtime-fixes.lisp
++++ b/src/pvs-parser-runtime-fixes.lisp
+@@ -189,7 +189,7 @@
+ 	   (values 'sbst::!string! token place comment))
+ 	  ;; SO - don't care about case for keywords
+ 	  ;; At some point should add another case-sensitivity option.
+-	  ((or (gethash (intern (string-upcase token) :sbst) *keyword-table*)
++	  ((or (gethash (find-symbol (string-upcase token) :sbst) *keyword-table*)
+ 	       (string= token "λ"))
+ 	   (let* ((upstr (if (member token '(|λ|) :test #'string=)
+ 			     (string token)

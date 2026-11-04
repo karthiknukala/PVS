@@ -1,0 +1,45 @@
+Subject: [13] Lazy ASDF registry setup, one prelude path resolution, and less launcher overhead, raw startup
+
+Measurement: 165 → 145 ms. Combined result, 25 launches per image. There is no separate end-to-end number for each launcher edit.
+The prelude-directory hoist used in this measurement is in patch 05.
+
+diff --git a/pvs.in b/pvs.in
+index 9d6a051..787e693 100755
+--- a/pvs.in
++++ b/pvs.in
+@@ -290,9 +290,9 @@ case $opsys in
+ 		 esac
+ 		 [ -n "${DISPLAY}" ] || nowin=1
+ 		 ;;
+-  Darwin) case `uname -p` in
++  Darwin) PVSARCH=`uname -p`
++	  case $PVSARCH in
+ 	    i*86) PVSARCH=ix86;;
+-	    *)    PVSARCH=`uname -p`;;
+ 	  esac
+           opsys=MacOSX
+ 	  export LC_ALL="en_US.UTF-8"
+@@ -414,7 +414,7 @@ fi
+ # Now run pvs, either through Emacs or the raw PVS image
+ # emacsargs is the arguments not otherwise hendled while processing the command line args
+ if [ -n "${rawmode}" ] # No Emacs involved - PVSEMACS is not set
+-then "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
++then exec "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
+ elif [ -n "${batch}" ] # Emacs, but no windows
+ then ${PVSEMACS} ${batch} ${dotemacs} ${pvsemacsinit} ${emacsargs} ${otherargs} 2>&1
+ elif [ -n "${nowin}" ]
+diff --git a/src/pvs.lisp b/src/pvs.lisp
+index 3257fc8..66ab00b 100644
+--- a/src/pvs.lisp
++++ b/src/pvs.lisp
+@@ -99,8 +99,8 @@
+   (ignore-errors
+     (setf uiop/configuration:*user-cache*
+           (uiop/configuration::compute-user-cache)))
+-  (asdf/source-registry:initialize-source-registry)
+-  (asdf/output-translations:initialize-output-translations)
++  ;; ASDF discovers systems and output translations on first use. Most
++  ;; sessions use only the systems already loaded into the saved image.
+   (setq *pvs-path* (initial-pvs-path path)
+         *pvs-prelude-directory-cache* nil)
+   (reset-pvs-log-directory)

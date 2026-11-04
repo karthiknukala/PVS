@@ -1,0 +1,80 @@
+Subject: [08] Track objects on the active binary-restore path by identity, cached CHERI load
+
+Measurement: 6.37 → 3.37 s. 1.63 → 1.54 GB. Live heap growth after GC was about 345 MB in both arms.
+
+diff --git a/src/save-theories.lisp b/src/save-theories.lisp
+index a38abbc..8618960 100644
+--- a/src/save-theories.lisp
++++ b/src/save-theories.lisp
+@@ -20,7 +20,10 @@
+   (undefmethod update-fetched ((obj mapping-with-formals)))
+   (undefmethod restore-object* ((obj store-print-type))))
+ 
++;; Prelude objects to skip within the current restore scope.
+ (defvar *restore-objects-seen*)
++;; Objects on the current recursion path, before their restored value is known.
++(defvar *active-restore-objects*)
+ 
+ (defvar *restore-object-hash*)
+ 
+@@ -70,6 +73,7 @@ instances, e.g., other declarations within the theory, or self-references."
+ 	       (let* ((theory (cdr vtheory))
+ 		      (*restore-object-hash* (make-hash-table :test #'eq))
+ 		      (*restore-objects-seen* nil)
++		      (*active-restore-objects* (make-hash-table :test #'eq))
+ 		      (*assert-if-arith-hash* (make-hash-table :test #'eq))
+ 		      (*subtype-of-hash* (make-hash-table :test #'equal))
+ 		      (*current-context* (make-new-context
+@@ -1436,7 +1440,8 @@ filled with the symbol 'self-ref, and restore-type-value replaces it with type-d
+ 	   (assert (not (store-print-type? gobj)))
+ 	   gobj)
+ 	  ((null obj) nil)
+-	  ((memq obj *restore-objects-seen*)
++	  ((or (gethash obj *active-restore-objects*)
++	       (memq obj *restore-objects-seen*))
+ ;; 	   (unless (or (listp obj)
+ ;; 		       (def-decl? obj)
+ ;; 		       (and (const-decl? obj) (def-axiom obj))
+@@ -1446,23 +1451,25 @@ filled with the symbol 'self-ref, and restore-type-value replaces it with type-d
+ 	     (assert (not (store-print-type? obj)) ()
+ 		     "Should have been restored already"))
+ 	   obj)
+-	  (t (let* ((*restore-objects-seen* (cons obj *restore-objects-seen*))
+-		    (nobj (if (store-print-type? obj)
+-			      ;; For some reason, call-next-method stops working for
+-			      ;; store-print-type, at least in Allegro
+-			      (progn (break) (restore-store-print-type obj))
+-			      (call-next-method))))
+-	       (when (subtype? nobj)
+-		 (assert (not (store-print-type? (supertype nobj))) ()
+-			 "nobj: call-next-method should have restored supertype"))
+-	       (when (subtype? obj)
+-		 (assert (not (store-print-type? (supertype obj))) ()
+-			 "obj: call-next-method should have restored supertype"))
+-	       (unless (eq obj nobj)
+-		 (setf-restored-object nobj))
+-	       (assert (not (store-print-type? nobj)) ()
+-		       "call-next-method should have restored this")
+-	       (setf (gethash obj *restore-object-hash*) nobj))))))
++	  (t (let ((*restore-objects-seen* *restore-objects-seen*))
++               ;; Prelude exclusions added below this node have local scope.
++               (setf (gethash obj *active-restore-objects*) t)
++               (unwind-protect
++                    (let ((nobj (if (store-print-type? obj)
++                                    (progn (break) (restore-store-print-type obj))
++                                    (call-next-method))))
++                      (when (subtype? nobj)
++                        (assert (not (store-print-type? (supertype nobj))) ()
++                                "nobj: call-next-method should have restored supertype"))
++                      (when (subtype? obj)
++                        (assert (not (store-print-type? (supertype obj))) ()
++                                "obj: call-next-method should have restored supertype"))
++                      (unless (eq obj nobj)
++                        (setf-restored-object nobj))
++                      (assert (not (store-print-type? nobj)) ()
++                              "call-next-method should have restored this")
++                      (setf (gethash obj *restore-object-hash*) nobj))
++                 (remhash obj *active-restore-objects*)))))))
+ 
+ (defmethod setf-restored-object (nobj)
+   (setf-restored-object*

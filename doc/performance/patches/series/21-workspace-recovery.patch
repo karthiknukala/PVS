@@ -1,0 +1,55 @@
+Subject: [21] Initialize library paths before workspace restoration and invalidate missing dependencies
+
+Measurement: No independent timing. Previously failing cached workspace opens successfully.
+
+diff --git a/src/context.lisp b/src/context.lisp
+index 129136d..760a868 100644
+--- a/src/context.lisp
++++ b/src/context.lisp
+@@ -983,19 +983,18 @@ its dependencies."
+ 			     (file-exists-p (make-specpath (ce-file ce))))
+ 	    (pvscontext-entries context)))
+     (dolist (ce (pvscontext-entries context))
+-      (let ((ndeps (remove-if-not #'(lambda (dep)
+-				      (let ((spos (position #\/ dep :from-end t)))
+-					(if spos
+-					    (let ((dir (subseq dep 0 spos))
+-						  (file (subseq dep (1+ spos))))
+-					      (with-workspace dir
+-						(file-exists-p (make-specpath file))))
+-					    (file-exists-p (make-specpath dep)))))
+-		     (ce-dependencies ce))))
+-	(unless (equal ndeps (ce-dependencies ce))
+-	  (pvs-message "PVS context has bad deps: ~a"
+-	    (remove-if #'(lambda (dep) (file-exists-p (make-specpath dep)))
+-	      (ce-dependencies ce)))
++      (let ((missing
++             (remove-if (lambda (dep)
++                          (let ((slash (position #\/ dep :from-end t)))
++                            (if slash
++                                (let ((dir (get-library-path (subseq dep 0 (max 1 slash)))))
++                                  (when dir
++                                    (let ((*default-pathname-defaults* dir))
++                                      (file-exists-p (make-specpath (subseq dep (1+ slash)))))))
++                                (file-exists-p (make-specpath dep)))))
++                        (ce-dependencies ce))))
++        (when missing
++          (pvs-message "PVS context has bad deps: ~a" missing)
+ 	  (setf (ce-dependencies ce) nil)
+ 	  (setf (ce-object-date ce) nil)
+ 	  (setf (ce-theories ce) nil))))
+diff --git a/src/pvs.lisp b/src/pvs.lisp
+index 66ab00b..3e4daa5 100644
+--- a/src/pvs.lisp
++++ b/src/pvs.lisp
+@@ -165,9 +165,9 @@
+ 	  (and fd (intern fd :pvs))))
+   (let ((dp (environment-variable "PVSDEFAULTDP")))
+     (when dp (set-decision-procedure (intern dp :pvs))))
++  (setq *pvs-library-path* (get-pvs-library-path))
+   (unless *workspace-session*
+     (change-workspace *default-pathname-defaults* t t))
+-  (setq *pvs-library-path* (get-pvs-library-path))
+   (unless dont-load-patches
+     (load-pvs-patches))
+   (pvs-init-globals)

@@ -1,0 +1,23 @@
+Subject: [03] Interpret short-lived Lisp strategy forms, five CHERI register proofs
+
+Measurement: 42.15 → 17.37 s. 14.36 → 2.24 GB. The same change took NASALib's 60 `gcd` proofs from 12.97 to 6.72 s and 3.99 to 1.05 GB.
+
+diff --git a/src/prover/eproofcheck.lisp b/src/prover/eproofcheck.lisp
+index 1e28acd..e8018bd 100644
+--- a/src/prover/eproofcheck.lisp
++++ b/src/prover/eproofcheck.lisp
+@@ -1539,7 +1539,13 @@
+ 		     (step-or-rule-defn (car expr))
+ 		     (not (isfun? (car expr))))
+ 		 expr
+-		 (eval expr)))
++		 ;; These strategy forms are usually evaluated only once per branch.
++		 ;; Asking SBCL to compile each one dominates large GRIND replays.
++		 (let (#+sbcl
++		       (sb-ext:*evaluator-mode*
++			#.(if (or (find-package :sb-eval) (find-package :sb-interpreter))
++			      :interpret :compile)))
++		   (eval expr))))
+ 	    (t (if (or (numberp expr)
+ 		       (special-variable-p expr))
+ 		   (eval expr)

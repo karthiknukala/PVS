@@ -1,0 +1,21 @@
+Subject: [18] Fill decoded lists in one pass
+
+Measurement: 57.7 → 3.54 ms. Generated 10,000-entry context; little change on bitvectors and finite_sets.
+
+diff --git a/src/store-object.lisp b/src/store-object.lisp
+index a73ef63..8e9702b 100644
+--- a/src/store-object.lisp
++++ b/src/store-object.lisp
+@@ -573,9 +573,9 @@
+   (cond ((equal obj '(0 . 0))
+ 	 (setf (car obj) (fetch-obj (stored-word 1)))
+ 	 (setf (cdr obj) (fetch-obj (stored-word 2))))
+-	(t (let ((size (stored-word 1)))
+-	     (dotimes (i size)
+-	       (setf (nth i obj) (fetch-obj (stored-word (+ i 2)))))))))
++	(t (loop for cell on obj
++                 for i from 2
++                 do (setf (car cell) (fetch-obj (stored-word i)))))))
+ 
+ #-gcl
+ (defmethod store-object* ((obj package))

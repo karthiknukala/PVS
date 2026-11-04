@@ -1,0 +1,1201 @@
+diff --git a/ess/lang/sb-term/rel/rt-structs.lisp b/ess/lang/sb-term/rel/rt-structs.lisp
+index b5f4bb31..5903f9f1 100644
+--- a/ess/lang/sb-term/rel/rt-structs.lisp
++++ b/ess/lang/sb-term/rel/rt-structs.lisp
+@@ -43,19 +43,22 @@
+ 			     (declare (ignore ps depth))
+ 			     (format stream "<lexical-stream>"))))
+   stream
+-  readtable
++  ;; The grammar assigns syntax to a small subset of all Unicode characters.
++  (readtable (make-hash-table :test 'eql :size 128))
+   stringbuffer)
+ 
++(declaim (inline lexical-character-syntax))
++(defun lexical-character-syntax (readtable character)
++  (gethash character readtable :alphabetic))
++
+ (defun open-lexical-stream (stream &aux result)
+   (setq result (make-lexical-stream :stream stream))
+-  (setf (lexical-stream-readtable result) (make-array `(,char-code-limit)
+-						    :initial-element :alphabetic)
+-	(lexical-stream-stringbuffer result)
++  (setf (lexical-stream-stringbuffer result)
+ 	(make-array '(20) :element-type 'character
+ 		    :adjustable t
+ 		    :fill-pointer t))
+   (dolist (xa '(#\space #\tab #\newline #\page))
+-    (setf (elt (lexical-stream-readtable result) (char-code xa)) nil))
++    (setf (gethash xa (lexical-stream-readtable result)) nil))
+   (lexical-make-macro result #\" #'string-lexer)
+   result)
+ 
+@@ -80,13 +83,13 @@
+    (loop
+     (setq char (lexical-read-char self :eof))
+     (when (or (equal char :eof)
+-	      (not (null (elt readtable (char-code char)))))
++	      (not (null (lexical-character-syntax readtable char))))
+       (return)))
+    (lexical-unread-char self)
+    (setq place (curplace (lexical-stream-stream self))
+ 	 char (multiple-value-list
+ 	       (cond ((equal char :eof) eofval)
+-		     ((equal (elt readtable (char-code char)) :alphabetic)
++		     ((equal (lexical-character-syntax readtable char) :alphabetic)
+ 		      (alpha-lexer self (lexical-read-char self nil)))
+ 		     ((is-lexical-escape? self char)
+ 		      (lexical-read-char self nil)
+@@ -94,7 +97,7 @@
+ 			(if (equal char :eof)
+ 			    eofval
+ 			    (alpha-lexer self char))))
+-		     (t (funcall (elt readtable (char-code char))
++		     (t (funcall (lexical-character-syntax readtable char)
+ 				 self
+ 				 (lexical-read-char self nil))))))
+    (when char (return)))
+@@ -114,8 +117,8 @@
+ 	  (return))
+ 	 ((is-lexical-escape? stream char)
+ 	  (setq char (lexical-read-char stream :eof)))
+-	 ((not (member (elt (lexical-stream-readtable stream)
+-			    (char-code char)) '(:alphabetic :number)))
++	 ((not (member (lexical-character-syntax (lexical-stream-readtable stream) char)
++		       '(:alphabetic :number)))
+ 	  (return)))
+    (if (not (equal char :eof))
+        (vector-push-extend char buffer)))
+@@ -181,15 +184,15 @@
+ ;;; readtable built into the given lexical stream.  Only terminating
+ ;;; macro characters may be defined.
+ (defun lexical-make-macro (self char function)
+-  (setf (elt (lexical-stream-readtable self) (char-code char)) function))
++  (setf (gethash char (lexical-stream-readtable self)) function))
+ 
+ ;;; Define an escape character for a lexical stream, like "\" is for the
+ ;;; standard readtable.  Not really implemented yet.
+ ;;;  ... and now more implemented. 
+ (defun lexical-make-escape (self char)
+-  (setf (elt (lexical-stream-readtable self) (char-code char)) :escape))
++  (setf (gethash char (lexical-stream-readtable self)) :escape))
+ (defun is-lexical-escape? (self char)
+-  (eq :escape (elt (lexical-stream-readtable self) (char-code char))))
++  (eq :escape (lexical-character-syntax (lexical-stream-readtable self) char)))
+ 
+ ;;; A place in a line.
+ (defstruct (place (:print-function place-printer))
+diff --git a/pvs.in b/pvs.in
+index 9d6a0511..787e6938 100755
+--- a/pvs.in
++++ b/pvs.in
+@@ -290,9 +290,9 @@ case $opsys in
+ 		 esac
+ 		 [ -n "${DISPLAY}" ] || nowin=1
+ 		 ;;
+-  Darwin) case `uname -p` in
++  Darwin) PVSARCH=`uname -p`
++	  case $PVSARCH in
+ 	    i*86) PVSARCH=ix86;;
+-	    *)    PVSARCH=`uname -p`;;
+ 	  esac
+           opsys=MacOSX
+ 	  export LC_ALL="en_US.UTF-8"
+@@ -414,7 +414,7 @@ fi
+ # Now run pvs, either through Emacs or the raw PVS image
+ # emacsargs is the arguments not otherwise hendled while processing the command line args
+ if [ -n "${rawmode}" ] # No Emacs involved - PVSEMACS is not set
+-then "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
++then exec "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
+ elif [ -n "${batch}" ] # Emacs, but no windows
+ then ${PVSEMACS} ${batch} ${dotemacs} ${pvsemacsinit} ${emacsargs} ${otherargs} 2>&1
+ elif [ -n "${nowin}" ]
+diff --git a/src/PVSio/pvs-lib.lisp b/src/PVSio/pvs-lib.lisp
+index 37e202d1..671439e3 100644
+--- a/src/PVSio/pvs-lib.lisp
++++ b/src/PVSio/pvs-lib.lisp
+@@ -155,15 +155,20 @@ using probe-file, make-pathname or merge-pathnames."
+     (not (gethash source *pvsio-loaded-files*))))
+ 
+ (defun purge-pvsio-attachments ()
+-  "Remove attachments that are outdated because the theory has been re-typechecked
+-since they were loaded."
+-  (maphash #'(lambda (key attach)
+-	       (let ((theory (extra-get-theory (attachment-theo-qid attach))))
+-		 (when (or (attachment-source-not-found (attachment-source attach))
+-			   (not theory)
+-			   (< (attachment-tc-time attach) (typecheck-time theory)))
+-                   (remhash key *pvsio-attachments*))))
+-             *pvsio-attachments*))
++  "Remove attachments missing their source or theory, or predating the current typecheck."
++  (let ((theories (make-hash-table :test 'equal)))
++    (maphash
++     (lambda (key attach)
++       (let ((qid (attachment-theo-qid attach)))
++         (multiple-value-bind (theory found) (gethash qid theories)
++           (unless found
++             (setf theory (extra-get-theory qid)
++                   (gethash qid theories) theory))
++           (when (or (attachment-source-not-found (attachment-source attach))
++                     (not theory)
++                     (< (attachment-tc-time attach) (typecheck-time theory)))
++             (remhash key *pvsio-attachments*)))))
++     *pvsio-attachments*)))
+ 
+ 
+ (defun all-imported-paths ()
+diff --git a/src/context.lisp b/src/context.lisp
+index 129136d6..760a868f 100644
+--- a/src/context.lisp
++++ b/src/context.lisp
+@@ -983,19 +983,18 @@ its dependencies."
+ 			     (file-exists-p (make-specpath (ce-file ce))))
+ 	    (pvscontext-entries context)))
+     (dolist (ce (pvscontext-entries context))
+-      (let ((ndeps (remove-if-not #'(lambda (dep)
+-				      (let ((spos (position #\/ dep :from-end t)))
+-					(if spos
+-					    (let ((dir (subseq dep 0 spos))
+-						  (file (subseq dep (1+ spos))))
+-					      (with-workspace dir
+-						(file-exists-p (make-specpath file))))
+-					    (file-exists-p (make-specpath dep)))))
+-		     (ce-dependencies ce))))
+-	(unless (equal ndeps (ce-dependencies ce))
+-	  (pvs-message "PVS context has bad deps: ~a"
+-	    (remove-if #'(lambda (dep) (file-exists-p (make-specpath dep)))
+-	      (ce-dependencies ce)))
++      (let ((missing
++             (remove-if (lambda (dep)
++                          (let ((slash (position #\/ dep :from-end t)))
++                            (if slash
++                                (let ((dir (get-library-path (subseq dep 0 (max 1 slash)))))
++                                  (when dir
++                                    (let ((*default-pathname-defaults* dir))
++                                      (file-exists-p (make-specpath (subseq dep (1+ slash)))))))
++                                (file-exists-p (make-specpath dep)))))
++                        (ce-dependencies ce))))
++        (when missing
++          (pvs-message "PVS context has bad deps: ~a" missing)
+ 	  (setf (ce-dependencies ce) nil)
+ 	  (setf (ce-object-date ce) nil)
+ 	  (setf (ce-theories ce) nil))))
+diff --git a/src/datatype.lisp b/src/datatype.lisp
+index a77cd4f8..9e485416 100644
+--- a/src/datatype.lisp
++++ b/src/datatype.lisp
+@@ -3129,6 +3129,26 @@ generated")
+ ;;       :type-value ntype
+ ;;       :expr nexpr)))
+ 
++;; Most identity maps are discarded by their parent selection. Save the
++;; spelling in the current unparse context and parse only maps used in terms.
++(defstruct (deferred-identity-fun (:constructor make-deferred-identity-fun (source)))
++  source)
++
++(defun defer-identity-fun (te)
++  (make-deferred-identity-fun
++   (unparse (mk-name-expr '|id| (list (mk-actual te))) :string t)))
++
++(defun materialize-adt-map (map)
++  (if (deferred-identity-fun-p map)
++      (pc-parse (deferred-identity-fun-source map) 'expr)
++      map))
++
++(defmethod identity-fun? ((expr deferred-identity-fun))
++  t)
++
++(defun apply-adt-maps (operator maps)
++  (mk-application* operator (mapcar #'materialize-adt-map maps)))
++
+ (defmethod acc-map-selection (arg (te type-name) pvars ptypes fpairs
+ 				  adt adtinst curried?)
+   (cond ((member te ptypes :test #'corresponding-formals)
+@@ -3309,7 +3329,7 @@ generated")
+ 					   :actuals (subst-map-actuals
+ 						     (list (mk-actual te))
+ 						     fpairs)
+-					   :argument (mk-application map
++					   :argument (mk-application (materialize-adt-map map)
+ 						       var))))
+ 			  (mk-selection in-expr (list bd) sel-expr)))
+ 	      maps (types te)))
+@@ -3333,9 +3353,9 @@ generated")
+ 						     pvars ptypes fpairs adt adtinst))
+ 			     (positive-actuals te))))
+ 	   (if (every #'identity-fun? maps)
+-	       (mk-identity-fun te)
++	       (defer-identity-fun te)
+ 	       (mk-map-application te fpairs adt maps))))
+-	(t (mk-identity-fun te))))
++	(t (defer-identity-fun te))))
+ 
+ (defmethod acc-map-selection* ((te datatype-subtype) pvars ptypes fpairs
+ 			       adt adtinst)
+@@ -3346,7 +3366,7 @@ generated")
+       (let ((map (acc-map-selection* (domain (supertype te))
+ 				     pvars ptypes fpairs adt adtinst)))
+ 	(if (identity-fun? map)
+-	    (mk-identity-fun te)
++	    (defer-identity-fun te)
+ 	    (mk-application '|image| map)))
+       (acc-map-selection* (supertype te) pvars ptypes fpairs adt adtinst)))
+ 
+@@ -3363,7 +3383,7 @@ generated")
+ 		   (range te))
+ 	       pvars ptypes fpairs adt adtinst)))
+     (cond ((identity-fun? map)
+-	   (mk-identity-fun te))
++	   (defer-identity-fun te))
+ 	  ((sequence? te)
+ 	   (mk-map-application te fpairs adt (list map)))
+ 	  (t
+@@ -3387,7 +3407,7 @@ generated")
+ 	 (maps (acc-map-selection-fields
+ 		(fields te) rvar pvars ptypes fpairs adt adtinst (dependent? te))))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list rbd)
+ 	  (mk-record-expr
+ 	   (mapcar #'(lambda (fd map)
+@@ -3409,7 +3429,7 @@ generated")
+ 	 (maps (acc-map-selection-types
+ 		(types te) tvar pvars ptypes fpairs adt adtinst)))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-tuple-expr
+ 	   (let ((num 0))
+@@ -3434,7 +3454,7 @@ generated")
+ 	 (maps (acc-map-selection-types
+ 		(types te) tvar pvars ptypes fpairs adt adtinst)))
+     (if (every #'identity-fun? maps)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-cases-expr tvar
+ 	    (let ((num 0)
+@@ -3452,7 +3472,7 @@ generated")
+ 					     :actuals (subst-map-actuals
+ 						       (list (mk-actual te))
+ 						       fpairs)
+-					     :argument (mk-application map
++					     :argument (mk-application (materialize-adt-map map)
+ 							 var))))
+ 			    (mk-selection in-expr (list bd) sel-expr)))
+ 		maps (types te)))
+@@ -3478,7 +3498,7 @@ generated")
+ 
+ (defmethod acc-map-selection* ((te type-expr) pvars ptypes fpairs adt adtinst)
+   (declare (ignore pvars ptypes fpairs adt adtinst))
+-  (mk-identity-fun te))
++  (defer-identity-fun te))
+ 
+ ;(defmethod acc-map-selection (arg (te tupletype) pvars ptypes adt)
+ ;  (labels ((map-tup (types i forms)
+@@ -4167,13 +4187,13 @@ generated")
+ 				     (id (module-instance te)))))
+ 		     (setf (dactuals appname) (append (dactuals te) dfacts))
+ 		     (let ((pname (pc-parse (unparse appname :string t) 'expr)))
+-		       (mk-application (mk-application* pname dfuns)
++		       (mk-application (apply-adt-maps pname dfuns)
+ 			 (copy arg)))))
+ 	       (if (every #'identity-fun? dfuns)
+ 		   (let* ((appname (mk-name-expr '|map|
+ 				     (append (actuals te) facts)))
+ 			  (pname (pc-parse (unparse appname :string t) 'expr)))
+-		     (mk-application (mk-application* pname funs)
++		     (mk-application (apply-adt-maps pname funs)
+ 		       (copy arg)))
+ 		   (break "acc-reduce-selection (type-name): have both actuals and dactuals")))))
+ 	(t (copy arg))))
+@@ -4315,7 +4335,7 @@ generated")
+ 					   :id (makesym "IN_~d" num)
+ 					   :index num
+ 					   :actuals (list (mk-actual fdom))
+-					   :argument (mk-application fun
++					   :argument (mk-application (materialize-adt-map fun)
+ 						       var))))
+ 			  (mk-selection in-expr (list bd) sel-expr)))
+ 	      funs (types te)))
+@@ -4335,9 +4355,9 @@ generated")
+ 		(funs (acc-reduce-sel-acts acts (actuals (find-supertype fte))
+ 					   fname red adt)))
+ 	   (if (every #'identity-fun? funs)
+-	       (mk-identity-fun te)
+-	       (mk-application* '|map| funs))))
+-	(t (mk-identity-fun fte))))
++	       (defer-identity-fun te)
++	       (apply-adt-maps '|map| funs))))
++	(t (defer-identity-fun fte))))
+ 
+ (defmethod acc-reduce-selection* ((te datatype-subtype) red fname fdom adt)
+   (acc-reduce-selection* (declared-type te) red fname fdom adt))
+@@ -4350,7 +4370,7 @@ generated")
+ 	     (nfun (acc-reduce-selection*
+ 		    (domain (supertype te)) red fname nfdom adt)))
+ 	(if (identity-fun? nfun)
+-	    (mk-identity-fun te)
++	    (defer-identity-fun te)
+ 	    (mk-application '|image| nfun)))
+       (acc-reduce-selection* (find-supertype te) red fname
+ 			     (find-declared-adt-supertype fdom) adt)))
+@@ -4372,7 +4392,7 @@ generated")
+ 		   (range fdom))
+ 	       adt)))
+     (cond ((identity-fun? fun)
+-	   (mk-identity-fun fdom))
++	   (defer-identity-fun fdom))
+ 	  ((sequence? te)
+ 	   (mk-application '|map|
+ 	     red))
+@@ -4399,7 +4419,7 @@ generated")
+ 		(fields te) (fields fdom) rvar red fname fdom adt
+ 		(dependent? te) (dependent? fdom))))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun fdom)
++	(defer-identity-fun fdom)
+ 	(mk-lambda-expr (list rbd)
+ 	  (mk-record-expr
+ 	   (mapcar #'(lambda (fd fun)
+@@ -4421,7 +4441,7 @@ generated")
+ 	 (funs (acc-reduce-selection-types
+ 		(types te) (types fdom) tvar red fname adt)))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-tuple-expr
+ 	   (let ((num 0))
+@@ -4446,7 +4466,7 @@ generated")
+ 	 (funs (acc-reduce-selection-types
+ 		(types te) (types fdom) tvar red fname adt)))
+     (if (every #'identity-fun? funs)
+-	(mk-identity-fun te)
++	(defer-identity-fun te)
+ 	(mk-lambda-expr (list tbd)
+ 	  (mk-cases-expr tvar
+ 	    (let ((num 0)
+@@ -4462,7 +4482,7 @@ generated")
+ 					     :id (makesym "IN_~d" num)
+ 					     :actuals (list (mk-actual fdom))
+ 					     :index num
+-					     :argument (mk-application fun var))))
++					     :argument (mk-application (materialize-adt-map fun) var))))
+ 			    (mk-selection in-expr (list bd) sel-expr)))
+ 		funs (types te)))
+ 	    nil)))))
+@@ -4495,7 +4515,7 @@ generated")
+ 
+ (defmethod acc-reduce-selection* ((te type-expr) red fname fdom adt)
+   (declare (ignore red fname fdom adt))
+-  (mk-identity-fun te))
++  (defer-identity-fun te))
+ 
+ 
+ (defun gen-adt-reduce-funtype (c bindings rtype adt adttype thinst strong?)
+@@ -5439,9 +5459,7 @@ function, tuple, or record type")
+        (eq (declaration (expression expr)) (declaration *false*))))
+ 
+ (defun mk-identity-fun (te)
+-  (let ((act (mk-actual te)))
+-    (pc-parse (unparse (mk-name-expr '|id| (list act)) :string t)
+-	      'expr)))
++  (materialize-adt-map (defer-identity-fun te)))
+ 
+ (defmethod identity-fun? (expr)
+   (declare (ignore expr))
+@@ -5465,7 +5483,7 @@ function, tuple, or record type")
+ 
+ (defmethod mk-map-application ((te type-name) fpairs adt maps)
+   (if (eq (adt te) adt)
+-      (mk-application* '|map| maps)
++      (apply-adt-maps '|map| maps)
+       (let* ((acts (raise-actuals (actuals (module-instance te))))
+ 	     (macts (raise-actuals (subst-map-actuals (positive-actuals te) fpairs)))
+ 	     (dacts (raise-actuals (dactuals (module-instance te))))
+@@ -5473,11 +5491,11 @@ function, tuple, or record type")
+ 	     (name (mk-name-expr '|map| (append acts macts))))
+ 	(setf (dactuals name) (append dacts dmacts))
+ 	(let ((pname (pc-parse (unparse name :string t) 'expr)))
+-	  (mk-application* pname maps)))))
++	  (apply-adt-maps pname maps)))))
+ 
+ (defmethod mk-map-application ((te funtype) fpairs adt maps)
+   (declare (ignore fpairs adt))
+-  (mk-application* '|map| maps))
++  (apply-adt-maps '|map| maps))
+ 
+ (defmethod mk-map-application ((te datatype-subtype) fpairs adt maps)
+   (mk-map-application (declared-type te) fpairs adt maps))
+diff --git a/src/ergo-runtime-fixes.lisp b/src/ergo-runtime-fixes.lisp
+index cedcf725..22be6a33 100644
+--- a/src/ergo-runtime-fixes.lisp
++++ b/src/ergo-runtime-fixes.lisp
+@@ -189,31 +189,31 @@
+ 	(setq char *holding-char*)
+ 	(setq char (lexical-read-char self :eof)))
+     (when (or (equal char :eof)
+-	      (not (null (elt readtable (char-code char)))))
++	      (not (null (lexical-character-syntax readtable char))))
+       (return)))
+    (unless *holding-char*
+      (lexical-unread-char self))
+    (setq place (curplace (lexical-stream-stream self))
+ 	 char (multiple-value-list
+ 	       (cond ((equal char :eof) eofval)
+-		     ((eq (elt readtable (char-code char)) :alphabetic)
++		     ((eq (lexical-character-syntax readtable char) :alphabetic)
+ 		      (let ((a (alpha-lexer self (lexical-read-char self nil))))
+ 			(if (and (symbolp a)
+-				 (member (intern (string-upcase a) :sbst)
++				 (member (find-symbol (string-upcase a) :sbst)
+ 					 '(sbst::TYPE
+ 					   sbst::CONVERSION
+ 					   sbst::AUTO_REWRITE)
+ 					 :test #'eq))
+ 			    (let ((nch (lexical-read-char self nil)))
+ 			      (cond ((and nch (char= nch #\+))
+-				     (case (intern (string-upcase a) :sbst)
++				     (case (find-symbol (string-upcase a) :sbst)
+ 				       (sbst::TYPE 'sbst::TYPE+)
+ 				       (sbst::CONVERSION 'sbst::CONVERSION+)
+ 				       (sbst::AUTO_REWRITE 'sbst::AUTO_REWRITE+)
+ 				       (t (lexical-unread-char self)
+ 					  a)))
+ 				    ((and nch (char= nch #\-))
+-				     (case (intern (string-upcase a) :sbst)
++				     (case (find-symbol (string-upcase a) :sbst)
+ 				       (sbst::CONVERSION 'sbst::CONVERSION-)
+ 				       (sbst::AUTO_REWRITE 'sbst::AUTO_REWRITE-)
+ 				       (t (lexical-unread-char self)
+@@ -227,7 +227,7 @@
+ 			(if (equal char :eof)
+ 			    eofval
+ 			    (alpha-lexer self char))))
+-		     (t (let ((rtfun (elt readtable (char-code char))))
++		     (t (let ((rtfun (lexical-character-syntax readtable char)))
+ 			  (funcall rtfun
+ 				   self
+ 				   (if *holding-char*
+@@ -247,8 +247,8 @@
+ 	  (return))
+ 	 ((is-lexical-escape? stream char) ;; Never true in PVS
+ 	  (setq char (lexical-read-char stream :eof)))
+-	 ((not (member (elt (lexical-stream-readtable stream)
+-			    (char-code char)) '(:alphabetic :number)))
++	 ((not (member (lexical-character-syntax (lexical-stream-readtable stream) char)
++		       '(:alphabetic :number)))
+ 	  (return)))
+    (if (not (equal char :eof))
+        (vector-push-extend char buffer)))
+@@ -293,14 +293,12 @@
+ 
+ (defun open-lexical-stream (stream &aux result)
+   (setq result (make-lexical-stream :stream stream))
+-  (setf (lexical-stream-readtable result) (make-array `(,char-code-limit)
+-						    :initial-element :alphabetic)
+-	(lexical-stream-stringbuffer result)
++  (setf (lexical-stream-stringbuffer result)
+ 	(make-array '(20) :element-type 'character
+ 		    :adjustable t
+ 		    :fill-pointer t))
+   (dolist (xa '(#\space #\tab #\newline #\page #\return #\^z))
+-    (setf (elt (lexical-stream-readtable result) (char-code xa)) nil))
++    (setf (gethash xa (lexical-stream-readtable result)) nil))
+   (lexical-make-macro result #\" #'string-lexer)
+   result)
+ 
+diff --git a/src/gensubst.lisp b/src/gensubst.lisp
+index dcd4b916..2322b0b4 100644
+--- a/src/gensubst.lisp
++++ b/src/gensubst.lisp
+@@ -806,10 +806,16 @@ behavior:
+ 
+ (defvar *mapobject-infix* nil)
+ 
++(defvar *spare-mapobject-cache*)
++;; Bound during typechecking. Each nested walk must own its visited set.
+ (defun mapobject (fn obj)
+-  (unwind-protect
+-      (mapobject* fn obj)
+-    (clrhash *mapobject-cache*))
++  (let* ((reuse? (boundp '*spare-mapobject-cache*))
++         (*mapobject-cache* (or (and reuse? (shiftf *spare-mapobject-cache* nil))
++                                (make-hash-table :test #'eq :size 37))))
++    (unwind-protect (mapobject* fn obj)
++      (when (and reuse? (null *spare-mapobject-cache*)
++                 (<= (hash-table-size *mapobject-cache*) 512))
++        (setf *spare-mapobject-cache* (clrhash *mapobject-cache*)))))
+   obj)
+ 
+ (defmethod mapobject* :around (fn obj)
+diff --git a/src/globals.lisp b/src/globals.lisp
+index 008f15d1..6078c4da 100644
+--- a/src/globals.lisp
++++ b/src/globals.lisp
+@@ -30,6 +30,9 @@ in util.lisp")
+ 
+ (defvar *pvs-path* nil "Set by make process")
+ 
++(defvar *pvs-prelude-directory-cache* nil
++  "Installation path and canonical prelude directory for the running image.")
++
+ (defvar *pvs-library-path* nil
+   "Set from the PVS_LIBRARY_PATH environment variable + *pvs-path*")
+ 
+diff --git a/src/ground-prover/interface.lisp b/src/ground-prover/interface.lisp
+index 7c3f4b69..5b7a576d 100644
+--- a/src/ground-prover/interface.lisp
++++ b/src/ground-prover/interface.lisp
+@@ -205,7 +205,9 @@
+ 
+ 
+ (defun alphalessp (a b)
+-  (string< (string a) (string b)))
++  ;; Comparing symbol names directly avoids widening them in STRING on SBCL.
++  (string< (if (symbolp a) (symbol-name a) a)
++           (if (symbolp b) (symbol-name b) b)))
+ 
+ ; (defun arithstring (a)
+ ;   (case a
+diff --git a/src/judgements.lisp b/src/judgements.lisp
+index e162ae33..ce0cd280 100644
+--- a/src/judgements.lisp
++++ b/src/judgements.lisp
+@@ -3575,7 +3575,8 @@ Note that the all? arument is only used in the type-constraints* (subtype) metho
+ 
+ (defun subst-theory-inst-from-free-params (th bindings)
+   (when (and bindings (every #'cdr bindings))
+-    (let* ((libid (get-library-id (context-path th)))
++    (let* ((libid (unless (eq th (from-prelude? th))
++                   (get-library-id (context-path th))))
+ 	   (nbindings (mapcar #'(lambda (elt)
+ 				  (cons (car elt)
+ 					(if (actual? (cdr elt))
+diff --git a/src/linked-hash-table.lisp b/src/linked-hash-table.lisp
+index 06bea670..a4a40cd9 100644
+--- a/src/linked-hash-table.lisp
++++ b/src/linked-hash-table.lisp
+@@ -76,7 +76,7 @@
+ 	     (if (memq test '(eq eql equal equalp))
+ 		 (make-hash-table
+ 		  :test test
+-		  :size size
++		  :size (max size (hash-table-count ht))
+ 		  :rehash-size rehash-size
+ 		  :rehash-threshold rehash-threshold
+ 		  #-sbcl :weak-p #+sbcl :weakness weakp)
+diff --git a/src/parse.lisp b/src/parse.lisp
+index 92994e96..39c9d358 100644
+--- a/src/parse.lisp
++++ b/src/parse.lisp
+@@ -2045,43 +2045,23 @@ char-exprs"
+ 	   (xt-typed-name expr name type pred))
+ 	  ((typep name '(or number-expr decimal))
+ 	   name)
+-	  (t (let ((upid (intern (string-upcase (format nil "~a" (id name))) :pvs)))
+-	       (multiple-value-bind (prindex prkind)
+-		   (projection? upid)
+-		 (if prindex
+-		     (cond ;;((actuals name)
+-		       ;;(parse-error expr "Projection may not have actuals"))
+-		       ((mod-id name)
+-			(parse-error expr "Projection may not have a theory id"))
+-		       ((library name)
+-			(parse-error expr "Projection may not have a library id"))
+-		       ((zerop prindex)
+-			(parse-error expr "Projection index may not be zero"))
+-		       (t (case prkind
+-			    (proj (make-instance 'projection-expr
+-				    :id upid
+-				    :actuals (actuals name)
+-				    :index prindex
+-				    :place (term-place expr)))
+-			    (in (make-instance 'injection-expr
+-				  :id upid
+-				  :actuals (actuals name)
+-				  :index prindex
+-				  :place (term-place expr)))
+-			    (in? (make-instance 'injection?-expr
+-				   :id upid
+-				   :actuals (actuals name)
+-				   :index prindex
+-				   :place (term-place expr)))
+-			    (out (make-instance 'extraction-expr
+-				   :id upid
+-				   :actuals (actuals name)
+-				   :index prindex
+-				   :place (term-place expr)))
+-			    (t (error "problem in xt-name-expr")))))
+-		     (progn (change-class name 'name-expr)
+-			    (setf (place name) (term-place expr))
+-			    name))))))))
++	  (t (multiple-value-bind (index kind) (projection? (id name))
++       (cond ((null index)
++              (change-class name 'name-expr)
++              (setf (place name) (term-place expr))
++              name)
++             ((mod-id name) (parse-error expr "Projection may not have a theory id"))
++             ((library name) (parse-error expr "Projection may not have a library id"))
++             ((zerop index) (parse-error expr "Projection index may not be zero"))
++             (t (make-instance (ecase kind
++                                 (proj 'projection-expr)
++                                 (in 'injection-expr)
++                                 (in? 'injection?-expr)
++                                 (out 'extraction-expr))
++                  :id (intern (string-upcase (id name)) :pvs)
++                  :actuals (actuals name)
++                  :index index
++                  :place (term-place expr)))))))))
+ 
+ (defun xt-typed-name (expr name type pred)
+   (unless *allowed-typed-names*
+diff --git a/src/prover/eproofcheck.lisp b/src/prover/eproofcheck.lisp
+index 1e28acde..f38520d9 100644
+--- a/src/prover/eproofcheck.lisp
++++ b/src/prover/eproofcheck.lisp
+@@ -304,7 +304,12 @@
+ 	       (cur-all-subst-mod-params-caches
+ 		(all-subst-mod-params-caches *workspace-session*))
+ 	       (new-all-subst-mod-params-caches
+-		(copy-subst-mod-params-cache))
++                ;; Substitutions computed during the proof belong to this proof.
++                (progn
++                  (assert *workspace-session*)
++                  (unless cur-all-subst-mod-params-caches
++                    (reset-subst-mod-params-cache))
++                  (make-pvs-hash-table :strong-eq? t)))
+ 	       ;; (*dump-proof-data-to-file*
+ 	       ;;  (or *dump-proof-data-to-file*
+ 	       ;; 	  (when *log-proofs* (format nil "~a/pvs-logs/prf-~a.json"
+@@ -1539,7 +1544,13 @@
+ 		     (step-or-rule-defn (car expr))
+ 		     (not (isfun? (car expr))))
+ 		 expr
+-		 (eval expr)))
++		 ;; These strategy forms are usually evaluated only once per branch.
++		 ;; Asking SBCL to compile each one dominates large GRIND replays.
++		 (let (#+sbcl
++		       (sb-ext:*evaluator-mode*
++			#.(if (or (find-package :sb-eval) (find-package :sb-interpreter))
++			      :interpret :compile)))
++		   (eval expr))))
+ 	    (t (if (or (numberp expr)
+ 		       (special-variable-p expr))
+ 		   (eval expr)
+diff --git a/src/pvs-parser-runtime-fixes.lisp b/src/pvs-parser-runtime-fixes.lisp
+index 480b3605..be847f21 100644
+--- a/src/pvs-parser-runtime-fixes.lisp
++++ b/src/pvs-parser-runtime-fixes.lisp
+@@ -189,7 +189,7 @@
+ 	   (values 'sbst::!string! token place comment))
+ 	  ;; SO - don't care about case for keywords
+ 	  ;; At some point should add another case-sensitivity option.
+-	  ((or (gethash (intern (string-upcase token) :sbst) *keyword-table*)
++	  ((or (gethash (find-symbol (string-upcase token) :sbst) *keyword-table*)
+ 	       (string= token "λ"))
+ 	   (let* ((upstr (if (member token '(|λ|) :test #'string=)
+ 			     (string token)
+diff --git a/src/pvs.lisp b/src/pvs.lisp
+index 04cfc799..3e4daa54 100644
+--- a/src/pvs.lisp
++++ b/src/pvs.lisp
+@@ -99,9 +99,10 @@
+   (ignore-errors
+     (setf uiop/configuration:*user-cache*
+           (uiop/configuration::compute-user-cache)))
+-  (asdf/source-registry:initialize-source-registry)
+-  (asdf/output-translations:initialize-output-translations)
+-  (setq *pvs-path* (initial-pvs-path path))
++  ;; ASDF discovers systems and output translations on first use. Most
++  ;; sessions use only the systems already loaded into the saved image.
++  (setq *pvs-path* (initial-pvs-path path)
++        *pvs-prelude-directory-cache* nil)
+   (reset-pvs-log-directory)
+   (setq *pvs-log-stream* nil)
+   (start-load-watching)
+@@ -164,16 +165,16 @@
+ 	  (and fd (intern fd :pvs))))
+   (let ((dp (environment-variable "PVSDEFAULTDP")))
+     (when dp (set-decision-procedure (intern dp :pvs))))
++  (setq *pvs-library-path* (get-pvs-library-path))
+   (unless *workspace-session*
+     (change-workspace *default-pathname-defaults* t t))
+-  (setq *pvs-library-path* (get-pvs-library-path))
+   (unless dont-load-patches
+     (load-pvs-patches))
+   (pvs-init-globals)
+-  (do-theories #'(lambda (th)
+-		   (setf (context-path th)
+-			 (truename (format nil "~a/lib" *pvs-path*))))
+-    *prelude*)
++  (let ((libdir (truename (format nil "~a/lib" *pvs-path*))))
++    (when (uiop:absolute-pathname-p *pvs-path*)
++      (setq *pvs-prelude-directory-cache* (cons *pvs-path* libdir)))
++    (do-theories #'(lambda (th) (setf (context-path th) libdir)) *prelude*))
+   (initialize-decision-procedures)
+   ;;(initialize-prelude-attachments)
+   ;;(register-manip-type *number_field* 'pvs-type-real)
+@@ -1905,7 +1906,8 @@ Needs to pay attention to sections."
+ 		(pvs-message "Deleted file ~a" sname))))))))
+ 
+ (defun typecheck-theories (pathname theories)
+-  (let* ((specpath (make-specpath pathname))
++  (let* ((*spare-mapobject-cache* nil)
++         (specpath (make-specpath pathname))
+ 	 (filename (pvs-filename specpath))
+ 	 (sorted-theories (sort-theories theories)))
+     ;; (check-import-circularities sorted-theories)
+@@ -4050,50 +4052,69 @@ nil is returned in that case."
+ ;; 		(uiop:directory-files (cdr elt) "*.pvs")))
+ ;;     (pvs-library-alist)))
+ 
++(defun theory-name-after-end? (text start name)
++  ;; The lexer skips whitespace and percent comments between END and the id.
++  ;; Leave non-ASCII spellings to the parser.
++  (loop with size = (length text) with pos = start
++        while (< pos size)
++        for ch = (char text pos)
++        do (cond ((member ch '(#\Space #\Tab #\Newline #\Return #\Page #\^z)) (incf pos))
++                 ((char= ch #\%)
++                  (setf pos (or (position-if (lambda (c) (member c '(#\Newline #\Return)))
++                                             text :start pos)
++                                size)))
++                 (t (return (or (> (char-code ch) 127)
++                                (and (<= (+ pos (length name)) size)
++                                     (string-equal name text :start2 pos
++                                                   :end2 (+ pos (length name))))))))))
++
++(defun file-may-declare-theory? (file id)
++  ;; Every top-level theory and datatype has an END id. For ordinary
++  ;; identifiers this avoids parsing files that merely import or use the id.
++  (let ((name (symbol-name id)))
++    (if (and (plusp (length name)) (alpha-char-p (char name 0))
++             (every (lambda (ch) (and (< (char-code ch) 128)
++                                      (or (alphanumericp ch) (member ch '(#\_ #\?)))))
++                    name))
++        (handler-case
++            (let ((text (uiop:read-file-string file)))
++              (and (search name text :test #'char-equal)
++                   (loop for pos = (search "END" text :test #'char-equal)
++                           then (search "END" text :start2 (+ pos 3) :test #'char-equal)
++                         while pos
++                         thereis (theory-name-after-end? text (+ pos 3) name))))
++          (file-error () nil)
++          (error () t))
++        t)))
++
+ (defun look-for-theory-in-directory-files (theoryref)
+-  (let* ((thname (ref-to-id theoryref))
+-	 (grep-form (format nil "grep -l -w ~a *.pvs" thname))
+-	 (grep-files
+-	  (uiop:run-program grep-form
+-	    :output '(:string :stripped t)
+-	    :ignore-error-status t))
+-	 (pvs-files (uiop:split-string grep-files :separator (list #\newline)))
+-	 (files-with-clashes nil)
+-	 (files-with-theoryref nil))
+-    (dolist (file pvs-files)
++  (let ((thname (ref-to-id theoryref))
++        (files-with-clashes nil)
++        (files-with-theoryref nil))
++    (dolist (file (uiop:directory-files *default-pathname-defaults* "*.pvs"))
+       (let ((fname (pvs-filename file)))
+-	(unless (parsed-file? fname)
+-	  ;; More refined search - strips comments first
+-	  (let* ((sed-grep-form (format nil "sed 's/%.*//g' ~a | grep -q -w ~a" file thname))
+-		 (found (zerop (nth-value 2
+-				 (uiop:run-program sed-grep-form :ignore-error-status t)))))
+-	    (when found
+-	      (let ((theories (with-no-parse-errors (parse :file file))))
+-		(when (member thname theories :key #'id)
+-		  ;; Make sure we're not introducing a name clash
+-		  ;; E.g., file1 has theories th1 and th2
+-		  ;;       file2 has theories th2 and th3
+-		  ;; and we're looking for th3 from file1.
+-		  (if (some #'(lambda (th)
+-				(let ((cth (gethash (id th) (current-pvs-theories))))
+-				  (and cth
+-				       (filename cth)
+-				       (not (string= fname (filename cth))))))
+-			    theories)
+-		      (push fname files-with-clashes)
+-		      (push fname files-with-theoryref)))))))))
++        (unless (or (char= (char (file-namestring file) 0) #\.) (parsed-file? fname))
++          (when (file-may-declare-theory? file thname)
++            (let ((theories (with-no-parse-errors (parse :file file))))
++              (when (member thname theories :key #'id)
++                (if (some (lambda (th)
++                            (let ((cth (gethash (id th) (current-pvs-theories))))
++                              (and cth (filename cth) (not (string= fname (filename cth))))))
++                          theories)
++                    (push fname files-with-clashes)
++                    (push fname files-with-theoryref))))))))
+     (cond ((null files-with-theoryref)
+-	   (when files-with-clashes
+-	     (type-error theoryref
+-	       "Theory ~a appears in other files:~%  ~{~a~^, ~}~
++           (when files-with-clashes
++             (type-error theoryref
++               "Theory ~a appears in other files:~%  ~{~a~^, ~}~
+               ~%but other theories in those files clash with current theories."
+-	       theoryref files-with-clashes)))
+-	  ((cdr files-with-theoryref)
+-	   (type-error theoryref
+-	     "Theory ~a appears in more than one file:~%  ~{~a~^, ~}~
++               theoryref files-with-clashes)))
++          ((cdr files-with-theoryref)
++           (type-error theoryref
++             "Theory ~a appears in more than one file:~%  ~{~a~^, ~}~
+               ~%pick one and typecheck it."
+-	     theoryref files-with-theoryref))
+-	  (t (car files-with-theoryref)))))
++             theoryref files-with-theoryref))
++          (t (car files-with-theoryref)))))
+ 
+ (defun get-parsed-library-theory (theoryname)
+   (load-imported-library (library theoryname) theoryname))
+diff --git a/src/save-theories.lisp b/src/save-theories.lisp
+index b0687d83..86189604 100644
+--- a/src/save-theories.lisp
++++ b/src/save-theories.lisp
+@@ -20,7 +20,10 @@
+   (undefmethod update-fetched ((obj mapping-with-formals)))
+   (undefmethod restore-object* ((obj store-print-type))))
+ 
++;; Prelude objects to skip within the current restore scope.
+ (defvar *restore-objects-seen*)
++;; Objects on the current recursion path, before their restored value is known.
++(defvar *active-restore-objects*)
+ 
+ (defvar *restore-object-hash*)
+ 
+@@ -70,6 +73,7 @@ instances, e.g., other declarations within the theory, or self-references."
+ 	       (let* ((theory (cdr vtheory))
+ 		      (*restore-object-hash* (make-hash-table :test #'eq))
+ 		      (*restore-objects-seen* nil)
++		      (*active-restore-objects* (make-hash-table :test #'eq))
+ 		      (*assert-if-arith-hash* (make-hash-table :test #'eq))
+ 		      (*subtype-of-hash* (make-hash-table :test #'equal))
+ 		      (*current-context* (make-new-context
+@@ -149,8 +153,8 @@ instances, e.g., other declarations within the theory, or self-references."
+ 				     (id (adt obj))))))))
+ 
+ (defmethod external-library-reference? ((obj datatype-or-module))
+-  (and (not (file-equal (context-path obj) *default-pathname-defaults*))
+-       (not (from-prelude? obj))))
++  (and (not (from-prelude? obj))
++       (not (file-equal (context-path obj) *default-pathname-defaults*))))
+ 
+ (defmethod external-library-reference? (obj)
+   (declare (ignore obj))
+@@ -1436,7 +1440,8 @@ filled with the symbol 'self-ref, and restore-type-value replaces it with type-d
+ 	   (assert (not (store-print-type? gobj)))
+ 	   gobj)
+ 	  ((null obj) nil)
+-	  ((memq obj *restore-objects-seen*)
++	  ((or (gethash obj *active-restore-objects*)
++	       (memq obj *restore-objects-seen*))
+ ;; 	   (unless (or (listp obj)
+ ;; 		       (def-decl? obj)
+ ;; 		       (and (const-decl? obj) (def-axiom obj))
+@@ -1446,23 +1451,25 @@ filled with the symbol 'self-ref, and restore-type-value replaces it with type-d
+ 	     (assert (not (store-print-type? obj)) ()
+ 		     "Should have been restored already"))
+ 	   obj)
+-	  (t (let* ((*restore-objects-seen* (cons obj *restore-objects-seen*))
+-		    (nobj (if (store-print-type? obj)
+-			      ;; For some reason, call-next-method stops working for
+-			      ;; store-print-type, at least in Allegro
+-			      (progn (break) (restore-store-print-type obj))
+-			      (call-next-method))))
+-	       (when (subtype? nobj)
+-		 (assert (not (store-print-type? (supertype nobj))) ()
+-			 "nobj: call-next-method should have restored supertype"))
+-	       (when (subtype? obj)
+-		 (assert (not (store-print-type? (supertype obj))) ()
+-			 "obj: call-next-method should have restored supertype"))
+-	       (unless (eq obj nobj)
+-		 (setf-restored-object nobj))
+-	       (assert (not (store-print-type? nobj)) ()
+-		       "call-next-method should have restored this")
+-	       (setf (gethash obj *restore-object-hash*) nobj))))))
++	  (t (let ((*restore-objects-seen* *restore-objects-seen*))
++               ;; Prelude exclusions added below this node have local scope.
++               (setf (gethash obj *active-restore-objects*) t)
++               (unwind-protect
++                    (let ((nobj (if (store-print-type? obj)
++                                    (progn (break) (restore-store-print-type obj))
++                                    (call-next-method))))
++                      (when (subtype? nobj)
++                        (assert (not (store-print-type? (supertype nobj))) ()
++                                "nobj: call-next-method should have restored supertype"))
++                      (when (subtype? obj)
++                        (assert (not (store-print-type? (supertype obj))) ()
++                                "obj: call-next-method should have restored supertype"))
++                      (unless (eq obj nobj)
++                        (setf-restored-object nobj))
++                      (assert (not (store-print-type? nobj)) ()
++                              "call-next-method should have restored this")
++                      (setf (gethash obj *restore-object-hash*) nobj))
++                 (remhash obj *active-restore-objects*)))))))
+ 
+ (defmethod setf-restored-object (nobj)
+   (setf-restored-object*
+diff --git a/src/store-object.lisp b/src/store-object.lisp
+index 1a80e013..9c7c5c41 100644
+--- a/src/store-object.lisp
++++ b/src/store-object.lisp
+@@ -273,23 +273,31 @@
+ 			(object-store start))
+     (fill *fetch-object-table* *fetch-object-not-present*
+ 	  :end (object-store start))
+-    (prog1
+-	(fetch-obj (1+ start))
+-      (block loop
+-	(loop
+-	 (when (= *fetch-object-update-end* 0)
+-	   (return-from loop nil))
+-	 (decf *fetch-object-update-end*)
+-	 (let ((*fetch-object-ptr* (svref *fetch-object-update-ptr*
+-					  *fetch-object-update-end*)))
+-	   (update-fetched (svref *fetch-object-update-obj*
+-				  *fetch-object-update-end*))))))))
++    (unwind-protect
++         (prog1 (fetch-obj (1+ start))
++           (loop while (plusp *fetch-object-update-end*)
++                 do (let* ((i (decf *fetch-object-update-end*))
++                           (*fetch-object-ptr* (svref *fetch-object-update-ptr* i))
++                           (obj (svref *fetch-object-update-obj* i)))
++                      ;; Updates may immediately reuse this stack slot.
++                      (setf (svref *fetch-object-update-obj* i) nil)
++                      (update-fetched obj))))
++      (fill *fetch-object-table* nil :end (object-store start))
++      (fill *fetch-object-update-obj* nil :end *fetch-object-update-end*))))
++
+ 
+ #+(or allegro cmu sbcl)
+ (defun fetch-object-from-file (file)
+-  (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+-    (setf (object-store 0) (read-byte f))
+-    (setf (object-store 1) (read-byte f))
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
++  (with-open-file (f file :direction :input
++                     :element-type #+sbcl '(unsigned-byte 8) #-sbcl '(unsigned-byte 32))
++    ;; SBCL's word streams decode one element at a time. Its octet reader
++    ;; can fill the word vector directly in native byte order.
++    #+sbcl (sb-sys:read-n-bytes f *store-object-store* 0 8)
++    #-sbcl (setf (object-store 0) (read-byte f)
++                 (object-store 1) (read-byte f))
+     (let* ((reverse-endian (and (not (= (object-store 0) 1))
+ 				(= (reverse-endian (object-store 0)) 1)))
+ 	   (size (cond ((= (object-store 0) 1)
+@@ -297,18 +305,21 @@
+ 		       (reverse-endian
+ 			(reverse-endian (object-store 1)))
+ 		       (t (object-store 0))))
+-	   (fsize #+allegro (let ((stat (excl.osi:stat file)))
+-			      (excl.osi:stat-size stat))
+-		  #+sbcl (let ((stat (sb-posix:stat file)))
+-			   (sb-posix:stat-size stat))))
+-      (unless (= size (/ fsize 4))
+-	(error 'file-error
+-	       :pathname file
+-	       :format-control "File ~a corrupted"
+-	       :format-arguments (list file)))
++	   (fsize #+sbcl (file-length f)
++                  #+allegro (excl.osi:stat-size (excl.osi:stat file))
++                  #+cmu (* 4 (file-length f))))
++      (unless (and (>= size 3) (= (* 4 size) fsize))
++        (error 'file-error :pathname file))
+       (ensure-vector-size *store-object-store* *store-object-store-size* size)
+-      (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+-	(cl:read-sequence *store-object-store* f :start 0 :end size))
++      ;; SBCL versions differ on whether the final argument denotes a
++      ;; count or an end offset. With a start of zero the two coincide.
++      #+sbcl
++      (progn
++        (file-position f 0)
++        (sb-sys:read-n-bytes f *store-object-store* 0 (* 4 size)))
++      #-sbcl
++      (unless (= (cl:read-sequence *store-object-store* f :start 2 :end size) size)
++        (error 'end-of-file :stream f))
+       (when reverse-endian
+ 	(dotimes (i size)
+ 	  (setf (object-store i)
+@@ -319,6 +330,9 @@
+ 
+ #+lucid
+ (defun fetch-object-from-file (file)
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
+   (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+     (setf (object-store 0) (read-byte f))
+     (ensure-vector-size *store-object-store* *store-object-store-size*
+@@ -328,6 +342,9 @@
+ 
+ #+gcl
+ (defun fetch-object-from-file (file)
++  ;; A dumped image drops these buffers. Workspace restoration can run
++  ;; before the normal typechecker initialization recreates them.
++  (unless *fetch-object-table* (reset-store-object-caches))
+   (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+     (setf (object-store 0) (read-byte f))
+     (ensure-vector-size *store-object-store* *store-object-store-size*
+@@ -566,9 +583,9 @@
+   (cond ((equal obj '(0 . 0))
+ 	 (setf (car obj) (fetch-obj (stored-word 1)))
+ 	 (setf (cdr obj) (fetch-obj (stored-word 2))))
+-	(t (let ((size (stored-word 1)))
+-	     (dotimes (i size)
+-	       (setf (nth i obj) (fetch-obj (stored-word (+ i 2)))))))))
++	(t (loop for cell on obj
++                 for i from 2
++                 do (setf (car cell) (fetch-obj (stored-word i)))))))
+ 
+ #-gcl
+ (defmethod store-object* ((obj package))
+diff --git a/src/tclib.lisp b/src/tclib.lisp
+index faebbe54..32329f56 100644
+--- a/src/tclib.lisp
++++ b/src/tclib.lisp
+@@ -530,6 +530,26 @@ in your PVS_LIBRARY_PATH."
+       *pvs-library-alist*
+       (setq *pvs-library-alist* (get-pvs-library-alist))))
+ 
++(defun directory-has-pvs-source-p (dir)
++  #+sbcl
++  (let ((mapper (find-symbol "MAP-DIRECTORY" :sb-ext)))
++    (when (and mapper (fboundp mapper) (not (typep dir 'logical-pathname)))
++      (handler-case
++          (progn
++            (funcall mapper
++                     (lambda (file)
++                       ;; MAP-DIRECTORY includes dangling links.
++                       (when (and (equal (pathname-type file) "pvs")
++                                  (handler-case (sb-posix:stat file)
++                                    (sb-posix:syscall-error () nil)))
++                         (return-from directory-has-pvs-source-p t)))
++                     dir :directories nil)
++            (return-from directory-has-pvs-source-p nil))
++        (error () nil))))
++  ;; Use the portable implementation for logical paths, or if this SBCL
++  ;; lacks a suitable directory iterator.
++  (not (null (uiop:directory-files dir "*.pvs"))))
++
+ (defun get-pvs-library-alist ()
+   (let ((alist nil))
+     (dolist (path *pvs-library-path*)
+@@ -541,7 +561,7 @@ in your PVS_LIBRARY_PATH."
+ 	      (when (and (valid-pvs-id* dname)
+ 			 (not (string-equal dname "pvsbin"))
+ 			 (or (uiop:file-exists-p (merge-pathnames ".pvscontext" sdir))
+-			     (uiop:directory-files sdir "*.pvs")))
++			     (directory-has-pvs-source-p sdir)))
+ 		(push (cons (intern dname :pvs) subdir) alist))))
+ 	  (pvs-warning "~a is in the library path, but is not a directory" path)))
+     ;; earlier paths in *pvs-library-path* shadow later ones.
+@@ -894,6 +914,14 @@ point."
+ 
+ ;;;   3. A libpath, which is an absolute pathname.
+ 
++(defun prelude-library-directory ()
++  ;; Before initialization, or when processing a different installation,
++  ;; resolve against the active PVS path.
++  (let ((entry *pvs-prelude-directory-cache*))
++    (if (and entry (equal (car entry) *pvs-path*))
++        (cdr entry)
++        (uiop:directory-exists-p (format nil "~a/lib/" *pvs-path*)))))
++
+ (defun get-library-reference (libref)
+   "Given a libref, attempts to return three values: an absolute lib-path, a
+ lib-id, and the origin.  Returns nil if a lib-path cannot be determined.  A
+@@ -944,7 +972,7 @@ not a dir: if a valid id
+ 	 (idstr (if pos (subseq nlibstr (1+ pos)) nlibstr)) ; possible id is after the last '/'
+ 	 (pid (when (valid-pvs-id* idstr) (intern idstr :pvs)))) ; is it a valid pvs id?
+     (cond (dirp
+-	   (cond ((equal lib-path (uiop:directory-exists-p (format nil "~a/lib/" *pvs-path*)))
++	   (cond ((equal lib-path (prelude-library-directory))
+ 		  (values lib-path nil :prelude))
+ 		 ;; ((equal lib-path (path *workspace-session*))
+ 		 ;;  (values lib-path nil :current-workspace))
+diff --git a/src/xref.lisp b/src/xref.lisp
+index f2faa75b..b89a866d 100755
+--- a/src/xref.lisp
++++ b/src/xref.lisp
+@@ -28,6 +28,29 @@
+ (defvar *xref-names-seen* nil)
+ (defvar *xref-types-seen* nil)
+ 
++;; Keep short walks in a list. Big declarations repeatedly revisit names
++;; and types through their resolutions, so switch to EQ lookup after 32.
++(defmacro xref-seen? (node seen)
++  `(cond ((hash-table-p ,seen)
++          (if (gethash ,node ,seen)
++              t
++              (progn (setf (gethash ,node ,seen) t) nil)))
++         ((memq ,node ,seen) t)
++         (t
++          (push ,node ,seen)
++          (when (nthcdr 31 ,seen)
++            (let ((table (make-hash-table :test #'eq :size 64)))
++              (dolist (item ,seen)
++                (setf (gethash item table) t))
++              (setf ,seen table)))
++          nil)))
++
++;; A module visits one declaration at a time. Reuse its small visited tables
++;; across declarations, dropping large tables instead of repeatedly clearing them.
++(defun reusable-xref-table (seen)
++  (when (and (hash-table-p seen) (<= (hash-table-size seen) 1024))
++    (clrhash seen)))
++
+ ;;; collects the references of an expression
+ 
+ (defmethod collect-references (ex)
+@@ -83,11 +106,14 @@
+   (unless (gethash m *prelude*)
+     (mapc #'(lambda (u) (pushnew m (used-by (car u)) :test #'eq))
+ 	  (all-usings m))
+-    (dolist (d (all-decls m))
+-      (let ((*generate-xref-declaration* d)
+-	    (*xref-names-seen* nil)
+-	    (*xref-types-seen* nil))
+-	(generate-xref d))))
++    (let ((names nil) (types nil))
++      (dolist (d (all-decls m))
++        (let ((*generate-xref-declaration* d)
++              (*xref-names-seen* names)
++              (*xref-types-seen* types))
++          (generate-xref d)
++          (setf names (reusable-xref-table *xref-names-seen*)
++                types (reusable-xref-table *xref-types-seen*))))))
+   m)
+ 
+ (defmethod generate-xref ((use importing))
+@@ -124,8 +150,7 @@
+   nil)
+ 
+ (defmethod generate-xref :around ((te type-expr))
+-  (unless (memq te *xref-types-seen*)
+-    (push te *xref-types-seen*)
++  (unless (xref-seen? te *xref-types-seen*)
+     (call-next-method)
+     (generate-xref (print-type te))))
+ 
+@@ -355,8 +380,7 @@
+   (assert (or (type n)
+ 	      (typep (declaration n)
+ 		     '(or module theory-abbreviation-decl))))
+-  (unless (memq n *xref-names-seen*)
+-    (push n *xref-names-seen*)
++  (unless (xref-seen? n *xref-names-seen*)
+     (unless (typep (declaration n) '(or module mod-decl formal-theory-decl
+ 					theory-abbreviation-decl))
+       (generate-xref (type n))))

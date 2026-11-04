@@ -1,0 +1,19 @@
+Subject: [06] Check for prelude objects before filesystem identity queries, forced save of 39 CHERI theories
+
+Measurement: 6.05 → 1.76 s. 456 → 52 MB. File-information calls fell from 296,172 to 954. The saved binaries matched byte-for-byte.
+
+diff --git a/src/save-theories.lisp b/src/save-theories.lisp
+index b0687d8..a38abbc 100644
+--- a/src/save-theories.lisp
++++ b/src/save-theories.lisp
+@@ -149,8 +149,8 @@ instances, e.g., other declarations within the theory, or self-references."
+ 				     (id (adt obj))))))))
+ 
+ (defmethod external-library-reference? ((obj datatype-or-module))
+-  (and (not (file-equal (context-path obj) *default-pathname-defaults*))
+-       (not (from-prelude? obj))))
++  (and (not (from-prelude? obj))
++       (not (file-equal (context-path obj) *default-pathname-defaults*))))
+ 
+ (defmethod external-library-reference? (obj)
+   (declare (ignore obj))

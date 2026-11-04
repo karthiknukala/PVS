@@ -1,0 +1,97 @@
+Subject: [17] Hash MCP sources in chunks using a reusable buffer and deduplicate physical files, CHERI
+
+Measurement: 7.7 → 4.2 ms per validation. Derived from batches of three. Registration averaged 8.5 → 6.5 ms per call. All 39 paths in this fixture were distinct.
+
+diff --git a/agent/interface.lisp b/agent/interface.lisp
+index 1f76563..2305b72 100644
+--- a/agent/interface.lisp
++++ b/agent/interface.lisp
+@@ -46,10 +46,11 @@
+ (defun agent-check-prepared-sources ()
+   (when (eq *agent-preparation-status* :failed)
+     (error "The last preparation failed; prepare successfully before continuing"))
+-  (dolist (entry *agent-prepared-files*)
+-    (unless (and (probe-file (car entry))
+-                 (string-equal (cdr entry) (agent-source-fingerprint (car entry))))
+-      (error "Source changed since preparation: ~a. Close sessions and prepare again." (car entry))))
++  (let ((buffer (agent-fingerprint-buffer)))
++    (dolist (entry *agent-prepared-files*)
++      (unless (and (probe-file (car entry))
++                   (string-equal (cdr entry) (agent-source-fingerprint (car entry) buffer)))
++        (error "Source changed since preparation: ~a. Close sessions and prepare again." (car entry)))))
+   t)
+ 
+ (defun agent-theory-source-path (theory)
+@@ -59,13 +60,18 @@
+     (make-specpath (filename theory))))
+ 
+ (defun agent-record-prepared-sources (theories)
+-  (setq *agent-prepared-files*
+-        (loop for th in (remove-duplicates
+-                         (loop for th in theories
+-                               append (cons th (all-imported-theories th))) :test #'eq)
+-              for path = (ignore-errors (agent-theory-source-path th))
+-              when (and path (probe-file path))
+-              collect (cons (namestring (truename path)) (agent-source-fingerprint path)))))
++  ;; Several imported theories can live in a single physical file.
++  (let ((seen (make-hash-table :test #'equal))
++        (buffer (agent-fingerprint-buffer)))
++    (setq *agent-prepared-files*
++          (loop for th in (remove-duplicates
++                           (loop for th in theories
++                                 append (cons th (all-imported-theories th))) :test #'eq)
++                for path = (ignore-errors (agent-theory-source-path th))
++                for file = (and path (probe-file path))
++                when (and file (not (gethash file seen)))
++                collect (progn (setf (gethash file seen) t)
++                               (cons (namestring file) (agent-source-fingerprint file buffer)))))))
+ 
+ (defun agent-prepare (context file)
+   (agent-call-with-setup
+diff --git a/agent/support.lisp b/agent/support.lisp
+index cce8b45..d7b94bd 100644
+--- a/agent/support.lisp
++++ b/agent/support.lisp
+@@ -18,23 +18,29 @@
+   (or (gethash name *agent-original-functions*)
+       (error "No saved original for ~s" name)))
+ 
+-(defun agent-source-fingerprint (file)
++(defun agent-fingerprint-buffer ()
++  (make-array 1024 :element-type '(unsigned-byte 8)))
++
++(defun agent-source-fingerprint (file &optional (buffer (agent-fingerprint-buffer)))
+   "Portable FNV-1a fingerprint used for exact local patch compatibility."
+   (with-open-file (stream file :element-type '(unsigned-byte 8))
+-    (loop with hash = 14695981039346656037
+-          for byte = (read-byte stream nil nil)
+-          while byte
+-          do (setf hash (logand #xffffffffffffffff
+-                               (* (logxor hash byte) 1099511628211)))
+-          finally (return (format nil "~16,'0x" hash)))))
++    (let ((hash 14695981039346656037))
++      (declare (cl:type (simple-array (unsigned-byte 8) (*)) buffer)
++               (cl:type (unsigned-byte 64) hash))
++      (loop for end = (read-sequence buffer stream) until (zerop end)
++            do (dotimes (i end)
++                 (setf hash (ldb (byte 64 0)
++                                 (* (logxor hash (aref buffer i)) 1099511628211)))))
++      (format nil "~16,'0x" hash))))
+ 
+ (defun agent-check-sources (manifest)
+-  (dolist (entry manifest)
+-    (let ((path (merge-pathnames (car entry) *pvs-path*)))
+-      (unless (and (probe-file path)
+-                   (string-equal (cdr entry) (agent-source-fingerprint path)))
+-        (error "Agent patches do not match ~a. Review/update agent/compatibility.lisp for this PVS build."
+-               path))))
++  (let ((buffer (agent-fingerprint-buffer)))
++    (dolist (entry manifest)
++      (let ((path (merge-pathnames (car entry) *pvs-path*)))
++        (unless (and (probe-file path)
++                     (string-equal (cdr entry) (agent-source-fingerprint path buffer)))
++          (error "Agent patches do not match ~a. Review/update agent/compatibility.lisp for this PVS build."
++                 path)))))
+   t)
+ 
+ (defun agent-capture-output (thunk)

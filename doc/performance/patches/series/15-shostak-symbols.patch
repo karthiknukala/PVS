@@ -1,0 +1,19 @@
+Subject: [15] Compare Shostak symbol names directly, full 64-variable proof
+
+Measurement: 420 → 406 ms. 756 → 733 MB. A synthetic 2,048-symbol sum took 249 → 41 ms and 201 MB → 98 KB.
+
+diff --git a/src/ground-prover/interface.lisp b/src/ground-prover/interface.lisp
+index 7c3f4b6..5b7a576 100644
+--- a/src/ground-prover/interface.lisp
++++ b/src/ground-prover/interface.lisp
+@@ -205,7 +205,9 @@
+ 
+ 
+ (defun alphalessp (a b)
+-  (string< (string a) (string b)))
++  ;; Comparing symbol names directly avoids widening them in STRING on SBCL.
++  (string< (if (symbolp a) (symbol-name a) a)
++           (if (symbolp b) (symbol-name b) b)))
+ 
+ ; (defun arithstring (a)
+ ;   (case a

@@ -1,0 +1,58 @@
+Subject: [10] Read binary words in bulk on SBCL, cached CHERI load
+
+Measurement: 7.62 → 6.59 s. Isolated reader prototype. The final portable reader is included in the complete-build comparison of 3.82 → 3.12 s.
+
+diff --git a/src/store-object.lisp b/src/store-object.lisp
+index 1a80e01..a73ef63 100644
+--- a/src/store-object.lisp
++++ b/src/store-object.lisp
+@@ -287,9 +287,13 @@
+ 
+ #+(or allegro cmu sbcl)
+ (defun fetch-object-from-file (file)
+-  (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+-    (setf (object-store 0) (read-byte f))
+-    (setf (object-store 1) (read-byte f))
++  (with-open-file (f file :direction :input
++                     :element-type #+sbcl '(unsigned-byte 8) #-sbcl '(unsigned-byte 32))
++    ;; SBCL's word streams decode one element at a time. Its octet reader
++    ;; can fill the word vector directly in native byte order.
++    #+sbcl (sb-sys:read-n-bytes f *store-object-store* 0 8)
++    #-sbcl (setf (object-store 0) (read-byte f)
++                 (object-store 1) (read-byte f))
+     (let* ((reverse-endian (and (not (= (object-store 0) 1))
+ 				(= (reverse-endian (object-store 0)) 1)))
+ 	   (size (cond ((= (object-store 0) 1)
+@@ -297,18 +301,21 @@
+ 		       (reverse-endian
+ 			(reverse-endian (object-store 1)))
+ 		       (t (object-store 0))))
+-	   (fsize #+allegro (let ((stat (excl.osi:stat file)))
+-			      (excl.osi:stat-size stat))
+-		  #+sbcl (let ((stat (sb-posix:stat file)))
+-			   (sb-posix:stat-size stat))))
+-      (unless (= size (/ fsize 4))
+-	(error 'file-error
+-	       :pathname file
+-	       :format-control "File ~a corrupted"
+-	       :format-arguments (list file)))
++	   (fsize #+sbcl (file-length f)
++                  #+allegro (excl.osi:stat-size (excl.osi:stat file))
++                  #+cmu (* 4 (file-length f))))
++      (unless (and (>= size 3) (= (* 4 size) fsize))
++        (error 'file-error :pathname file))
+       (ensure-vector-size *store-object-store* *store-object-store-size* size)
+-      (with-open-file (f file :direction :input :element-type '(unsigned-byte 32))
+-	(cl:read-sequence *store-object-store* f :start 0 :end size))
++      ;; SBCL versions differ on whether the final argument denotes a
++      ;; count or an end offset. With a start of zero the two coincide.
++      #+sbcl
++      (progn
++        (file-position f 0)
++        (sb-sys:read-n-bytes f *store-object-store* 0 (* 4 size)))
++      #-sbcl
++      (unless (= (cl:read-sequence *store-object-store* f :start 2 :end size) size)
++        (error 'end-of-file :stream f))
+       (when reverse-endian
+ 	(dotimes (i size)
+ 	  (setf (object-store i)

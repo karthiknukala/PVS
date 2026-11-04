@@ -1,0 +1,17 @@
+Subject: [12] Pre-size copies of linked hash tables, VSTTE12 `top`
+
+Measurement: 818 → 789 ms. 822.0 → 820.1 MB. Small timing difference.
+
+diff --git a/src/linked-hash-table.lisp b/src/linked-hash-table.lisp
+index 06bea67..a4a40cd 100644
+--- a/src/linked-hash-table.lisp
++++ b/src/linked-hash-table.lisp
+@@ -76,7 +76,7 @@
+ 	     (if (memq test '(eq eql equal equalp))
+ 		 (make-hash-table
+ 		  :test test
+-		  :size size
++		  :size (max size (hash-table-count ht))
+ 		  :rehash-size rehash-size
+ 		  :rehash-threshold rehash-threshold
+ 		  #-sbcl :weak-p #+sbcl :weakness weakp)

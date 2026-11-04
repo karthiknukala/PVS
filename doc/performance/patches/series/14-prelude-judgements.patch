@@ -1,0 +1,18 @@
+Subject: [14] Skip library lookup for known prelude theories during judgement instantiation, VSTTE12 `top`
+
+Measurement: 574 → 555 ms. 182 → 0 library lookups. Timing ranges overlapped.
+
+diff --git a/src/judgements.lisp b/src/judgements.lisp
+index e162ae3..ce0cd28 100644
+--- a/src/judgements.lisp
++++ b/src/judgements.lisp
+@@ -3575,7 +3575,8 @@ Note that the all? arument is only used in the type-constraints* (subtype) metho
+ 
+ (defun subst-theory-inst-from-free-params (th bindings)
+   (when (and bindings (every #'cdr bindings))
+-    (let* ((libid (get-library-id (context-path th)))
++    (let* ((libid (unless (eq th (from-prelude? th))
++                   (get-library-id (context-path th))))
+ 	   (nbindings (mapcar #'(lambda (elt)
+ 				  (cons (car elt)
+ 					(if (actual? (cdr elt))
