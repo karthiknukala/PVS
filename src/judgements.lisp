@@ -3575,7 +3575,8 @@ Note that the all? arument is only used in the type-constraints* (subtype) metho
 
 (defun subst-theory-inst-from-free-params (th bindings)
   (when (and bindings (every #'cdr bindings))
-    (let* ((libid (get-library-id (context-path th)))
+    (let* ((libid (unless (eq th (from-prelude? th))
+                   (get-library-id (context-path th))))
 	   (nbindings (mapcar #'(lambda (elt)
 				  (cons (car elt)
 					(if (actual? (cdr elt))
