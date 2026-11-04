@@ -2045,43 +2045,23 @@ char-exprs"
 	   (xt-typed-name expr name type pred))
 	  ((typep name '(or number-expr decimal))
 	   name)
-	  (t (let ((upid (intern (string-upcase (format nil "~a" (id name))) :pvs)))
-	       (multiple-value-bind (prindex prkind)
-		   (projection? upid)
-		 (if prindex
-		     (cond ;;((actuals name)
-		       ;;(parse-error expr "Projection may not have actuals"))
-		       ((mod-id name)
-			(parse-error expr "Projection may not have a theory id"))
-		       ((library name)
-			(parse-error expr "Projection may not have a library id"))
-		       ((zerop prindex)
-			(parse-error expr "Projection index may not be zero"))
-		       (t (case prkind
-			    (proj (make-instance 'projection-expr
-				    :id upid
-				    :actuals (actuals name)
-				    :index prindex
-				    :place (term-place expr)))
-			    (in (make-instance 'injection-expr
-				  :id upid
-				  :actuals (actuals name)
-				  :index prindex
-				  :place (term-place expr)))
-			    (in? (make-instance 'injection?-expr
-				   :id upid
-				   :actuals (actuals name)
-				   :index prindex
-				   :place (term-place expr)))
-			    (out (make-instance 'extraction-expr
-				   :id upid
-				   :actuals (actuals name)
-				   :index prindex
-				   :place (term-place expr)))
-			    (t (error "problem in xt-name-expr")))))
-		     (progn (change-class name 'name-expr)
-			    (setf (place name) (term-place expr))
-			    name))))))))
+	  (t (multiple-value-bind (index kind) (projection? (id name))
+       (cond ((null index)
+              (change-class name 'name-expr)
+              (setf (place name) (term-place expr))
+              name)
+             ((mod-id name) (parse-error expr "Projection may not have a theory id"))
+             ((library name) (parse-error expr "Projection may not have a library id"))
+             ((zerop index) (parse-error expr "Projection index may not be zero"))
+             (t (make-instance (ecase kind
+                                 (proj 'projection-expr)
+                                 (in 'injection-expr)
+                                 (in? 'injection?-expr)
+                                 (out 'extraction-expr))
+                  :id (intern (string-upcase (id name)) :pvs)
+                  :actuals (actuals name)
+                  :index index
+                  :place (term-place expr)))))))))
 
 (defun xt-typed-name (expr name type pred)
   (unless *allowed-typed-names*

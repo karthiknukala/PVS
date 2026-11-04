@@ -189,7 +189,7 @@
 	   (values 'sbst::!string! token place comment))
 	  ;; SO - don't care about case for keywords
 	  ;; At some point should add another case-sensitivity option.
-	  ((or (gethash (intern (string-upcase token) :sbst) *keyword-table*)
+	  ((or (gethash (find-symbol (string-upcase token) :sbst) *keyword-table*)
 	       (string= token "λ"))
 	   (let* ((upstr (if (member token '(|λ|) :test #'string=)
 			     (string token)
