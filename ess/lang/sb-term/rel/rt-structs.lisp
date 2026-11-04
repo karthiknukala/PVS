@@ -43,19 +43,22 @@
 			     (declare (ignore ps depth))
 			     (format stream "<lexical-stream>"))))
   stream
-  readtable
+  ;; The grammar assigns syntax to a small subset of all Unicode characters.
+  (readtable (make-hash-table :test 'eql :size 128))
   stringbuffer)
+
+(declaim (inline lexical-character-syntax))
+(defun lexical-character-syntax (readtable character)
+  (gethash character readtable :alphabetic))
 
 (defun open-lexical-stream (stream &aux result)
   (setq result (make-lexical-stream :stream stream))
-  (setf (lexical-stream-readtable result) (make-array `(,char-code-limit)
-						    :initial-element :alphabetic)
-	(lexical-stream-stringbuffer result)
+  (setf (lexical-stream-stringbuffer result)
 	(make-array '(20) :element-type 'character
 		    :adjustable t
 		    :fill-pointer t))
   (dolist (xa '(#\space #\tab #\newline #\page))
-    (setf (elt (lexical-stream-readtable result) (char-code xa)) nil))
+    (setf (gethash xa (lexical-stream-readtable result)) nil))
   (lexical-make-macro result #\" #'string-lexer)
   result)
 
@@ -80,13 +83,13 @@
    (loop
     (setq char (lexical-read-char self :eof))
     (when (or (equal char :eof)
-	      (not (null (elt readtable (char-code char)))))
+	      (not (null (lexical-character-syntax readtable char))))
       (return)))
    (lexical-unread-char self)
    (setq place (curplace (lexical-stream-stream self))
 	 char (multiple-value-list
 	       (cond ((equal char :eof) eofval)
-		     ((equal (elt readtable (char-code char)) :alphabetic)
+		     ((equal (lexical-character-syntax readtable char) :alphabetic)
 		      (alpha-lexer self (lexical-read-char self nil)))
 		     ((is-lexical-escape? self char)
 		      (lexical-read-char self nil)
@@ -94,7 +97,7 @@
 			(if (equal char :eof)
 			    eofval
 			    (alpha-lexer self char))))
-		     (t (funcall (elt readtable (char-code char))
+		     (t (funcall (lexical-character-syntax readtable char)
 				 self
 				 (lexical-read-char self nil))))))
    (when char (return)))
@@ -114,8 +117,8 @@
 	  (return))
 	 ((is-lexical-escape? stream char)
 	  (setq char (lexical-read-char stream :eof)))
-	 ((not (member (elt (lexical-stream-readtable stream)
-			    (char-code char)) '(:alphabetic :number)))
+	 ((not (member (lexical-character-syntax (lexical-stream-readtable stream) char)
+		       '(:alphabetic :number)))
 	  (return)))
    (if (not (equal char :eof))
        (vector-push-extend char buffer)))
@@ -181,15 +184,15 @@
 ;;; readtable built into the given lexical stream.  Only terminating
 ;;; macro characters may be defined.
 (defun lexical-make-macro (self char function)
-  (setf (elt (lexical-stream-readtable self) (char-code char)) function))
+  (setf (gethash char (lexical-stream-readtable self)) function))
 
 ;;; Define an escape character for a lexical stream, like "\" is for the
 ;;; standard readtable.  Not really implemented yet.
 ;;;  ... and now more implemented. 
 (defun lexical-make-escape (self char)
-  (setf (elt (lexical-stream-readtable self) (char-code char)) :escape))
+  (setf (gethash char (lexical-stream-readtable self)) :escape))
 (defun is-lexical-escape? (self char)
-  (eq :escape (elt (lexical-stream-readtable self) (char-code char))))
+  (eq :escape (lexical-character-syntax (lexical-stream-readtable self) char)))
 
 ;;; A place in a line.
 (defstruct (place (:print-function place-printer))
