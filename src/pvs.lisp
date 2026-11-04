@@ -4051,50 +4051,69 @@ nil is returned in that case."
 ;; 		(uiop:directory-files (cdr elt) "*.pvs")))
 ;;     (pvs-library-alist)))
 
+(defun theory-name-after-end? (text start name)
+  ;; The lexer skips whitespace and percent comments between END and the id.
+  ;; Leave non-ASCII spellings to the parser.
+  (loop with size = (length text) with pos = start
+        while (< pos size)
+        for ch = (char text pos)
+        do (cond ((member ch '(#\Space #\Tab #\Newline #\Return #\Page #\^z)) (incf pos))
+                 ((char= ch #\%)
+                  (setf pos (or (position-if (lambda (c) (member c '(#\Newline #\Return)))
+                                             text :start pos)
+                                size)))
+                 (t (return (or (> (char-code ch) 127)
+                                (and (<= (+ pos (length name)) size)
+                                     (string-equal name text :start2 pos
+                                                   :end2 (+ pos (length name))))))))))
+
+(defun file-may-declare-theory? (file id)
+  ;; Every top-level theory and datatype has an END id. For ordinary
+  ;; identifiers this avoids parsing files that merely import or use the id.
+  (let ((name (symbol-name id)))
+    (if (and (plusp (length name)) (alpha-char-p (char name 0))
+             (every (lambda (ch) (and (< (char-code ch) 128)
+                                      (or (alphanumericp ch) (member ch '(#\_ #\?)))))
+                    name))
+        (handler-case
+            (let ((text (uiop:read-file-string file)))
+              (and (search name text :test #'char-equal)
+                   (loop for pos = (search "END" text :test #'char-equal)
+                           then (search "END" text :start2 (+ pos 3) :test #'char-equal)
+                         while pos
+                         thereis (theory-name-after-end? text (+ pos 3) name))))
+          (file-error () nil)
+          (error () t))
+        t)))
+
 (defun look-for-theory-in-directory-files (theoryref)
-  (let* ((thname (ref-to-id theoryref))
-	 (grep-form (format nil "grep -l -w ~a *.pvs" thname))
-	 (grep-files
-	  (uiop:run-program grep-form
-	    :output '(:string :stripped t)
-	    :ignore-error-status t))
-	 (pvs-files (uiop:split-string grep-files :separator (list #\newline)))
-	 (files-with-clashes nil)
-	 (files-with-theoryref nil))
-    (dolist (file pvs-files)
+  (let ((thname (ref-to-id theoryref))
+        (files-with-clashes nil)
+        (files-with-theoryref nil))
+    (dolist (file (uiop:directory-files *default-pathname-defaults* "*.pvs"))
       (let ((fname (pvs-filename file)))
-	(unless (parsed-file? fname)
-	  ;; More refined search - strips comments first
-	  (let* ((sed-grep-form (format nil "sed 's/%.*//g' ~a | grep -q -w ~a" file thname))
-		 (found (zerop (nth-value 2
-				 (uiop:run-program sed-grep-form :ignore-error-status t)))))
-	    (when found
-	      (let ((theories (with-no-parse-errors (parse :file file))))
-		(when (member thname theories :key #'id)
-		  ;; Make sure we're not introducing a name clash
-		  ;; E.g., file1 has theories th1 and th2
-		  ;;       file2 has theories th2 and th3
-		  ;; and we're looking for th3 from file1.
-		  (if (some #'(lambda (th)
-				(let ((cth (gethash (id th) (current-pvs-theories))))
-				  (and cth
-				       (filename cth)
-				       (not (string= fname (filename cth))))))
-			    theories)
-		      (push fname files-with-clashes)
-		      (push fname files-with-theoryref)))))))))
+        (unless (or (char= (char (file-namestring file) 0) #\.) (parsed-file? fname))
+          (when (file-may-declare-theory? file thname)
+            (let ((theories (with-no-parse-errors (parse :file file))))
+              (when (member thname theories :key #'id)
+                (if (some (lambda (th)
+                            (let ((cth (gethash (id th) (current-pvs-theories))))
+                              (and cth (filename cth) (not (string= fname (filename cth))))))
+                          theories)
+                    (push fname files-with-clashes)
+                    (push fname files-with-theoryref))))))))
     (cond ((null files-with-theoryref)
-	   (when files-with-clashes
-	     (type-error theoryref
-	       "Theory ~a appears in other files:~%  ~{~a~^, ~}~
+           (when files-with-clashes
+             (type-error theoryref
+               "Theory ~a appears in other files:~%  ~{~a~^, ~}~
               ~%but other theories in those files clash with current theories."
-	       theoryref files-with-clashes)))
-	  ((cdr files-with-theoryref)
-	   (type-error theoryref
-	     "Theory ~a appears in more than one file:~%  ~{~a~^, ~}~
+               theoryref files-with-clashes)))
+          ((cdr files-with-theoryref)
+           (type-error theoryref
+             "Theory ~a appears in more than one file:~%  ~{~a~^, ~}~
               ~%pick one and typecheck it."
-	     theoryref files-with-theoryref))
-	  (t (car files-with-theoryref)))))
+             theoryref files-with-theoryref))
+          (t (car files-with-theoryref)))))
 
 (defun get-parsed-library-theory (theoryname)
   (load-imported-library (library theoryname) theoryname))
