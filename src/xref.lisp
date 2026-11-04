@@ -28,6 +28,29 @@
 (defvar *xref-names-seen* nil)
 (defvar *xref-types-seen* nil)
 
+;; Keep short walks in a list. Big declarations repeatedly revisit names
+;; and types through their resolutions, so switch to EQ lookup after 32.
+(defmacro xref-seen? (node seen)
+  `(cond ((hash-table-p ,seen)
+          (if (gethash ,node ,seen)
+              t
+              (progn (setf (gethash ,node ,seen) t) nil)))
+         ((memq ,node ,seen) t)
+         (t
+          (push ,node ,seen)
+          (when (nthcdr 31 ,seen)
+            (let ((table (make-hash-table :test #'eq :size 64)))
+              (dolist (item ,seen)
+                (setf (gethash item table) t))
+              (setf ,seen table)))
+          nil)))
+
+;; A module visits one declaration at a time. Reuse its small visited tables
+;; across declarations, dropping large tables instead of repeatedly clearing them.
+(defun reusable-xref-table (seen)
+  (when (and (hash-table-p seen) (<= (hash-table-size seen) 1024))
+    (clrhash seen)))
+
 ;;; collects the references of an expression
 
 (defmethod collect-references (ex)
@@ -83,11 +106,14 @@
   (unless (gethash m *prelude*)
     (mapc #'(lambda (u) (pushnew m (used-by (car u)) :test #'eq))
 	  (all-usings m))
-    (dolist (d (all-decls m))
-      (let ((*generate-xref-declaration* d)
-	    (*xref-names-seen* nil)
-	    (*xref-types-seen* nil))
-	(generate-xref d))))
+    (let ((names nil) (types nil))
+      (dolist (d (all-decls m))
+        (let ((*generate-xref-declaration* d)
+              (*xref-names-seen* names)
+              (*xref-types-seen* types))
+          (generate-xref d)
+          (setf names (reusable-xref-table *xref-names-seen*)
+                types (reusable-xref-table *xref-types-seen*))))))
   m)
 
 (defmethod generate-xref ((use importing))
@@ -124,8 +150,7 @@
   nil)
 
 (defmethod generate-xref :around ((te type-expr))
-  (unless (memq te *xref-types-seen*)
-    (push te *xref-types-seen*)
+  (unless (xref-seen? te *xref-types-seen*)
     (call-next-method)
     (generate-xref (print-type te))))
 
@@ -355,8 +380,7 @@
   (assert (or (type n)
 	      (typep (declaration n)
 		     '(or module theory-abbreviation-decl))))
-  (unless (memq n *xref-names-seen*)
-    (push n *xref-names-seen*)
+  (unless (xref-seen? n *xref-names-seen*)
     (unless (typep (declaration n) '(or module mod-decl formal-theory-decl
 					theory-abbreviation-decl))
       (generate-xref (type n))))
