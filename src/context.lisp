@@ -983,19 +983,18 @@ its dependencies."
 			     (file-exists-p (make-specpath (ce-file ce))))
 	    (pvscontext-entries context)))
     (dolist (ce (pvscontext-entries context))
-      (let ((ndeps (remove-if-not #'(lambda (dep)
-				      (let ((spos (position #\/ dep :from-end t)))
-					(if spos
-					    (let ((dir (subseq dep 0 spos))
-						  (file (subseq dep (1+ spos))))
-					      (with-workspace dir
-						(file-exists-p (make-specpath file))))
-					    (file-exists-p (make-specpath dep)))))
-		     (ce-dependencies ce))))
-	(unless (equal ndeps (ce-dependencies ce))
-	  (pvs-message "PVS context has bad deps: ~a"
-	    (remove-if #'(lambda (dep) (file-exists-p (make-specpath dep)))
-	      (ce-dependencies ce)))
+      (let ((missing
+             (remove-if (lambda (dep)
+                          (let ((slash (position #\/ dep :from-end t)))
+                            (if slash
+                                (let ((dir (get-library-path (subseq dep 0 (max 1 slash)))))
+                                  (when dir
+                                    (let ((*default-pathname-defaults* dir))
+                                      (file-exists-p (make-specpath (subseq dep (1+ slash)))))))
+                                (file-exists-p (make-specpath dep)))))
+                        (ce-dependencies ce))))
+        (when missing
+          (pvs-message "PVS context has bad deps: ~a" missing)
 	  (setf (ce-dependencies ce) nil)
 	  (setf (ce-object-date ce) nil)
 	  (setf (ce-theories ce) nil))))

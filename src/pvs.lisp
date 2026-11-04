@@ -165,9 +165,9 @@
 	  (and fd (intern fd :pvs))))
   (let ((dp (environment-variable "PVSDEFAULTDP")))
     (when dp (set-decision-procedure (intern dp :pvs))))
+  (setq *pvs-library-path* (get-pvs-library-path))
   (unless *workspace-session*
     (change-workspace *default-pathname-defaults* t t))
-  (setq *pvs-library-path* (get-pvs-library-path))
   (unless dont-load-patches
     (load-pvs-patches))
   (pvs-init-globals)
