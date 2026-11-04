@@ -806,10 +806,16 @@ behavior:
 
 (defvar *mapobject-infix* nil)
 
+(defvar *spare-mapobject-cache*)
+;; Bound during typechecking. Each nested walk must own its visited set.
 (defun mapobject (fn obj)
-  (unwind-protect
-      (mapobject* fn obj)
-    (clrhash *mapobject-cache*))
+  (let* ((reuse? (boundp '*spare-mapobject-cache*))
+         (*mapobject-cache* (or (and reuse? (shiftf *spare-mapobject-cache* nil))
+                                (make-hash-table :test #'eq :size 37))))
+    (unwind-protect (mapobject* fn obj)
+      (when (and reuse? (null *spare-mapobject-cache*)
+                 (<= (hash-table-size *mapobject-cache*) 512))
+        (setf *spare-mapobject-cache* (clrhash *mapobject-cache*)))))
   obj)
 
 (defmethod mapobject* :around (fn obj)

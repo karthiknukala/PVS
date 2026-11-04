@@ -1905,7 +1905,8 @@ Needs to pay attention to sections."
 		(pvs-message "Deleted file ~a" sname))))))))
 
 (defun typecheck-theories (pathname theories)
-  (let* ((specpath (make-specpath pathname))
+  (let* ((*spare-mapobject-cache* nil)
+         (specpath (make-specpath pathname))
 	 (filename (pvs-filename specpath))
 	 (sorted-theories (sort-theories theories)))
     ;; (check-import-circularities sorted-theories)
