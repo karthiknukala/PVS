@@ -290,9 +290,9 @@ case $opsys in
 		 esac
 		 [ -n "${DISPLAY}" ] || nowin=1
 		 ;;
-  Darwin) case `uname -p` in
+  Darwin) PVSARCH=`uname -p`
+	  case $PVSARCH in
 	    i*86) PVSARCH=ix86;;
-	    *)    PVSARCH=`uname -p`;;
 	  esac
           opsys=MacOSX
 	  export LC_ALL="en_US.UTF-8"
@@ -414,7 +414,7 @@ fi
 # Now run pvs, either through Emacs or the raw PVS image
 # emacsargs is the arguments not otherwise hendled while processing the command line args
 if [ -n "${rawmode}" ] # No Emacs involved - PVSEMACS is not set
-then "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
+then exec "${pvsimagepath}" ${noinform} ${noinit} ${otherargs}
 elif [ -n "${batch}" ] # Emacs, but no windows
 then ${PVSEMACS} ${batch} ${dotemacs} ${pvsemacsinit} ${emacsargs} ${otherargs} 2>&1
 elif [ -n "${nowin}" ]

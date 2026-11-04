@@ -99,8 +99,8 @@
   (ignore-errors
     (setf uiop/configuration:*user-cache*
           (uiop/configuration::compute-user-cache)))
-  (asdf/source-registry:initialize-source-registry)
-  (asdf/output-translations:initialize-output-translations)
+  ;; ASDF discovers systems and output translations on first use. Most
+  ;; sessions use only the systems already loaded into the saved image.
   (setq *pvs-path* (initial-pvs-path path)
         *pvs-prelude-directory-cache* nil)
   (reset-pvs-log-directory)
