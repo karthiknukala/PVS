@@ -149,8 +149,8 @@ instances, e.g., other declarations within the theory, or self-references."
 				     (id (adt obj))))))))
 
 (defmethod external-library-reference? ((obj datatype-or-module))
-  (and (not (file-equal (context-path obj) *default-pathname-defaults*))
-       (not (from-prelude? obj))))
+  (and (not (from-prelude? obj))
+       (not (file-equal (context-path obj) *default-pathname-defaults*))))
 
 (defmethod external-library-reference? (obj)
   (declare (ignore obj))
