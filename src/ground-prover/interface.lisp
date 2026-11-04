@@ -205,7 +205,9 @@
 
 
 (defun alphalessp (a b)
-  (string< (string a) (string b)))
+  ;; Comparing symbol names directly avoids widening them in STRING on SBCL.
+  (string< (if (symbolp a) (symbol-name a) a)
+           (if (symbolp b) (symbol-name b) b)))
 
 ; (defun arithstring (a)
 ;   (case a
