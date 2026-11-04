@@ -304,7 +304,12 @@
 	       (cur-all-subst-mod-params-caches
 		(all-subst-mod-params-caches *workspace-session*))
 	       (new-all-subst-mod-params-caches
-		(copy-subst-mod-params-cache))
+                ;; Substitutions computed during the proof belong to this proof.
+                (progn
+                  (assert *workspace-session*)
+                  (unless cur-all-subst-mod-params-caches
+                    (reset-subst-mod-params-cache))
+                  (make-pvs-hash-table :strong-eq? t)))
 	       ;; (*dump-proof-data-to-file*
 	       ;;  (or *dump-proof-data-to-file*
 	       ;; 	  (when *log-proofs* (format nil "~a/pvs-logs/prf-~a.json"
