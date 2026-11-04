@@ -76,7 +76,7 @@
 	     (if (memq test '(eq eql equal equalp))
 		 (make-hash-table
 		  :test test
-		  :size size
+		  :size (max size (hash-table-count ht))
 		  :rehash-size rehash-size
 		  :rehash-threshold rehash-threshold
 		  #-sbcl :weak-p #+sbcl :weakness weakp)
