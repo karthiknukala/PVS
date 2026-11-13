@@ -14,7 +14,7 @@ A machine is represented by ordinary PVS types and functions:
 it must not be mistaken for equality of complete states.
 
 The Lisp `sal-transition-view` also holds the original resolved SAL context,
-normalized SAL AST, dependency contexts, formal/actual parameters, selected
+flat or hierarchical SAL AST, dependency contexts, formal/actual parameters, selected
 properties, source places, generated declarations, and exact source snapshots. This metadata supports compilation and presentation;
 it is **not** a syntax interpreter inside the PVS logic.
 
@@ -68,16 +68,71 @@ explicit concrete selections, and unused context aliases. Their PVS checks live
 in the declaring context or selected view, without introducing extra imported
 namespaces. Thus normalization cannot erase a parameter-domain obligation.
 
-Indexed composition currently goes through SAL's normalization into quantified
-relations and array state. It does not require a first-class PVS theory per
-component and it does not enumerate the finite index carrier. Preserving the
-hierarchical module structure for presentation and compositional proofs is a
-later optimization; the normalized view remains the semantic interface. Long conjunctions are
+The default flat mode sends indexed composition through SAL's normalization
+into quantified relations and array state, without enumerating the index carrier.
+The modular mode preserves the hierarchy as described below. Long conjunctions are
 balanced, and total Boolean/real LET chains at relation scope become small
 tuple-valued helper definitions with source origins. Subtype bindings, partial
 operations, array accesses, and expressions under local guards retain their
 original scope. These helpers preserve expression sharing and bound the nesting
 depth without asking PVS to repeat very wide state binders for every Boolean gate.
+
+## Structural module theories
+
+`sal-open :translation :modular` requests `--modular` from the exporter.
+The envelope carries each named module's parameters, native interface, hierarchical
+body, rebound properties, and source places. Every composition node carries
+SAL's computed interface, including private tuple and indexed array fields.
+SAL inserts implicit assignments
+locally in base modules. Neither SAL module flattening nor the Lisp flat
+elaborator runs on this path.
+
+`modular.lisp` emits a context theory and one theory per named module. The PVS
+state is a native record, and a `SAL_Module[State].Module` contains four ordinary
+functions: `defined`, `init`, `step`, and `idle`. `SAL_Module_Lift` connects
+components through typed state projections. `SAL_Module` defines binary
+synchronous and asynchronous composition; `SAL_Indexed_Module` applies the
+same operations to quantified families. Context and module parameters remain
+PVS theory parameters. A family of N components remains one lambda and one
+quantifier over its index type.
+
+Named guarded commands become typed PVS functions. For an assignment under
+guard `enabled(s,next)`, the RHS function takes
+`next: {candidate: State | enabled(s,candidate)}` and returns the SAL target's
+translated type. Its body is the translated RHS itself. PVS therefore checks
+each assignment independently, including assignments in overlapping branches.
+Guards are also separate Boolean definitions, retaining domain TCCs even when
+another branch is always enabled. Unconditional assignments have ordinary state
+parameters. `IN` assignments retain relational membership semantics and are
+checked independently under their guards. Total Boolean/real expressions remain
+inline; partial expressions and subtype-valued assignments retain native typed
+functions. Large total LET expressions retain sharing through helper definitions.
+
+Private state is projected through the tuple position or family index supplied
+by SAL's interface. Asynchronous composition frames GLOBAL variables absent
+from the active component; output promotion adds the corresponding idle frame.
+Projection expressions are rebound separately for current and next states.
+
+The selected module exposes the same `defined/initial/step/idle` interface as
+the flat view and imports `SAL_Transition_System`. Source-level TCC display,
+the progress interpretation, and registered `sal-check` strategies use that
+interface. Mode-specific view identities allow both translations to coexist.
+
+`sal-write-modular-comparison` constructs a typed state map and four native
+PVS theorems equating the flat and modular relations. The counter,
+open-component, synchronous N-ary and asynchronous N-ary regressions prove
+these equalities and replay their proofs. The modular runner also tests the
+path with flat export and flat elaboration disabled.
+
+The structural implementation covers named and inline base modules,
+context/module parameters, imported module instances, renaming, hiding,
+NEWOUTPUT, observers, binary composition, asynchronous GLOBAL ownership,
+and indexed families with index-dependent theory actuals. Empty-state modules
+use a singleton carrier. Transition FORALL definitions still depend on SAL's
+implicit-assignment preprocessing support. Concrete SAL wrapper contexts,
+such as `nary_demo.sal`, instantiate generic modules for checker strategies.
+The automatic example-corpus suite exercises the structural frontend. The
+original flat translation supplies independent relation comparisons.
 
 ## Typechecking and source obligations
 

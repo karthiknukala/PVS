@@ -32,7 +32,7 @@
   (when (and (not in-proof) (fboundp 'confirm-not-in-checker)) (confirm-not-in-checker))
   (let ((file (expand-file-name "load.lisp" sal-pvs-bridge-directory)))
     (pvs-send-and-wait
-     (format "(progn (unless (fboundp 'pvs::sal-editor-request) (load %s)) t)"
+     (format "(progn (unless (and (fboundp 'pvs::sal-editor-request) (fboundp 'pvs::sal-editor-modules)) (load %s)) t)"
              (sal-pvs--literal file)) nil nil)))
 
 (defun sal-pvs--request (op &rest args)
@@ -55,14 +55,8 @@
     (plist-get response :ok)))
 
 (defun sal-pvs--modules ()
-  (save-excursion
-    (goto-char (point-min))
-    (let ((case-fold-search t) names)
-      (while (re-search-forward "\\_<\\([A-Za-z][A-Za-z0-9_]*\\)\\s-*\\(?:\\[[^]]*\\]\\s-*\\)?:\\s-*MODULE\\_>" nil t)
-        (let ((name (match-string-no-properties 1)) (start (match-beginning 0)))
-          (unless (save-excursion (save-match-data (nth 8 (syntax-ppss start))))
-            (push name names))))
-      (append (nreverse names) '("--context")))))
+  "Return the source context's modules as parsed by SAL."
+  (sal-pvs--request :modules (file-truename buffer-file-name)))
 
 (defun sal-pvs-typecheck (&optional select)
   "Save, run sal-wfc, translate, then generate PVS TCCs. SELECT changes module."
@@ -72,9 +66,12 @@
   (sal-pvs--connect)
   (save-buffer)
   (setq sal-pvs--description nil)
-  (when (or select (null sal-pvs-module))
-    (setq sal-pvs-module (completing-read "SAL module: " (sal-pvs--modules) nil nil
-                                         nil nil sal-pvs-module)))
+  (let ((modules (sal-pvs--modules)))
+    (setq sal-pvs-module
+          (cond ((null (cdr modules)) (car modules))
+                ((and (not select) (member sal-pvs-module modules)) sal-pvs-module)
+                (t (completing-read "SAL module: " modules nil t nil nil
+                                    (and (member sal-pvs-module modules) sal-pvs-module))))))
   (sal-pvs--request :syntax sal-pvs-syntax-enabled)
   (setq sal-pvs--description (sal-pvs--request :typecheck (file-truename buffer-file-name)
                                              sal-pvs-module))

@@ -1,0 +1,24 @@
+nary__sync__comparison[N: {n: nat | (n > 0)}]: THEORY
+BEGIN
+  IMPORTING nary__sync[N] AS modular, SAL_sal_nary_sal_sync[N] AS flat
+
+  to_flat(s: modular.State): flat.State =
+    (# sal_values := s`values #)
+
+  defined_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.defined(s) IFF flat.defined(to_flat(s))
+
+  initial_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.initial(s) IFF flat.initial(to_flat(s))
+
+  step_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.step(s, t) IFF flat.step(to_flat(s), to_flat(t))
+
+  idle_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.idle(s, t) IFF flat.idle(to_flat(s), to_flat(t))
+
+END nary__sync__comparison

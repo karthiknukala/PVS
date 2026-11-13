@@ -20,7 +20,18 @@ For an already running, normally initialized session:
 Start a working PVS Emacs session with =SAL_HOME= pointing to SAL and
 =SAL_XMLS_SOURCE= pointing to an existing =xmls.lisp=, unless XMLS is already
 loaded in that PVS image. This checkout's optional bridge need not be built into
-the image. Set these environment variables before starting PVS.
+the image. In the running PVS Lisp buffer, set SAL_HOME with:
+
+#+begin_src lisp
+(setf (uiop:getenv "SAL_HOME") "/Users/e35480/git/kn-sal")
+#+end_src
+
+PVS and the SAL subprocesses it launches use this value immediately. For future
+sessions launched from a terminal, set it before starting Emacs/PVS:
+
+#+begin_src sh
+export SAL_HOME=/Users/e35480/git/kn-sal
+#+end_src
 
 Evaluate the following in that Emacs session, substituting your paths:
 
@@ -53,6 +64,23 @@ the corrected loader rather than using =RECKLESSLY-CONTINUE= or repeated
 
 * Tutorial: bounded counter
 
+For the modular examples, visit [[file:../examples/modular/counter.sal][modular/counter.sal]],
+use the existing =sal-pvs-mode= and typecheck with =C-c C-t=. Its sole module,
+=bounded=, is selected automatically. =C-c C-v= opens the component's readable PVS theory;
+=C-c C-q= shows the native, source-linked TCCs. The same mode works for
+[[file:../examples/modular/open_component.sal][open_component.sal]] and [[file:../examples/modular/nary.sal][nary.sal]].
+The frontend preserves modules; the flat translator remains in the comparison tests.
+Module choices come from SAL's parser. Files containing modules offer those
+modules; files containing only library definitions are checked as libraries.
+An old remembered =--context= selection is replaced when the file contains a
+state machine.
+See [[file:../examples/modular/README.md][the modular tutorial]] for the worked examples and checker commands.
+
+When reloading this change into an already running bridge, evaluate
+=(load "/path/to/kn-pvs/src/sal/load.lisp")= in the PVS Lisp buffer and
+reload =sal-pvs-mode.el= with =M-x load-file= in Emacs. Existing transition-view
+structure layouts are preserved, so no PVS rebuild is needed.
+
 Visit [[file:../examples/bounded_counter.sal][bounded_counter.sal]], enable the mode, and use:
 
 | Key         | Command                  | Effect                                      |
@@ -73,7 +101,7 @@ Visit [[file:../examples/bounded_counter.sal][bounded_counter.sal]], enable the 
    the =count' = count + 1= check is displayed with SAL field selections,
    =FORALL=, =AND= and =STATE_TYPE(bounded_counter!counter)=. It retains the
    guard =count < LIMIT= and the bound =LIMIT= from the current PVS formula.
-3. Activate =check_step_5_TCC1= in the TCC list. In the native prover, try
+3. Activate the TCC for =count' = count + 1= in the list. In the native prover, try
    =(skosimp*)=, then =(grind)=. The sequent follows the actual transformed goal.
    SAL formulas have left-hand labels such as =SAL/{1}= and =SAL/[-1]=,
    preserving the native formula numbers, user labels and change markers.
@@ -93,18 +121,7 @@ The TCC buffer follows the usual PVS listing style: a clickable
 =name: OBLIGATION= and the full formula, with source links, proof status and
 the originating SAL expression in =%= comment lines above it. Quantifiers and
 implications are indented, and logical expressions wrap across lines. There is
-no introductory banner, prose summary or hidden formula. For example:
-
-#+begin_src text
-% bounded_counter.sal:30
-% SAL_sal_bounded_x5F_counter_sal_counter.check_step_5_TCC1 [UNFINISHED]
-% count' = count + 1
-check_step_5_TCC1: OBLIGATION
-  FORALL (s: STATE_TYPE(bounded_counter!counter),
-          next: STATE_TYPE(bounded_counter!counter)):
-    (s.phase = bounded_counter!counting AND s.count < bounded_counter!LIMIT)
-      => (0 <= (s.count + 1) AND (s.count + 1) <= bounded_counter!LIMIT);
-#+end_src
+no introductory banner, prose summary or hidden formula.
 
 Formatting preserves the actual formula, including unused binders and context
 qualification. It does not simplify the obligation or change the proof target.

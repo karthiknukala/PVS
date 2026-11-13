@@ -1,0 +1,21 @@
+open_component: CONTEXT =
+BEGIN
+  latch: MODULE =
+    BEGIN
+      INPUT request: BOOLEAN
+      OUTPUT acknowledged: BOOLEAN
+      INITIALIZATION acknowledged = FALSE
+      TRANSITION [ sample: TRUE --> acknowledged' = request ]
+    END;
+
+  source: MODULE =
+    BEGIN
+      OUTPUT request: BOOLEAN
+      INITIALIZATION request = FALSE
+      TRANSITION [ toggle: TRUE --> request' = NOT request ]
+    END;
+
+  connected: MODULE = source || latch;
+  interleaved: MODULE = source [] latch;
+  synchronized: THEOREM connected |- G(acknowledged /= request OR NOT request);
+END

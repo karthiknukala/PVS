@@ -1,0 +1,24 @@
+counter__bounded__comparison: THEORY
+BEGIN
+  IMPORTING counter__bounded AS modular, SAL_sal_counter_sal_bounded AS flat
+
+  to_flat(s: modular.State): flat.State =
+    (# sal_count := s`count #)
+
+  defined_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.defined(s) IFF flat.defined(to_flat(s))
+
+  initial_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.initial(s) IFF flat.initial(to_flat(s))
+
+  step_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.step(s, t) IFF flat.step(to_flat(s), to_flat(t))
+
+  idle_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.idle(s, t) IFF flat.idle(to_flat(s), to_flat(t))
+
+END counter__bounded__comparison

@@ -1,0 +1,24 @@
+open_component__connected__comparison: THEORY
+BEGIN
+  IMPORTING open_component__connected AS modular, SAL_sal_open_x5F_component_sal_connected AS flat
+
+  to_flat(s: modular.State): flat.State =
+    (# sal_acknowledged := s`acknowledged, sal_request := s`request #)
+
+  defined_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.defined(s) IFF flat.defined(to_flat(s))
+
+  initial_equivalent: THEOREM
+    FORALL (s: modular.State):
+      modular.initial(s) IFF flat.initial(to_flat(s))
+
+  step_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.step(s, t) IFF flat.step(to_flat(s), to_flat(t))
+
+  idle_equivalent: THEOREM
+    FORALL (s, t: modular.State):
+      modular.idle(s, t) IFF flat.idle(to_flat(s), to_flat(t))
+
+END open_component__connected__comparison

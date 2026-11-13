@@ -1,0 +1,47 @@
+nary__cell[N: {n: nat | (n > 0)}]: THEORY
+BEGIN
+  IMPORTING SALCTX_nary[N]
+
+  State: TYPE = [# value: subrange(0, 2) #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  initialize_value(s: State, next: State): subrange(0, 2) =
+    0
+
+  increment_enabled(s, next: State): bool = (s`value < 2)
+
+  increment_value(s: State, next: {candidate: State | increment_enabled(s, candidate)}): subrange(0, 2) =
+    (s`value + 1)
+
+  increment(s, next: State): bool =
+    increment_enabled(s, next) AND next`value = increment_value(s, next)
+
+  wrap_enabled(s, next: State): bool = NOT ((s`value < 2))
+
+  wrap_value(s: State, next: {candidate: State | wrap_enabled(s, candidate)}): subrange(0, 2) =
+    0
+
+  wrap(s, next: State): bool =
+    wrap_enabled(s, next) AND next`value = wrap_value(s, next)
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN s`value = initialize_value(s, next))
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND (increment(s, next) OR wrap(s, next))
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`value = s`value
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS nary__cell_semantics
+
+END nary__cell

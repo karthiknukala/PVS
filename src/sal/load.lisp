@@ -16,7 +16,7 @@
 (unless (find-class 'sal-context nil)
   (load (merge-pathnames "classes.lisp" *sal-bridge-directory*)))
 (dolist (file '("xml-reader.lisp" "sal-pp.lisp" "sal-utils.lisp"
-                "view.lisp" "view-import.lisp" "elaborate.lisp" "causality.lisp"
+                "view.lisp" "view-import.lisp" "elaborate.lisp" "modular.lisp" "causality.lisp"
                 "backend.lisp" "wfc.lisp" "strategies.lisp" "integration.lisp"
                 "pvs-to-sal.lisp" "pvs-origin-view.lisp" "pvs-origin.lisp"
                 "sal-display.lisp" "editor.lisp"))

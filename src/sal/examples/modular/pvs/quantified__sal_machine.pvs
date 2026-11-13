@@ -1,0 +1,50 @@
+quantified__sal_machine: THEORY
+BEGIN
+  IMPORTING SALCTX_quantified
+
+  State: TYPE = [# counts: [Index -> Count] #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  initialize_value(s: State, i: Index, next: State): Count =
+    0
+
+  initialize_target(s: State, i: Index, next: State): Count =
+    (s`counts)(i)
+
+  transition_enabled(s, next: State, i_2: Index): bool = ((s`counts)(i_2) < 3)
+
+  transition_value(s: State, i_2: Index, next: {candidate: State | transition_enabled(s, candidate, i_2)}): [Index -> Count] =
+    (s`counts WITH [(i_2) := ((s`counts)(i_2) + 1)])
+
+  transition(s, next: State, i_2: Index): bool =
+    transition_enabled(s, next, i_2) AND next`counts = transition_value(s, i_2, next)
+
+  reset_enabled(s, next: State): bool = NOT (EXISTS (i_2: Index): ((s`counts)(i_2) < 3))
+
+  reset_value(s: State, next: {candidate: State | reset_enabled(s, candidate)}): [Index -> Count] =
+    (LAMBDA (j: Index): 0)
+
+  reset(s, next: State): bool =
+    reset_enabled(s, next) AND next`counts = reset_value(s, next)
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN FORALL (i: Index): initialize_target(s, i, next) = initialize_value(s, i, next))
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND (EXISTS (i_2: Index): transition(s, next, i_2) OR reset(s, next))
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`counts = s`counts
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS quantified__sal_machine_semantics
+
+END quantified__sal_machine

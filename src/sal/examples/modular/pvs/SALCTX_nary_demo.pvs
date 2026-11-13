@@ -1,0 +1,11 @@
+% SAL context nary_demo; source nary_demo.sal.
+SALCTX_nary_demo: THEORY
+BEGIN
+
+  IMPORTING SALCTX_nary
+
+  check_module_3: bool = (LET sal_sal_x5F_macro_x5F_context_x5F_argument: {n: nat | (n > 0)} = 3 IN TRUE)
+
+  check_module_4: bool = (LET sal_sal_x5F_macro_x5F_context_x5F_argument_2: {n_2: nat | (n_2 > 0)} = 3 IN TRUE)
+
+END SALCTX_nary_demo

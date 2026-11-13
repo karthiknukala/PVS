@@ -1,0 +1,49 @@
+counter__bounded: THEORY
+BEGIN
+  IMPORTING SALCTX_counter
+
+  State: TYPE = [# count: Count #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  initialize_value(s: State, next: State): Count =
+    0
+
+  increment_enabled(s, next: State): bool = (s`count < Limit)
+
+  increment_value(s: State, next: {candidate: State | increment_enabled(s, candidate)}): Count =
+    (s`count + 1)
+
+  increment(s, next: State): bool =
+    increment_enabled(s, next) AND next`count = increment_value(s, next)
+
+  stay_enabled(s, next: State): bool = NOT ((s`count < Limit))
+
+  stay_value(s: State, next: {candidate: State | stay_enabled(s, candidate)}): Count =
+    s`count
+
+  stay(s, next: State): bool =
+    stay_enabled(s, next) AND next`count = stay_value(s, next)
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN s`count = initialize_value(s, next))
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND (increment(s, next) OR stay(s, next))
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`count = s`count
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS counter__bounded_semantics
+
+  within_limit: THEOREM counter__bounded_semantics.invariant(LAMBDA (s: State): (s`count <= Limit))
+
+END counter__bounded

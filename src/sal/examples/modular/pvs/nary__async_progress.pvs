@@ -1,0 +1,7 @@
+nary__async_progress[N: {n_2: nat | (n_2 > 0)}]: THEORY
+BEGIN
+  IMPORTING nary__async[N]
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := nary__async[N].State, initial := nary__async[N].initial, step := nary__async[N].step }}
+END nary__async_progress

@@ -1,0 +1,21 @@
+% Families remain quantified; component instances are not enumerated.
+SAL_Indexed_Module[S, Index: TYPE]: THEORY
+BEGIN
+  IMPORTING SAL_Module[S] AS indexed_ops
+  family: VAR [Index -> indexed_ops.Module]
+  s, t: VAR S
+
+  synchronous(family): indexed_ops.Module =
+    (# defined := LAMBDA s: FORALL (i: Index): family(i)`defined(s),
+       init := LAMBDA s: FORALL (i: Index): family(i)`init(s),
+       step := LAMBDA (s, t): FORALL (i: Index): family(i)`step(s, t),
+       idle := LAMBDA (s, t): FORALL (i: Index): family(i)`idle(s, t) #)
+
+  asynchronous(family): indexed_ops.Module =
+    (# defined := LAMBDA s: FORALL (i: Index): family(i)`defined(s),
+       init := LAMBDA s: FORALL (i: Index): family(i)`init(s),
+       step := LAMBDA (s, t): EXISTS (i: Index):
+         family(i)`step(s, t) AND
+         (FORALL (j: Index): j /= i IMPLIES family(j)`idle(s, t)),
+       idle := LAMBDA (s, t): FORALL (i: Index): family(i)`idle(s, t) #)
+END SAL_Indexed_Module

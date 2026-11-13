@@ -1,0 +1,14 @@
+counter: CONTEXT =
+BEGIN
+  Limit: NATURAL = 3;
+  Count: TYPE = [0..Limit + 1];
+  bounded: MODULE =
+    BEGIN
+      OUTPUT count: Count
+      INITIALIZATION count = 0
+      TRANSITION
+        [ increment: count < Limit --> count' = count + 1
+        [] stay: ELSE --> count' = count ]
+    END;
+  within_limit: THEOREM bounded |- G(count <= Limit);
+END

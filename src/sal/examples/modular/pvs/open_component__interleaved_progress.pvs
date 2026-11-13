@@ -1,0 +1,7 @@
+open_component__interleaved_progress: THEORY
+BEGIN
+  IMPORTING open_component__interleaved
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := open_component__interleaved.State, initial := open_component__interleaved.initial, step := open_component__interleaved.step }}
+END open_component__interleaved_progress

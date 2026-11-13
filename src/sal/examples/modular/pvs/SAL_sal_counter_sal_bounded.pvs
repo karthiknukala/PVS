@@ -1,0 +1,34 @@
+% Generated from src/sal/examples/modular/counter.sal, module bounded.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_counter_sal_bounded: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_counter
+
+  State: TYPE = [# sal_count: sal_Count #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = TRUE
+
+  initial(s: State): bool = defined(s) AND (((s)`sal_count = 0) AND TRUE)
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND ((TRUE AND ((s)`sal_count < sal_Limit) AND ((next)`sal_count = ((s)`sal_count + 1))) OR (TRUE AND (NOT ((s)`sal_count < sal_Limit)) AND ((next)`sal_count = (s)`sal_count)))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND ((next)`sal_count = (s)`sal_count)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  check_initial_1(s, next: State): bool =
+    TRUE IMPLIES (LET bridge_rhs: sal_Count = 0 IN TRUE)
+
+  check_step_1(s, next: State): bool =
+    (TRUE AND ((s)`sal_count < sal_Limit)) IMPLIES (LET bridge_rhs: sal_Count = ((s)`sal_count + 1) IN TRUE)
+
+  check_step_2(s, next: State): bool =
+    (TRUE AND (NOT ((s)`sal_count < sal_Limit))) IMPLIES (LET bridge_rhs: sal_Count = (s)`sal_count IN TRUE)
+
+  sal_within_x5F_limit: THEOREM system.invariant(LAMBDA (s: State): ((s)`sal_count <= sal_Limit))
+
+END SAL_sal_counter_sal_bounded

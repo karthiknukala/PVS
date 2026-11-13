@@ -1,0 +1,33 @@
+open_component__source: THEORY
+BEGIN
+  IMPORTING SALCTX_open_component
+
+  State: TYPE = [# request: bool #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  toggle_enabled(s, next: State): bool = TRUE
+
+  toggle(s, next: State): bool =
+    toggle_enabled(s, next) AND next`request = (NOT s`request)
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN s`request = FALSE)
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND toggle(s, next)
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`request = s`request
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS open_component__source_semantics
+
+END open_component__source

@@ -1,0 +1,25 @@
+% Generated from src/sal/examples/modular/open_component.sal, module connected.
+% The relations below are exported by SAL's module normalizer.
+SAL_sal_open_x5F_component_sal_connected: THEORY
+BEGIN
+
+  IMPORTING SALCTX_sal_open_x5F_component
+
+  State: TYPE = [# sal_acknowledged: bool, sal_request: bool #]
+
+  s, next: VAR State
+
+  defined(s: State): bool = (TRUE AND TRUE)
+
+  initial(s: State): bool = defined(s) AND ((((s)`sal_request = FALSE) AND TRUE) AND (((s)`sal_acknowledged = FALSE) AND TRUE))
+
+  step(s, next: State): bool = defined(s) AND defined(next) AND ((TRUE AND TRUE AND ((next)`sal_request = (NOT (s)`sal_request))) AND (TRUE AND TRUE AND ((next)`sal_acknowledged = (s)`sal_request)))
+
+  idle(s, next: State): bool = defined(s) AND defined(next) AND (((next)`sal_request = (s)`sal_request) AND ((next)`sal_acknowledged = (s)`sal_acknowledged))
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS system
+
+  % Separate checks preserve nondeterministic branch typing.
+  sal_synchronized: THEOREM system.invariant(LAMBDA (s: State): (((s)`sal_acknowledged /= (s)`sal_request) OR (NOT (s)`sal_request)))
+
+END SAL_sal_open_x5F_component_sal_connected

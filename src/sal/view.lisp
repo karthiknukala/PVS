@@ -14,6 +14,19 @@
   (origins (make-hash-table :test #'equal))
   tccs)
 
+;; Keep extension metadata outside the structure so a running PVS can reload
+;; the bridge without invalidating its existing transition-view objects.
+(defvar *sal-modular-view-metadata* (make-hash-table :test #'eq))
+(defmacro sal-define-view-metadata (name default)
+  `(progn
+     (defun ,name (view)
+       (getf (gethash view *sal-modular-view-metadata*) ',name ,default))
+     (defun (setf ,name) (value view)
+       (setf (getf (gethash view *sal-modular-view-metadata*) ',name) value))))
+(sal-define-view-metadata sal-transition-view-translation-mode :flat)
+(sal-define-view-metadata sal-transition-view-structural-modules nil)
+(sal-define-view-metadata sal-transition-view-source-module nil)
+
 (defstruct sal-source-obligation
   name kind status formula declaration source place source-expression)
 
@@ -58,7 +71,8 @@
   (let ((dir (sal-bridge-output-path (uiop:ensure-directory-pathname directory))))
     (ensure-directories-exist (merge-pathnames "placeholder" dir))
     (dolist (name '("SAL_Transition_System.pvs" "SAL_Transition_View.pvs" "SAL_Progress_Contract.pvs" "SAL_CTL.pvs"
-                   "SAL_Causality_Contract.pvs"))
+                   "SAL_Causality_Contract.pvs" "SAL_Module.pvs" "SAL_Module_Lift.pvs"
+                   "SAL_Indexed_Module.pvs" "SAL_Guarded_Action.pvs"))
       (let ((from (merge-pathnames (concatenate 'string "theories/" name)
                                   *sal-bridge-directory*))
             (to (merge-pathnames name dir)))
@@ -100,6 +114,8 @@
     (or best (and theory-name (sal-view-origin view generated-name)))))
 
 (export '(sal-transition-view make-sal-transition-view
+          sal-transition-view-translation-mode sal-transition-view-structural-modules
+          sal-transition-view-source-module
           sal-transition-view-source sal-transition-view-source-text
           sal-transition-view-context sal-transition-view-module-name
           sal-transition-view-contexts sal-transition-view-context-pvs-files

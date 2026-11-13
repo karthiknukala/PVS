@@ -1,0 +1,32 @@
+nary_demo__async: THEORY
+BEGIN
+  IMPORTING SALCTX_nary_demo
+
+  State: TYPE = [# values: [SALCTX_nary[3].Index -> subrange(0, 2)] #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State], SAL_Module_Lift, SAL_Indexed_Module
+
+  IMPORTING nary__async[3]
+
+  async_state(s: State): nary__async[3].State =
+    (# values := s`values #)
+
+  async_component: SAL_Module[State].Module =
+    SAL_Module_Lift[State, nary__async[3].State,
+      LAMBDA (s: State): async_state(s)].lift(nary__async[3].machine)
+
+  machine: SAL_Module[State].Module =
+    async_component
+
+  defined(s: State): bool = machine`defined(s)
+  initial(s: State): bool = machine`init(s)
+  step(s, next: State): bool = machine`step(s, next)
+  idle(s, next: State): bool = machine`idle(s, next)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS nary_demo__async_semantics
+
+  async_aligned: THEOREM nary_demo__async_semantics.invariant(LAMBDA (s: State): (FORALL (i: subrange(1, 3), j: subrange(1, 3)): ((s`values)(i) = (s`values)(j))))
+
+END nary_demo__async

@@ -1,0 +1,6 @@
+% SAL context open_component; source open_component.sal.
+SALCTX_open_component: THEORY
+BEGIN
+
+
+END SALCTX_open_component

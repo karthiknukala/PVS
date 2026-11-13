@@ -1,0 +1,10 @@
+% Wiring is an ordinary typed projection from the containing state.
+SAL_Module_Lift[S, C: TYPE, project: [S -> C]]: THEORY
+BEGIN
+  IMPORTING SAL_Module[S] AS outer, SAL_Module[C] AS component
+  lift(m: component.Module): outer.Module =
+    (# defined := LAMBDA (s: S): m`defined(project(s)),
+       init := LAMBDA (s: S): m`init(project(s)),
+       step := LAMBDA (s, t: S): m`step(project(s), project(t)),
+       idle := LAMBDA (s, t: S): m`idle(project(s), project(t)) #)
+END SAL_Module_Lift

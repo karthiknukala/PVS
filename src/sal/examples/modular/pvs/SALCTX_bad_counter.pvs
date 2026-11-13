@@ -1,0 +1,6 @@
+% SAL context bad_counter; source bad_counter.sal.
+SALCTX_bad_counter: THEORY
+BEGIN
+
+
+END SALCTX_bad_counter

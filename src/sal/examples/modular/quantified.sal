@@ -1,0 +1,13 @@
+quantified: CONTEXT =
+BEGIN
+  Index: TYPE = [0..2];
+  Count: TYPE = [0..3];
+  machine: MODULE =
+    BEGIN
+      OUTPUT counts: ARRAY Index OF Count
+      INITIALIZATION (FORALL (i: Index): counts[i] = 0)
+      TRANSITION
+        [ ([] (i: Index): counts[i] < 3 --> counts'[i] = counts[i] + 1)
+        [] reset: ELSE --> counts' = [[j: Index] 0] ]
+    END;
+END

@@ -1,0 +1,7 @@
+open_component__latch_progress: THEORY
+BEGIN
+  IMPORTING open_component__latch
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := open_component__latch.State, initial := open_component__latch.initial, step := open_component__latch.step }}
+END open_component__latch_progress

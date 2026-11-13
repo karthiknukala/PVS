@@ -1,0 +1,27 @@
+% Open modules keep definition constraints and composition idle distinct.
+SAL_Module[S: TYPE]: THEORY
+BEGIN
+  Module: TYPE = [# defined: [S -> bool], init: [S -> bool],
+                    step: [S, S -> bool], idle: [S, S -> bool] #]
+  m, n: VAR Module
+  s, t: VAR S
+
+  synchronous(m, n): Module =
+    (# defined := LAMBDA s: m`defined(s) AND n`defined(s),
+       init := LAMBDA s: m`init(s) AND n`init(s),
+       step := LAMBDA (s, t): m`step(s, t) AND n`step(s, t),
+       idle := LAMBDA (s, t): m`idle(s, t) AND n`idle(s, t) #)
+
+  asynchronous(m, n): Module =
+    (# defined := LAMBDA s: m`defined(s) AND n`defined(s),
+       init := LAMBDA s: m`init(s) AND n`init(s),
+       step := LAMBDA (s, t):
+         (m`step(s, t) AND n`idle(s, t)) OR
+         (m`idle(s, t) AND n`step(s, t)),
+       idle := LAMBDA (s, t): m`idle(s, t) AND n`idle(s, t) #)
+  frame_step(m: Module, frame: [S, S -> bool]): Module =
+    m WITH [`step := LAMBDA (s, t): m`step(s, t) AND frame(s, t)]
+
+  frame_idle(m: Module, frame: [S, S -> bool]): Module =
+    m WITH [`idle := LAMBDA (s, t): m`idle(s, t) AND frame(s, t)]
+END SAL_Module

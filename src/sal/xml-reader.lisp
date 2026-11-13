@@ -988,11 +988,12 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
               (rhs-node (if (sal-xml-elements rhs-wrapper)
                             (first (sal-xml-elements rhs-wrapper))
                             (third elements))))
-         (sal-node (if selectionp
-                       'sal-simple-selection-definition
-                       'sal-simple-definition)
-                   state node :lhs lhs
-                   :rhs (sal-convert-expression state rhs-node))))
+         (let* ((rhs (sal-convert-expression state rhs-node))
+                (predicate-type (sal-xml-child node "PREDICATETYPE")))
+           (when predicate-type
+             (setf (type rhs) (sal-convert-type state (first (sal-xml-elements predicate-type)))))
+           (sal-node (if selectionp 'sal-simple-selection-definition 'sal-simple-definition)
+                     state node :lhs lhs :rhs rhs))))
       ((string-equal tag "FORALLDEFINITION")
        (let* ((decl-container (first elements))
               (decl-nodes (sal-xml-elements decl-container)))
@@ -1055,7 +1056,9 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
         (else-command nil))
     (dolist (child (sal-xml-elements node))
       (let ((command (sal-convert-command state child)))
-        (if (typep command 'sal-else-command)
+        (if (or (typep command 'sal-else-command)
+                (and (typep command 'sal-labeled-command)
+                     (typep (command command) 'sal-else-command)))
             (setf else-command command)
             (push command commands))))
     (sal-node 'sal-command-section state node
@@ -1151,6 +1154,19 @@ and the conventional ~/projects/misc/sal/sal-3.3 checkout, in that order.")
                                   nil))))
 
 (defun sal-convert-module (state node)
+  (let ((module (sal-convert-module-body state node))
+        (interface (sal-xml-child node "BRIDGEINTERFACE")))
+    (when interface
+      (let* ((nodes (sal-xml-elements interface))
+             (variables (mapcar (lambda (n) (sal-make-state-var state n)) nodes))
+             (scope (sal-state-vars-table variables)))
+        (sal-call-with-scope state scope
+          (lambda ()
+            (loop for n in nodes for v in variables do (sal-populate-state-var state n v))))
+        (sal-set-module-interface module variables)))
+    module))
+
+(defun sal-convert-module-body (state node)
   (let ((tag (xmls:node-name node))
         (elements (sal-xml-elements node)))
     (cond

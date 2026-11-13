@@ -24,6 +24,10 @@
   (error 'sal-elaboration-error :origin origin
          :message (apply #'format nil control arguments)))
 
+(defvar *sal-pvs-readable-names* nil)
+(defvar *sal-pvs-system-alias* "system")
+(defvar *sal-pvs-ctl-alias* "ctl")
+
 (defun sal-pvs-name (name)
   "Injectively encode a SAL identifier as a PVS identifier.
 The fixed prefix separates source names from bridge declarations. Underscores
@@ -34,6 +38,20 @@ literal source spelling. The source display always retains the original name."
                   (symbol (symbol-name name))
                   (sal-identifier (sal-identifier-text name))
                   (sal-decl (sal-declaration-name name)))))
+    (when (and *sal-pvs-readable-names*
+               (not (member string *pvs-all-keywords* :test #'string-equal))
+               (alpha-char-p (char string 0))
+               (every (lambda (c) (or (alphanumericp c) (char= c #\_))) string)
+               (not (or (search "__" string) (uiop:string-prefix-p "sal_" string)
+                        (uiop:string-prefix-p "bridge_" string)))
+               (not (member (string-upcase string)
+                            '("STATE" "MODULE" "DEFINED" "INITIAL" "STEP" "IDLE" "MACHINE" "SYSTEM"
+                              "OPS" "S" "NEXT" "CANDIDATE" "CHOICE" "IMPORTING" "THEORY" "BEGIN" "END" "TYPE" "VAR"
+                              "FORALL" "EXISTS" "LET" "IN" "IF" "THEN" "ELSE" "ENDIF"
+                              "AND" "OR" "NOT" "IMPLIES" "IFF" "WITH" "LAMBDA" "TABLE"
+                              "RECURSIVE" "MEASURE" "ASSUMING" "ENDASSUMING" "THEOREM" "LEMMA"
+                              "AXIOM" "CONJECTURE" "OBLIGATION" "TRUE" "FALSE") :test #'equal)))
+      (return-from sal-pvs-name string))
     (concatenate
      'string "sal_"
      (with-output-to-string (out)
@@ -150,8 +168,16 @@ Identity, not spelling, distinguishes a binder from a qualified reference to
 a same-spelled context declaration. Repeated occurrences reuse its name."
   (or (gethash declaration *sal-pvs-local-names*)
       (setf (gethash declaration *sal-pvs-local-names*)
-            (format nil "~A_~A" (sal-pvs-fresh "local")
-                    (sal-pvs-name declaration)))))
+            (if *sal-pvs-readable-names*
+                (let* ((base (sal-pvs-name declaration)) (candidate base))
+                  (loop for i from 2 while
+                        (or (loop for used being the hash-values of *sal-pvs-local-names*
+                                  thereis (string= candidate used))
+                            (and *sal-pvs-context*
+                                 (gethash candidate (constant-declarations *sal-pvs-context*))))
+                        do (setf candidate (format nil "~a_~d" base i)))
+                  candidate)
+                (format nil "~A_~A" (sal-pvs-fresh "local") (sal-pvs-name declaration))))))
 
 (defun sal-pvs-join (strings separator)
   (format nil "~{~A~}" (loop for text in strings for first = t then nil
@@ -352,8 +378,13 @@ requires real membership; no arbitrary numeric predicate is approximated."
              (concatenate 'string
                           (subseq qualified 0 (- (length qualified) (length source-name)))
                           "bridge_temporal_signature_" source-name)))
+          ((and (boundp '*sal-pvs-state-projections*) *sal-pvs-state-projections*
+                (sal-pvs-state-declaration-p declaration)
+                (assoc name *sal-pvs-state-projections* :test #'equal))
+           (let ((projection (cdr (assoc name *sal-pvs-state-projections* :test #'equal))))
+             (if (functionp projection) (funcall projection *sal-pvs-state*) projection)))
           ((sal-pvs-state-declaration-p declaration)
-           (format nil "(~A)`~A" *sal-pvs-state* (sal-pvs-name name)))
+           (format nil (if *sal-pvs-readable-names* "~A`~A" "(~A)`~A") *sal-pvs-state* (sal-pvs-name name)))
           ((and (typep declaration 'sal-constant-decl) (null (type declaration))
                 (member name '("above" "below" "up-to" "up_to") :test #'string=))
            ;; These native prelude macros return predicates over NATURAL.
@@ -761,7 +792,7 @@ actual expressions under temporal operators. It is not a Boolean constant."
                               (sal-application-arguments expression))))
           (labels ((at (e) (sal-pvs-ctl-expression e state))
                    (operator (name)
-                     (format nil "ctl.~A(~A)(~A)" name
+                     (format nil "~A.~A(~A)(~A)" *sal-pvs-ctl-alias* name
                              (sal-pvs-join
                               (mapcar (lambda (arg)
                                         (let ((s (sal-pvs-fresh "ctlstate")))
@@ -1000,7 +1031,7 @@ cover the source libraries. This never asserts that a recursive call decreases."
          (*sal-pvs-origin-prefix* (sal-pvs-context-theory-name context)))
     (with-output-to-string (stream)
       (format stream "% SAL context ~A; source ~A.~%~A~A: THEORY~%BEGIN~%~%"
-              (sal-declaration-name context) (file-name context)
+              (sal-declaration-name context) (if *sal-pvs-readable-names* (file-namestring (file-name context)) (file-name context))
               *sal-pvs-origin-prefix* (sal-pvs-formals (params context)))
       (dolist (parameter (params context))
         (sal-pvs-note-origin (sal-pvs-name parameter) parameter))
@@ -1166,10 +1197,11 @@ native non-strict contexts. Assignments and choices are not assumed guards."
              (sal-pvs-ctl-expression expression "s")))
     ((and (typep expression 'sal-ltl-g)
           (not (sal-pvs-temporal-p (first (sal-application-arguments expression)))))
-     (format nil "system.invariant(LAMBDA (s: State): ~A)"
+     (format nil "~A.invariant(LAMBDA (s: State): ~A)" *sal-pvs-system-alias*
              (sal-pvs-expression (first (sal-application-arguments expression)))))
     ((sal-pvs-temporal-p expression)
-     (format nil "system.satisfies(LAMBDA (p: system.path, k: nat): ~A)"
+     (format nil "~A.satisfies(LAMBDA (p: ~A.path, k: nat): ~A)"
+             *sal-pvs-system-alias* *sal-pvs-system-alias*
              (sal-pvs-ltl-expression expression "p" "k")))
     (t (sal-elaboration-fail expression
                              "A module property must explicitly select a temporal modality"))))
@@ -1273,7 +1305,12 @@ acquire the companion theory's progress assumptions."
          (name (format nil "~A_progress" (sal-transition-view-theory-name view))))
     (setf (sal-transition-view-progress-theory-name view) name
           (gethash "progress" (sal-transition-view-origins view))
-          (sal-transition-view-flat-module view))
+          (or (sal-transition-view-source-module view) (sal-transition-view-flat-module view)))
+    (when (eq (sal-transition-view-translation-mode view) :modular)
+      (return-from sal-pvs-render-progress-view
+        (let ((instance (sal-pvs-view-instance view)))
+          (format nil "~a~a: THEORY~%BEGIN~%  IMPORTING ~a~%~%  progress: THEORY = SAL_Progress_Contract{{~%    S := ~a.State, initial := ~a.initial, step := ~a.step }}~%END ~a~%"
+                  name (sal-pvs-view-formal-text view) instance instance instance instance name))))
     (format nil "% Optional initialization and deadlock obligations for ~A.~%~A~A: THEORY~%BEGIN~%  IMPORTING ~A~%~%  progress: THEORY = SAL_Progress_Contract{{~%    S := State, initial := initial, step := step }}~%END ~A~%"
             (sal-transition-view-module-name view) name
             (sal-pvs-view-formal-text view)

@@ -34,7 +34,7 @@
           :source (namestring (or source (sal-origin-source-file view ast)))
           :line (if (sal-source-place-p p) (sal-source-place-initial-line p) 1)
           :end-line (if (sal-source-place-p p) (sal-source-place-final-line p) 1)
-          :status (format nil "~a" (proof-status decl))
+          :status (format nil "~a" (or (proof-status decl) 'unproved))
           :source-expression (and obligation (sal-source-obligation-source-expression obligation))
           :text (if *sal-syntax-mode*
                     (if obligation (sal-display-tcc-formula (definition decl) view)
@@ -42,8 +42,10 @@
                     (str (definition decl))))))
 
 (defun sal-editor-description (view)
-  (let ((theory (get-typechecked-theory (sal-transition-view-theory-name view))))
+  (let ((*sal-pvs-readable-names* (eq (sal-transition-view-translation-mode view) :modular))
+        (theory (get-typechecked-theory (sal-transition-view-theory-name view))))
     (list :key (sal-view-key view) :module (sal-transition-view-module-name view)
+          :translation (sal-transition-view-translation-mode view)
           :syntax (if *sal-syntax-mode* "SAL" "PVS")
           :wfc *sal-last-wfc-result*
           :formulas
@@ -58,11 +60,25 @@
                                            (sal-source-obligation-place o) o))
                        (sal-transition-view-tccs view)))))
 
+(defun sal-editor-modules (source)
+  "Discover module declarations with SAL, including parameterized modules."
+  (sal-check-well-formed source)
+  (let* ((path (truename source))
+         (manifest (sal-view-read-xml (sal-export-call path "--manifest")))
+         (entry (find path (sal-xml-elements manifest)
+                      :key (lambda (node) (truename (sal-xml-attribute node "PATH")))
+                      :test #'equal)))
+    (unless entry (error "SAL manifest omitted the source context"))
+    (or (loop for node in (sal-xml-elements entry)
+              when (string-equal (xmls:node-name node) "MODULE")
+                collect (sal-xml-attribute node "NAME"))
+        (list "--context"))))
+
 (defun sal-editor-typecheck (source module)
   (when *in-checker* (error "Exit the PVS prover before typechecking SAL"))
   (sal-editor-description
    (if (string= module "--context") (sal-open-context source)
-       (sal-open source module))))
+       (sal-open source module :translation :modular))))
 
 (defun sal-editor-request (operation &rest arguments)
   "Return a printed data plist inside a string; never send executable Elisp."
@@ -72,6 +88,7 @@
                (let ((*standard-output* log))
                  (list :ok
                        (ecase operation
+                         (:modules (apply #'sal-editor-modules arguments))
                          (:typecheck (apply #'sal-editor-typecheck arguments))
                          (:describe (sal-editor-description (sal-editor-view (first arguments))))
                          (:syntax (sal-set-syntax-mode (first arguments))

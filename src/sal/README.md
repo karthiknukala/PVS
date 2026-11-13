@@ -1,7 +1,7 @@
 # SAL and PVS transition systems
 
-This extension imports **SAL's own normalized transition relations and dependency
-contexts**, translates them into ordinary PVS definitions, generates native PVS TCCs,
+This extension imports **SAL's modules and dependency contexts**, translates
+them into ordinary PVS definitions, generates native PVS TCCs,
 and registers source-associated invariants for an experimental SAL proof rule.
 It lives entirely in `src/sal`; neither SAL nor the PVS build needs modification.
 
@@ -49,6 +49,34 @@ supported safety properties. `:typecheck nil` stops after elaboration;
 extension. `:progress-checks nil` omits progress obligations. Optional
 `:causality-checks t` emits the structural causality contract for supported
 whole-variable deterministic definitions.
+
+## Modular translation
+
+Use `:translation :modular` to keep named modules, component wiring, and indexed
+families in PVS. This path uses SAL's structural XML export and local implicit
+assignments; it does not invoke the flat translation. `:translation :flat`
+retains the existing normalized translation and remains the default.
+
+```lisp
+(defparameter v
+  (sal-open "/path/to/kn-pvs/src/sal/examples/modular/counter.sal"
+            "bounded" :translation :modular))
+```
+
+The shared theories are `SAL_Module`, `SAL_Module_Lift`,
+`SAL_Indexed_Module`, and `SAL_Guarded_Action`. Each assignment has a native
+PVS result type; command guards appear in dependent function domains, so PVS
+generates the assignment's subtype and application-domain TCCs directly.
+The source map connects those TCCs to their SAL assignments.
+
+The existing `sal-pvs-mode` frontend uses the modular translation. Use its
+usual typecheck, TCC, proof, and source/PVS-view commands. The flat translator
+is retained internally for comparison tests.
+
+See the [counter, open-component, and N-ary tutorial](examples/modular/README.md)
+for SAL/PVS counterparts and proof commands. Run `tools/run-modular-tests.sh`
+to typecheck both translations, prove their relation equalities, run SAL from
+PVS, and replay the saved proofs in a fresh PVS process.
 
 ## Experimental SAL editor and proof display
 
@@ -267,7 +295,7 @@ Semantic proofs are saved and replayed in a fresh PVS process.
 ## Complete example corpus
 
 `tools/run-corpus-tests.sh` inventories every `.sal`, `.lsal`, and SAL XML file
-under `$SAL_HOME/examples`, then exports and typechecks every declared module
+under `$SAL_HOME/examples`, then structurally exports and typechecks every declared module
 and every library-only context. It retains per-case failures and TCC counts;
 successful typechecking does not mean those TCCs have been proved. See
 [tests/corpus.md](tests/corpus.md) for the inventory, template handling, and

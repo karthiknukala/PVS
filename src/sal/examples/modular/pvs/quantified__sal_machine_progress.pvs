@@ -1,0 +1,7 @@
+quantified__sal_machine_progress: THEORY
+BEGIN
+  IMPORTING quantified__sal_machine
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := quantified__sal_machine.State, initial := quantified__sal_machine.initial, step := quantified__sal_machine.step }}
+END quantified__sal_machine_progress

@@ -1,0 +1,51 @@
+(in-package :pvs)
+(let ((root (uiop:ensure-directory-pathname (uiop:getenv "SAL_BRIDGE_DIR"))))
+  (load (merge-pathnames "load.lisp" root))
+  (load (merge-pathnames "tests/support.lisp" root)))
+(setq *noninteractive* t *noninteractive-timeout* 60 *proceed-without-asking* t
+      *proof-prompt-behavior* :noquestions *quit-prompt-behavior* :noquestions)
+
+(defun sal-modular-replay-declaration (decl)
+  (sal-test (justification decl) (format nil "saved proof ~a" (id decl)))
+  (sal-test (eq (status-flag (prove-decl decl :strategy '(then (rerun) (quit)))) '!)
+            (format nil "fresh replay ~a" (id decl))))
+
+(handler-case
+    (let ((root (uiop:ensure-directory-pathname (uiop:getenv "SAL_BRIDGE_TEST_OUTPUT"))))
+      (dolist (case '(("counter" "bounded") ("open_component" "latch")
+                     ("open_component" "connected") ("open_component" "interleaved")
+                     ("nary" "sync") ("nary" "async")))
+        (destructuring-bind (file module) case
+          (change-context (namestring (merge-pathnames (format nil "~a-~a/" file module) root)))
+          (let ((name (format nil "~a__~a__comparison" file module)))
+            (typecheck-file name)
+            (dolist (import (all-importings (get-typechecked-theory name)))
+              (unless (from-prelude? import)
+                (dolist (tcc (collect-tccs import)) (sal-modular-replay-declaration tcc))))
+            (dolist (decl (theory (get-typechecked-theory name)))
+              (when (formula-decl? decl) (sal-modular-replay-declaration decl))))))
+      (dolist (case '(("counter" "bounded" "counter-bounded" "within_limit")
+                     ("nary_demo" "sync" "extra-nary_demo" "aligned")))
+        (destructuring-bind (file module directory property) case
+          (let* ((view (sal-open (merge-pathnames (format nil "examples/modular/~a.sal" file)
+                                                 *sal-bridge-directory*)
+                                 module :translation :modular :progress-checks nil
+                                 :output-directory (merge-pathnames (format nil "~a/" directory) root)))
+                 (th (get-typechecked-theory (sal-transition-view-theory-name view))))
+            (dolist (import (cons th (all-importings th)))
+              (unless (from-prelude? import)
+                (dolist (tcc (collect-tccs import)) (sal-modular-replay-declaration tcc))))
+            (sal-modular-replay-declaration
+             (find-if (lambda (d) (and (formula-decl? d) (equal property (string (id d)))))
+                      (theory th))))))
+      (loop for number from 1 to 13 do
+        (dolist (salt '(17 53))
+          (let* ((directory (format nil "wiring_~d_~d_system" number salt))
+                 (name (concatenate 'string directory "__assembly__comparison")))
+            (change-context (namestring (merge-pathnames (concatenate 'string directory "/") root)))
+            (typecheck-file name)
+            (dolist (decl (theory (get-typechecked-theory name)))
+              (when (formula-decl? decl) (sal-modular-replay-declaration decl))))))
+      (format t "~%SAL-MODULAR-REPLAY-PASSED (~d assertions)~%" *sal-test-count*))
+  (error (e) (format t "~%SAL-MODULAR-REPLAY-FAILED: ~a~%" e) (uiop:quit 1)))
+(uiop:quit)

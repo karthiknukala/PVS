@@ -1,0 +1,10 @@
+% SAL context quantified; source quantified.sal.
+SALCTX_quantified: THEORY
+BEGIN
+
+
+  Index: TYPE = subrange(0, 2)
+
+  Count: TYPE = subrange(0, 3)
+
+END SALCTX_quantified

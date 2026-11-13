@@ -1,0 +1,27 @@
+selection_typing: CONTEXT =
+BEGIN
+  Positive: TYPE = {n: INTEGER | n > 0};
+  positive(p: Positive): BOOLEAN = p > 0;
+
+  bad: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT gate, flag: BOOLEAN
+      INITIALIZATION gate = FALSE; flag = FALSE
+      TRANSITION
+        [ select: TRUE -->
+            gate' IN {b: BOOLEAN | FALSE};
+            flag' IN {b: BOOLEAN | positive(arg)} ]
+    END;
+
+  safe: MODULE =
+    BEGIN
+      INPUT arg: INTEGER
+      OUTPUT gate, flag: BOOLEAN
+      INITIALIZATION gate = FALSE; flag = FALSE
+      TRANSITION
+        [ select: arg > 0 -->
+            gate' IN {b: BOOLEAN | FALSE};
+            flag' IN {b: BOOLEAN | positive(arg)} ]
+    END;
+END

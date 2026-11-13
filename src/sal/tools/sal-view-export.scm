@@ -107,13 +107,66 @@
              (cons (view/export-list 'VARDECLS (slot-value ast :local-decls) ast)
                    (map sal-ast->sxml (slot-value ast :definitions))) ast))
 
+(define-method (sal-ast->sxml (ast <sal-simple-selection-definition>))
+  (view/node 'SIMPLEDEFINITION
+    (list (sal-ast->sxml (slot-value ast :lhs))
+          (view/node 'RHSSELECTION (list (sal-ast->sxml (slot-value ast :rhs))) ast)
+          (view/node 'PREDICATETYPE (list (sal-ast->sxml (sal-expr/type (slot-value ast :rhs)))) ast)) ast))
+
+;; Preserve SAL's computed interfaces: composition changes LOCAL variables to
+;; tuples/arrays, and NEWOUTPUT/HIDING change ownership. These are not a union
+;; of the child declarations.
+(define (view/module-node tag children ast)
+  (view/node tag
+    (append children
+      (if *view-modular-export?*
+          (list (view/export-list 'BRIDGEINTERFACE (sal-module/state-variables ast) ast)) '())) ast))
+(define-method (sal-ast->sxml (ast <sal-synch-composition>))
+  (view/module-node 'SYNCHRONOUSCOMPOSITION
+    (list (sal-ast->sxml (slot-value ast :module1)) (sal-ast->sxml (slot-value ast :module2))) ast))
+(define-method (sal-ast->sxml (ast <sal-asynch-composition>))
+  (view/module-node 'ASYNCHRONOUSCOMPOSITION
+    (list (sal-ast->sxml (slot-value ast :module1)) (sal-ast->sxml (slot-value ast :module2))) ast))
+(define-method (sal-ast->sxml (ast <sal-observer>))
+  (view/module-node 'OBSERVEMODULE
+    (list (sal-ast->sxml (slot-value ast :module1)) (sal-ast->sxml (slot-value ast :module2))) ast))
+(define (view/indexed-module tag ast)
+  (view/module-node tag
+    (list (sal-ast->sxml (car (slot-value ast :local-decls)))
+          (sal-ast->sxml (slot-value ast :module))) ast))
+(define-method (sal-ast->sxml (ast <sal-multi-synch-composition>))
+  (view/indexed-module 'MULTISYNCHRONOUS ast))
+(define-method (sal-ast->sxml (ast <sal-multi-asynch-composition>))
+  (view/indexed-module 'MULTIASYNCHRONOUS ast))
+(define-method (sal-ast->sxml (ast <sal-renaming>))
+  (view/module-node 'RENAMING
+    (list (view/export-list 'RENAMES (slot-value ast :renames) ast)
+          (sal-ast->sxml (slot-value ast :module))) ast))
+(define (view/org-module tag ast)
+  (view/module-node tag
+    (list (view/export-list 'IDENTIFIERS (slot-value ast :identifiers) ast)
+          (sal-ast->sxml (slot-value ast :module))) ast))
+(define-method (sal-ast->sxml (ast <sal-hiding>)) (view/org-module 'HIDING ast))
+(define-method (sal-ast->sxml (ast <sal-new-output>)) (view/org-module 'NEWOUTPUT ast))
+(define-method (sal-ast->sxml (ast <sal-with-module>))
+  (view/module-node 'WITHMODULE
+    (list (view/export-list 'NEWVARDECLS (slot-value ast :new-state-vars) ast)
+          (sal-ast->sxml (slot-value ast :module))) ast))
+(define-method (sal-ast->sxml (ast <sal-module-instance>))
+  (view/module-node 'MODULEINSTANCE
+    (list (sal-ast->sxml (slot-value ast :module-name))
+          (view/export-list 'MODULEACTUALS (slot-value ast :actuals) ast)) ast))
+
 (define (view/command-section tag definitions command source)
   (if (and (null? definitions) (not command))
       '()
       (list (view/export-list tag
                               (append definitions (if command (list command) '()))
                               source))))
+(define *view-modular-export?* #f)
 (define-method (sal-ast->sxml (ast <sal-base-module>))
+  (when *view-modular-export?*
+    (set! ast (sal-base-module/insert-implicit-assignments ast)))
   ;; The legacy method APPENDs a DEFDECL node where a list is required.
   (view/node 'BASEMODULE
              (append (map sal-ast->sxml (slot-value ast :state-vars))
@@ -516,10 +569,29 @@
     (reverse result)))
 
 (unless (or (= (length *arguments*) 2) (= (length *arguments*) 3))
-  (sign-error "Usage: sal-view-export.scm INPUT MODULE [QUALIFIED-SELECTOR], or INPUT --context/--source/--manifest" *arguments*))
+  (sign-error "Usage: sal-view-export.scm INPUT MODULE [QUALIFIED-SELECTOR], or INPUT --context/--source/--manifest/--modular" *arguments*))
+
+(define (view/structural-module decl)
+  (let* ((parametric (slot-value decl :parametric-module))
+         (body (slot-value parametric :module))
+         (node (view/node 'STRUCTURALMODULE
+                          (list (view/export-list 'MODULEPARAMETERS
+                                                   (slot-value parametric :local-decls) decl)
+                                (view/export-list 'STATEVARS (sal-module/state-variables body) body)
+                                (view/node 'STRUCTURE (list (sal-ast->sxml body)) body)
+                                (view/node 'PROPERTIES
+                                  (map (lambda (d) (view/property d body #f))
+                                       (filter (lambda (d) (view/selected-property? d decl #f #f
+                                                            (slot-value parametric :local-decls)))
+                                               (sal-context/declarations (sal-ast/context decl)))) decl)) decl)))
+    (sxml/set-attribute! node 'NAME (symbol->string (sal-decl/name decl)))
+    (sxml/set-attribute! node 'CONTEXT (symbol->string (sal-context/name (sal-ast/context decl))))
+    node))
 
 (let* ((input (car *arguments*))
        (target (cadr *arguments*))
+       (modular? (string=? target "--modular"))
+       (_ (set! *view-modular-export?* modular?))
        (selector (and (= (length *arguments*) 3) (caddr *arguments*)))
        (environment (make-sal-env))
        ;; The selected file's directory takes precedence over ambient paths.
@@ -549,14 +621,22 @@
    ((string=? target "--manifest")
     (let ((node (view/node 'SALMANIFEST
                           (map (lambda (ctx)
-                                 (let ((file-node (view/node 'FILE '() ctx)))
+                                 (let ((file-node
+                                        (view/node 'FILE
+                                          (map (lambda (decl)
+                                                 (let ((module-node (view/node 'MODULE '() decl)))
+                                                   (sxml/set-attribute! module-node 'NAME
+                                                     (symbol->string (sal-decl/name decl)))
+                                                   module-node))
+                                               (filter (lambda (decl) (instance-of? decl <sal-module-decl>))
+                                                       (sal-context/declarations ctx))) ctx)))
                                    (sxml/set-attribute! file-node 'PATH (view/context-file ctx))
                                    (sxml/set-attribute! file-node 'NAME (symbol->string (sal-context/name ctx)))
                                    file-node)) contexts) context)))
       (sxml/set-attribute! node 'VERSION "2")
       (sxml->xml node)))
    (else
-    (let* ((library-only? (string=? target "--context"))
+    (let* ((library-only? (or modular? (string=? target "--context")))
            (decl (and (not library-only?)
                       ;; SAL has distinct namespaces: e.g. Needham-Schroeder
                       ;; declares both a Boolean function and module intruder.
@@ -598,6 +678,14 @@
                                             (list (view/module-check-entry check context "view"
                                                     (sal-decl/name decl) selected '())) '()))
                                       '())) context))
+                          (if modular?
+                              (list (view/node 'STRUCTURALMODULES
+                                      (apply append
+                                        (map (lambda (ctx)
+                                               (map view/structural-module
+                                                 (filter (lambda (d) (instance-of? d <sal-module-decl>))
+                                                         (sal-context/declarations ctx)))) contexts)) context))
+                              '())
                           (if flat (list (view/flat-node flat)) '())
                           (list (view/node 'PROPERTIES
                                            (map (lambda (d) (view/property d flat context-actuals)) properties)

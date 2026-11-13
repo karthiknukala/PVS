@@ -5,6 +5,8 @@ does not maintain a hand-picked list of examples that happen to translate.
 Every native-accepted module declaration is checked, including parameterized
 modules. A file with no modules gets a context-only check. Each target has an
 isolated PVS context under `src/sal/.work/corpus/`.
+Module targets use the structural translation used by `sal-pvs-mode`; only
+library-only contexts use the context renderer. There is no flat fallback.
 
 ```sh
 SAL_HOME=/path/to/kn-sal \
@@ -76,6 +78,16 @@ The optional `run-corpus-export.py CASES.json OUTPUT` runs only native
 normalization/XML serialization. Its `exported` result is not PVS typechecking
 and is not counted as successful frontend coverage.
 
+`tools/run-modular-tests.sh` additionally proves equality of the structural
+and native-flattened `defined`, `initial`, `step`, and `idle` relations. Its
+construct-level fixtures cover private tuple/array state, parameter-dependent
+indexed instances, asynchronous GLOBAL framing, output promotion, renaming,
+WITH, conditional selections, observers, nested composition, and CTL imports.
+The fixtures are generated with two different sets of source names. A fresh
+PVS process replays the saved relation proofs. Separate negative tests check
+that overlapping branches and inconsistent assignments cannot conceal source
+subtype obligations.
+
 At the initial inventory, the tree contains 181 `.sal`, 31 `.lsal`, and four XML
 files: 216 source-format entries. Native SAL accepts 210, containing 355 modules
 and 15 library-only contexts. Two additional representative TTA template models
@@ -119,10 +131,25 @@ Ordinary PVS proofs check distinct-instance transition behavior. These checks
 exercise semantic preservation at specific boundaries; the corpus typecheck
 count alone is not a general translation-correctness proof.
 
-Validation on 2026-10-23 completed a fresh run of **372/372 targets**, covering
+Flat-frontend validation on 2026-10-23 completed a fresh run of **372/372 targets**, covering
 all 210 native-accepted source files and both documented template instances,
 with no missing targets or frontend failures. Frontend source hashes remained
 unchanged throughout the run. The bridge suite and 13 parameter regression
 groups also passed, including fresh-process replay of their saved semantic
 proofs. The largest model typechecked in 158 seconds. Local logs, source hashes,
 and the full corpus report are indexed by `../.work/validation.json`.
+
+Structural-frontend validation on 2026-11-11 completed a fresh run of
+**372/372 targets**, again covering all 210 native-accepted source files and
+both template instances. There were no frontend failures, missing targets,
+duplicate results, or unexpected native rejections. The complete report is
+`../.work/corpus/run.JOZlo2/summary.json`; its batch logs retain the generated
+TCC counts and individual PVS typechecking results. This run uses the same
+structural translation selected by the SAL Emacs frontend.
+
+The accompanying modular regression run passed 455 assertions, including
+128 distinct relation-equality proofs, and 348 fresh-process replay assertions.
+It includes source-linked negative TCC tests and 13 construct-level models with
+two sets of source names. The flat bridge suite and its replay, 32 editor
+integration assertions and 34 replay assertions, and all 13 Emacs tests also
+passed. Local evidence is indexed by `../.work/structural-validation.json`.

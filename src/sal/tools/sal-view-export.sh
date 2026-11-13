@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "Usage: sal-view-export.sh INPUT MODULE [QUALIFIED-SELECTOR], or INPUT --context/--source/--manifest [QUALIFIED-SELECTOR]" >&2
+  echo "Usage: sal-view-export.sh INPUT MODULE [QUALIFIED-SELECTOR], or INPUT --context/--source/--manifest/--modular [QUALIFIED-SELECTOR]" >&2
   exit 2
 fi
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

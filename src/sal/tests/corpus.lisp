@@ -37,6 +37,7 @@
           (finish-output)
           (handler-case
               (let* ((view (sal-open (or input (merge-pathnames source root)) module
+                                     :translation (if (string= module "--context") :flat :modular)
                                      :progress-checks nil :register nil
                                      :output-directory (merge-pathnames
                                                         (concatenate 'string "contexts/" identity "/")

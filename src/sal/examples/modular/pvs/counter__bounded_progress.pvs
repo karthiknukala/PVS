@@ -1,0 +1,7 @@
+counter__bounded_progress: THEORY
+BEGIN
+  IMPORTING counter__bounded
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := counter__bounded.State, initial := counter__bounded.initial, step := counter__bounded.step }}
+END counter__bounded_progress

@@ -1,0 +1,26 @@
+nary{N: {n: NATURAL | n > 0}}: CONTEXT =
+BEGIN
+  Index: TYPE = [1..N];
+
+  cell: MODULE =
+    BEGIN
+      OUTPUT value: [0..2]
+      INITIALIZATION value = 0
+      TRANSITION
+        [ increment: value < 2 --> value' = value + 1
+        [] wrap: ELSE --> value' = 0 ]
+    END;
+
+  sync: MODULE =
+    WITH OUTPUT values: ARRAY Index OF [0..2]
+      (|| (i: Index): RENAME value TO values[i] IN cell);
+
+  async: MODULE =
+    WITH OUTPUT values: ARRAY Index OF [0..2]
+      ([] (i: Index): RENAME value TO values[i] IN cell);
+
+  aligned: THEOREM sync |-
+    G(FORALL(i, j: Index): values[i] = values[j]);
+  async_aligned: THEOREM async |-
+    G(FORALL(i, j: Index): values[i] = values[j]);
+END

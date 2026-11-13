@@ -1,0 +1,33 @@
+open_component__latch: THEORY
+BEGIN
+  IMPORTING SALCTX_open_component
+
+  State: TYPE = [# request: bool, acknowledged: bool #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  sample_enabled(s, next: State): bool = TRUE
+
+  sample(s, next: State): bool =
+    sample_enabled(s, next) AND next`acknowledged = s`request
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN s`acknowledged = FALSE)
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND sample(s, next)
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`acknowledged = s`acknowledged
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS open_component__latch_semantics
+
+END open_component__latch

@@ -1,0 +1,6 @@
+% SAL context open_component; source src/sal/examples/modular/open_component.sal.
+SALCTX_sal_open_x5F_component: THEORY
+BEGIN
+
+
+END SALCTX_sal_open_x5F_component

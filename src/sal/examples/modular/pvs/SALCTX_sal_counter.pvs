@@ -1,0 +1,10 @@
+% SAL context counter; source src/sal/examples/modular/counter.sal.
+SALCTX_sal_counter: THEORY
+BEGIN
+
+
+  sal_Limit: nat = 3
+
+  sal_Count: TYPE = subrange(0, (sal_Limit + 1))
+
+END SALCTX_sal_counter

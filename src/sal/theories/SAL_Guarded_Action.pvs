@@ -1,0 +1,6 @@
+% The update's dependent domain exposes its guard to PVS typechecking.
+SAL_Guarded_Action[S: TYPE, enabled: [S -> bool],
+                   update: [{s: S | enabled(s)} -> S]]: THEORY
+BEGIN
+  step(s, t: S): bool = enabled(s) AND t = update(s)
+END SAL_Guarded_Action

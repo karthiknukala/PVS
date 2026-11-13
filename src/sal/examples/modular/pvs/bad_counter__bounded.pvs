@@ -1,0 +1,47 @@
+bad_counter__bounded: THEORY
+BEGIN
+  IMPORTING SALCTX_bad_counter
+
+  State: TYPE = [# count: subrange(0, 2) #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State]
+
+  initialize_value(s: State, next: State): subrange(0, 2) =
+    0
+
+  reset_enabled(s, next: State): bool = TRUE
+
+  reset_value(s: State, next: {candidate: State | reset_enabled(s, candidate)}): subrange(0, 2) =
+    0
+
+  reset(s, next: State): bool =
+    reset_enabled(s, next) AND next`count = reset_value(s, next)
+
+  overflow_enabled(s, next: State): bool = TRUE
+
+  overflow_value(s: State, next: {candidate: State | overflow_enabled(s, candidate)}): subrange(0, 2) =
+    (s`count + 1)
+
+  overflow(s, next: State): bool =
+    overflow_enabled(s, next) AND next`count = overflow_value(s, next)
+
+  defined(s: State): bool =
+    TRUE
+
+  initial(s: State): bool =
+    defined(s) AND (LET next = s IN s`count = initialize_value(s, next))
+
+  step(s, next: State): bool =
+    defined(s) AND defined(next) AND (reset(s, next) OR overflow(s, next))
+
+  idle(s, next: State): bool =
+    defined(s) AND defined(next) AND next`count = s`count
+
+  machine: SAL_Module[State].Module =
+    (# defined := defined, init := initial, step := step, idle := idle #)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS bad_counter__bounded_semantics
+
+END bad_counter__bounded

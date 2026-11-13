@@ -1,0 +1,33 @@
+nary__sync[N: {n: nat | (n > 0)}]: THEORY
+BEGIN
+  IMPORTING SALCTX_nary[N]
+
+  State: TYPE = [# values: [Index -> subrange(0, 2)] #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State], SAL_Module_Lift, SAL_Indexed_Module
+
+  IMPORTING nary__cell
+
+  cell_state(s: State, i: Index): nary__cell[N].State =
+    (# value := (s`values)(i) #)
+
+  cell_at(i: Index): SAL_Module[State].Module =
+    SAL_Module_Lift[State, nary__cell[N].State,
+      LAMBDA (s: State): cell_state(s, i)].lift(nary__cell[N].machine)
+
+  machine: SAL_Module[State].Module =
+    SAL_Indexed_Module[State, Index].synchronous(
+      LAMBDA (i: Index): cell_at(i))
+
+  defined(s: State): bool = machine`defined(s)
+  initial(s: State): bool = machine`init(s)
+  step(s, next: State): bool = machine`step(s, next)
+  idle(s, next: State): bool = machine`idle(s, next)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS nary__sync_semantics
+
+  aligned: THEOREM nary__sync_semantics.invariant(LAMBDA (s: State): (FORALL (i_2: Index, j: Index): ((s`values)(i_2) = (s`values)(j))))
+
+END nary__sync

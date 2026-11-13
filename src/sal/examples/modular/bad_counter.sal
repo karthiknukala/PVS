@@ -1,0 +1,11 @@
+bad_counter: CONTEXT =
+BEGIN
+  bounded: MODULE =
+    BEGIN
+      OUTPUT count: [0..2]
+      INITIALIZATION count = 0
+      TRANSITION
+        [ reset: TRUE --> count' = 0
+        [] overflow: TRUE --> count' = count + 1 ]
+    END;
+END

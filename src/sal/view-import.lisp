@@ -208,7 +208,7 @@ the envelope's SOURCE element need not be the last item in dependency order."
                   (sal-xml-fail entry "Dependency source does not exist")))
             (sal-xml-elements root))))
 
-(defun sal-import-transition-view (source module-name &key selector)
+(defun sal-import-transition-view (source module-name &key selector (translation :flat))
   "Import generic or instantiated SAL with a complete stable dependency closure.
 The first SAL pass discovers files. Snapshots surround the second semantic
 export; any changed or newly discovered dependency rejects that export."
@@ -220,10 +220,14 @@ export; any changed or newly discovered dependency rejects that export."
                                                        (and configuration (list configuration)))
                                                :test #'equal)))
          (source-text (cdr (assoc (namestring path) snapshots :test #'string=)))
-         (xml (sal-export-call path module-name selector)))
+         (xml (sal-export-call path (if (eq translation :modular) "--modular" module-name) selector)))
     (unless (sal-snapshots-current-p snapshots)
       (error "SAL source, dependency, or configuration changed during export"))
     (let ((view (sal-view-parse-xml xml path source-text)))
+      (when (eq translation :modular)
+        (setf (sal-transition-view-translation-mode view) :modular
+              (sal-transition-view-module-name view) module-name)
+        (sal-read-structural-modules view xml))
       (dolist (file (sal-transition-view-dependency-files view))
         (unless (member (truename file) files :test #'equal)
           (error "SAL dependency closure changed while exporting: ~a" file)))

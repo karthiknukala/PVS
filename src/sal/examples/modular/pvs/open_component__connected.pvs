@@ -1,0 +1,42 @@
+open_component__connected: THEORY
+BEGIN
+  IMPORTING SALCTX_open_component
+
+  State: TYPE = [# acknowledged: bool, request: bool #]
+
+  s, next: VAR State
+
+  IMPORTING SAL_Module[State], SAL_Module_Lift, SAL_Indexed_Module
+
+  IMPORTING open_component__source
+
+  source_state(s: State): open_component__source.State =
+    (# request := s`request #)
+
+  source_component: SAL_Module[State].Module =
+    SAL_Module_Lift[State, open_component__source.State,
+      LAMBDA (s: State): source_state(s)].lift(open_component__source.machine)
+
+  IMPORTING open_component__latch
+
+  latch_state(s: State): open_component__latch.State =
+    (# request := s`request, acknowledged := s`acknowledged #)
+
+  latch_component: SAL_Module[State].Module =
+    SAL_Module_Lift[State, open_component__latch.State,
+      LAMBDA (s: State): latch_state(s)].lift(open_component__latch.machine)
+
+  machine: SAL_Module[State].Module =
+    SAL_Module[State].synchronous(source_component,
+      latch_component)
+
+  defined(s: State): bool = machine`defined(s)
+  initial(s: State): bool = machine`init(s)
+  step(s, next: State): bool = machine`step(s, next)
+  idle(s, next: State): bool = machine`idle(s, next)
+
+  IMPORTING SAL_Transition_System[State, initial, step] AS open_component__connected_semantics
+
+  synchronized: THEOREM open_component__connected_semantics.invariant(LAMBDA (s: State): ((s`acknowledged /= s`request) OR (NOT s`request)))
+
+END open_component__connected

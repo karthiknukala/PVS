@@ -1,0 +1,10 @@
+% SAL context counter; source counter.sal.
+SALCTX_counter: THEORY
+BEGIN
+
+
+  Limit: nat = 3
+
+  Count: TYPE = subrange(0, (Limit + 1))
+
+END SALCTX_counter

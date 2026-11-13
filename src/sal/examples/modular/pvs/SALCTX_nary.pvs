@@ -1,0 +1,12 @@
+% SAL context nary; source nary.sal.
+SALCTX_nary[N: {n: nat | (n > 0)}]: THEORY
+BEGIN
+
+
+  Index: TYPE = subrange(1, N)
+
+  check_module_1: bool = (FORALL (i: Index): (LET sal_sal_x5F_macro_x5F_context_x5F_argument: {n_2: nat | (n_2 > 0)} = N IN TRUE))
+
+  check_module_2: bool = (FORALL (i_2: Index): (LET sal_sal_x5F_macro_x5F_context_x5F_argument_2: {n_3: nat | (n_3 > 0)} = N IN TRUE))
+
+END SALCTX_nary

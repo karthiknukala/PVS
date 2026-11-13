@@ -3,8 +3,9 @@
 (defvar *sal-syntax-mode* nil)
 
 (defun sal-view-key (view)
-  (format nil "~a::~a::~a" (sal-transition-view-source view)
-          (sal-transition-view-module-name view) (sal-transition-view-selector view)))
+  (format nil "~a::~a::~a::~a" (sal-transition-view-source view)
+          (sal-transition-view-module-name view) (sal-transition-view-selector view)
+          (sal-transition-view-translation-mode view)))
 
 (defun sal-obligation-source-text (ast)
   (when ast (handler-case (sal-pp-to-string ast) (error () nil))))
@@ -15,8 +16,12 @@
    (lambda (tcc)
      (let* ((name (string (id tcc)))
             (ast (or (sal-view-origin view name (id theory))
-                     (and (generated-by tcc)
-                          (sal-view-origin view (id (generated-by tcc)) (id theory)))))
+                     (let ((generated (generated-by tcc)))
+                       (cond ((declaration? generated)
+                              (sal-view-origin view (id generated) (id theory)))
+                             ((importing? generated)
+                              (sal-view-origin view (format nil "import_~a" (id (theory-name generated)))
+                                               (id theory)))))))
             (origin (origin tcc)))
        (make-sal-source-obligation
         :name name :kind (and origin (kind origin))
@@ -31,7 +36,8 @@
 This generates obligations; it does not discharge or assume them."
   (unless (equal *sal-wfc-source* (sal-file-snapshot (sal-transition-view-source view)))
     (sal-check-well-formed (sal-transition-view-source view)))
-  (let* ((file (sal-transition-view-pvs-file view))
+  (let* ((*sal-pvs-readable-names* (eq (sal-transition-view-translation-mode view) :modular))
+         (file (sal-transition-view-pvs-file view))
          (directory (uiop:pathname-directory-pathname file)))
     (sal-bridge-output-path directory)
     (change-context (namestring directory))
@@ -100,18 +106,22 @@ This generates obligations; it does not discharge or assume them."
 
 (defun sal-open (source module-name &key output-directory (typecheck t)
                                         (progress-checks t) (causality-checks nil)
-                                        (register t) selector context-actuals module-actuals)
+                                        (register t) selector context-actuals module-actuals (translation :flat))
   "Import a symbolic or concretely instantiated SAL module and its dependencies.
 OUTPUT-DIRECTORY defaults to an isolated directory under src/sal/.work."
+  (unless (member translation '(:flat :modular)) (error "Unknown SAL translation ~a" translation))
+  (when (and (eq translation :modular) (or selector context-actuals module-actuals))
+    (error "Instantiate modular PVS theories with their native theory parameters"))
   (when (and selector (or context-actuals module-actuals))
     (error "Use either :selector or explicit context/module actuals"))
   ;; This must precede selector resolution and every native export call.
   (when typecheck (sal-check-well-formed source))
-  (let* ((*sal-wfc-source* (and typecheck (sal-file-snapshot source)))
+  (let* ((*sal-pvs-readable-names* (eq translation :modular))
+         (*sal-wfc-source* (and typecheck (sal-file-snapshot source)))
          (selection (or selector
                         (and (or context-actuals module-actuals)
                              (sal-selection-expression source module-name context-actuals module-actuals))))
-         (view (sal-import-transition-view source module-name :selector selection))
+         (view (sal-import-transition-view source module-name :selector selection :translation translation))
          (directory (or output-directory
                         (merge-pathnames
                          (format nil ".work/generated/~a/~a/~a/"
@@ -120,7 +130,9 @@ OUTPUT-DIRECTORY defaults to an isolated directory under src/sal/.work."
                                   (sal-text-fingerprint (sal-view-key view)))
                                  (sal-pvs-name module-name))
                          *sal-bridge-directory*))))
-    (sal-elaborate-view view directory :progress-checks progress-checks)
+    (if (eq translation :modular)
+        (sal-elaborate-modular-view view directory :progress-checks progress-checks)
+        (sal-elaborate-view view directory :progress-checks progress-checks))
     (when causality-checks (sal-elaborate-causality view directory))
     (when typecheck
       (sal-typecheck-view view :progress-checks progress-checks

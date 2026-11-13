@@ -1,0 +1,7 @@
+nary_demo__sync_progress: THEORY
+BEGIN
+  IMPORTING nary_demo__sync
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := nary_demo__sync.State, initial := nary_demo__sync.initial, step := nary_demo__sync.step }}
+END nary_demo__sync_progress

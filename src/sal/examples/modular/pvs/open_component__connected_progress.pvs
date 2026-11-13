@@ -1,0 +1,7 @@
+open_component__connected_progress: THEORY
+BEGIN
+  IMPORTING open_component__connected
+
+  progress: THEORY = SAL_Progress_Contract{{
+    S := open_component__connected.State, initial := open_component__connected.initial, step := open_component__connected.step }}
+END open_component__connected_progress
